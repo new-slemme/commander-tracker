@@ -7,7 +7,7 @@ import re
 import requests
 from urllib.parse import quote
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import text, inspect
+from sqlalchemy import func, text, inspect
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
@@ -227,6 +227,29 @@ def index():
         winrate = round(wins / played * 100, 1) if played > 0 else 0
         player_stats.append({"player": p, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
+        # --- Enrich top players with most-played deck art ---
+    top_players = player_stats[:3]
+    
+    for row in top_players:
+        p = row["player"]
+    
+        # Find this player's most-played deck (by participations)
+        most_played = (
+            db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
+            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+            .filter(GameParticipant.player_id == p.id)
+            .group_by(Deck.id)
+            .order_by(text("plays DESC"))
+            .first()
+        )
+    
+        if most_played:
+            deck = most_played[0]
+            row["most_played_deck"] = deck
+            row["bg_art"] = deck.commander_local_art or deck.commander_art_crop_url
+        else:
+            row["most_played_deck"] = None
+            row["bg_art"] = None
 
     # Deck stats
     decks = Deck.query.all()
@@ -272,6 +295,14 @@ def index():
         best_candidates.sort(key=lambda t: (t[0], t[1]), reverse=True)
         best_deck = best_candidates[0][3]
 
+    most_played = (
+        db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .filter(GameParticipant.player_id == p.id)
+        .group_by(Deck.id)
+        .order_by(text("plays DESC"))
+        .first()
+    )
     
     return render_template(
         "index.html",
