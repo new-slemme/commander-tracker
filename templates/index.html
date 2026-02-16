@@ -240,21 +240,15 @@
         <div class="list-group-item p-0 recent-game-tile mb-2">
           <div class="recent-game-inner">
 
-            <div class="recent-game-bg"
-                 style="
-                   background-image:
-                     {% for art in ns.arts -%}
-                       url('{{ art }}'){% if not loop.last %}, {% endif %}
-                     {%- endfor %};
-                   background-position:
-                     {% for i in range(n) -%}
-                       {{ (i * slice) }}% top{% if not loop.last %}, {% endif %}
-                     {%- endfor %};
-                   background-size:
-                     {% for i in range(n) -%}
-                       {{ slice }}% 100%{% if not loop.last %}, {% endif %}
-                     {%- endfor %};
-                 "></div>
+         <div class="recent-game-bg">
+           {% if ns.arts|length == 0 %}
+             <div class="recent-game-slice" style="background: rgba(255,255,255,0.04);"></div>
+           {% else %}
+             {% for art in ns.arts %}
+               <div class="recent-game-slice" style="background-image:url('{{ art }}');"></div>
+             {% endfor %}
+           {% endif %}
+         </div>
 
             <div class="recent-game-overlay"></div>
 
