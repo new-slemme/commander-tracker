@@ -1,59 +1,140 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Record New Game</h1>
-<form method="post" action="/manual_record_game">
-    <input type="hidden" name="winner" id="winner_hidden">
-    <div class="row">
-        {% for i in range(1,5) %}
-        <div class="col-md-6 mb-3">
-            <div class="card">
-                <div class="card-body">
-                    <h5>Player {{ i }}</h5>
-                    <select id="player{{ i }}" name="player{{ i }}" class="form-select mb-2">
-                        <option value="">- None -</option>
-                        {% for p in players %}
-                            <option value="{{ p.id }}">{{ p.name }}</option>
-                        {% endfor %}
-                    </select>
-                    <select id="deck{{ i }}" class="form-select mb-2" disabled>
-                        <option>Select player first</option>
-                    </select>
-                    <div class="form-check">
-                        <input type="radio" name="winner" id="winner{{ i }}" class="form-check-input" disabled>
-                        <label class="form-check-label">Winner</label>
-                    </div>
-                </div>
-            </div>
+
+<div class="container py-4">
+  <h1 class="mb-4">Record New Game</h1>
+
+  <form method="post" action="{{ url_for('manual_record_game') }}" id="manualGameForm">
+    <div class="row g-3">
+
+      {% for i in range(1, 7) %}
+      <div class="col-12 col-lg-6">
+        <div class="card p-3">
+          <h5 class="mb-3">Player {{ i }}</h5>
+
+          <div class="mb-3">
+            <label class="form-label" for="player{{ i }}">Player</label>
+            <select class="form-select player-select" id="player{{ i }}" name="player{{ i }}" data-index="{{ i }}">
+              <option value="">- None -</option>
+              {% for p in players %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label" for="deck{{ i }}">Deck</label>
+            <select class="form-select deck-select" id="deck{{ i }}" name="deck{{ i }}" data-index="{{ i }}" disabled>
+              <option value="">Select player first</option>
+            </select>
+          </div>
         </div>
-        {% endfor %}
+      </div>
+      {% endfor %}
+
+      <div class="col-12">
+        <div class="card p-3">
+          <h5 class="mb-3">Winner</h5>
+
+          <select class="form-select" name="winner" id="winnerSelect" required>
+            <option value="" selected disabled>Select Winner</option>
+          </select>
+
+          <div class="mt-3 d-flex gap-2">
+            <button type="submit" class="btn btn-success btn-lg">Save Game</button>
+            <a class="btn btn-secondary btn-lg" href="{{ url_for('index') }}">Cancel</a>
+          </div>
+
+          <small class="d-block mt-2" style="color: var(--font-base-trans);">
+            Tip: Pick players first; winner list updates automatically.
+          </small>
+        </div>
+      </div>
+
     </div>
-    <button type="submit" class="btn btn-success btn-lg">Save Game</button>
-</form>
+  </form>
+</div>
 
 <script>
-    const decksData = {{ decks_json | safe }};
-    for (let i = 1; i <= 4; i++) {
-        const playerSel = document.getElementById('player' + i);
-        const deckSel = document.getElementById('deck' + i);
-        const winnerRadio = document.getElementById('winner' + i);
+  // decks_json is passed by the Flask route /manual_game
+  const DECKS_BY_PLAYER = {{ decks_json | safe }};
 
-        playerSel.addEventListener('change', function() {
-            const pid = this.value;
-            deckSel.innerHTML = '<option value="">Select deck</option>';
-            deckSel.disabled = true;
-            winnerRadio.disabled = true;
-            winnerRadio.checked = false;
+  function resetDeckSelect(deckSelect) {
+    deckSelect.innerHTML = '<option value="">Select player first</option>';
+    deckSelect.disabled = true;
+  }
 
-            if (pid && decksData[pid]) {
-                decksData[pid].forEach(d => {
-                    const opt = new Option(d.name, d.id);
-                    deckSel.add(opt);
-                });
-                deckSel.disabled = false;
-                winnerRadio.disabled = false;
-                winnerRadio.value = pid;
-            }
-        });
+  function populateDeckSelect(deckSelect, playerId) {
+    const decks = DECKS_BY_PLAYER[String(playerId)] || [];
+    deckSelect.innerHTML = '<option value="">- Select Deck -</option>';
+
+    for (const d of decks) {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.name;
+      deckSelect.appendChild(opt);
     }
+
+    deckSelect.disabled = decks.length === 0;
+    if (decks.length === 0) {
+      deckSelect.innerHTML = '<option value="">No decks for this player</option>';
+      deckSelect.disabled = true;
+    }
+  }
+
+  function updateWinnerOptions() {
+    const winner = document.getElementById('winnerSelect');
+    const previous = winner.value;
+
+    // collect unique selected player ids in order
+    const selects = Array.from(document.querySelectorAll('.player-select'));
+    const picked = [];
+    const seen = new Set();
+
+    for (const sel of selects) {
+      const v = sel.value;
+      if (v && !seen.has(v)) {
+        seen.add(v);
+        picked.push({ id: v, name: sel.options[sel.selectedIndex].textContent });
+      }
+    }
+
+    // rebuild winner select
+    winner.innerHTML = '<option value="" disabled>Select Winner</option>';
+
+    for (const p of picked) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      winner.appendChild(opt);
+    }
+
+    // restore previous if still valid
+    if (picked.some(p => p.id === previous)) {
+      winner.value = previous;
+    } else {
+      winner.value = ""; // force reselect if winner no longer valid
+    }
+  }
+
+  // Hook up player->deck + winner updates
+  document.querySelectorAll('.player-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const idx = sel.dataset.index;
+      const deckSelect = document.getElementById('deck' + idx);
+
+      if (!sel.value) {
+        resetDeckSelect(deckSelect);
+      } else {
+        populateDeckSelect(deckSelect, sel.value);
+      }
+
+      updateWinnerOptions();
+    });
+  });
+
+  // Initialize winner list (empty until players selected)
+  updateWinnerOptions();
 </script>
+
 {% endblock %}
