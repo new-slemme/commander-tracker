@@ -325,12 +325,14 @@
             <div class="collapse navbar-collapse" id="navbarNav">
 			  <!-- Left side -->
 			  <div class="navbar-nav">
-			    <a class="nav-link" href="/">Home</a>
-			    <a class="nav-link" href="/players">Players</a>
-			    <a class="nav-link" href="/decks">Decks</a>
-			    <a class="nav-link" href="/games">Games</a>
-			    <a class="nav-link" href="/play_game">Play Game</a>
-			    <a class="nav-link" href="/manual_game">Manual Game</a>
+				{% if session.get("user_id") %}
+				  	<a class="nav-link" href="/">Home</a>
+				    <a class="nav-link" href="/players">Players</a>
+				    <a class="nav-link" href="/decks">Decks</a>
+				    <a class="nav-link" href="/games">Games</a>
+				    <a class="nav-link" href="/play_game">Play Game</a>
+				    <a class="nav-link" href="/manual_game">Manual Game</a>
+			  	{% endif %}
 			  </div>
 			
 			  <!-- Right side -->
