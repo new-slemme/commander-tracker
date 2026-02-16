@@ -7,7 +7,8 @@ import os
 import re
 import requests
 from urllib.parse import quote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func, text, inspect
 
@@ -128,31 +129,46 @@ def extract_art_crop(card: dict):
     return None
 
 
-def download_art_crop(art_url: str, scryfall_id: str, commander_name: str):
+def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> str | None:
     """
-    Downloads art_crop into /data/commander_art (persistent).
-    Returns a web path like '/commander_art/<file>.jpg' or None.
+    Downloads art_crop into /data/art (persistent).
+    Returns web path like '/art/<file>.jpg' or None.
     """
     if not (art_url and scryfall_id and commander_name):
         return None
 
-    os.makedirs(ART_DIR, exist_ok=True)
     filename = f"{_safe_filename(commander_name)}_{scryfall_id}.jpg"
-    abs_path = os.path.join(ART_DIR, filename)
-    web_path = f"/commander_art/{filename}"
+    out_path = ART_DIR / filename
+    web_path = f"/art/{filename}"
 
-    if os.path.exists(abs_path):
+    if out_path.exists() and out_path.stat().st_size > 0:
         return web_path
 
     try:
-        img = requests.get(art_url, timeout=15)
-        if img.status_code != 200:
+        req = Request(
+            art_url,
+            headers={
+                "User-Agent": "CommanderTracker/1.0 (https://edh.figurensohn.de)",
+                "Accept": "image/*,*/*;q=0.8",
+            },
+        )
+        with urlopen(req, timeout=20) as resp:
+            data = resp.read()
+
+        if not data:
+            print("download_art_crop: empty response", art_url)
             return None
-        with open(abs_path, "wb") as f:
-            f.write(img.content)
+
+        out_path.write_bytes(data)
         return web_path
-    except Exception:
+
+    except (HTTPError, URLError) as e:
+        print("download_art_crop failed:", e, art_url)
         return None
+    except Exception as e:
+        print("download_art_crop unexpected error:", e, art_url)
+        return None
+
 
 
 # -------------------------
@@ -588,22 +604,16 @@ def deck_detail(deck_id):
 def add_deck():
     name = request.form.get("name", "").strip()
     commander_input = request.form.get("commander", "").strip()
-    player_id_raw = request.form.get("player_id", "").strip()
+    player_id = request.form.get("player_id", type=int)
 
-    if not (name and commander_input and player_id_raw):
-        flash("Missing deck name, commander, or owner.")
+    if not (name and commander_input and player_id):
+        flash("Deck name, commander, and owner are required.")
         return redirect(url_for("decks"))
 
-    try:
-        player_id = int(player_id_raw)
-    except ValueError:
-        flash("Invalid owner.")
-        return redirect(url_for("decks"))
-
-    # Create deck first (commander kept as entered / fallback)
+    # Create deck first
     deck = Deck(name=name, commander=commander_input, player_id=player_id)
 
-    # Best-effort Scryfall enrich
+    # Enrich from Scryfall (if you have these helpers)
     card = scryfall_named_exact(commander_input)
     if card:
         scry_id = card.get("id")
@@ -623,6 +633,8 @@ def add_deck():
 
     db.session.add(deck)
     db.session.commit()
+
+    flash("Deck added.")
     return redirect(url_for("decks"))
 
 
