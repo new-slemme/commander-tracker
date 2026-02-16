@@ -44,11 +44,46 @@
 
   body { background-color: var(--darkest); color: var(--font-base); font-family: Arial, sans-serif; }
 
-  .navbar { background-color: var(--darker) !important; border-bottom: 1px solid var(--font-base); }
-  .navbar-brand, .nav-link { color: var(--font-base) !important; }
-  .navbar-brand:hover, .nav-link:hover { color: #ffffff !important; }
-  .navbar-toggler img { filter: invert(0.7); }
-  .navbar-toggler:focus { box-shadow: none; }
+/* --- Navbar Layout --- */
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 28px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.nav-left,
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 18px;
+  margin-right: 20px;
+}
+
+.navbar a {
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+}
+
+.navbar a:hover {
+  opacity: 1;
+}
+
+.welcome {
+  opacity: 0.65;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+
 
   a { color: var(--font-base); text-decoration: none; }
   a:hover { color: #ffffff; }
