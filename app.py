@@ -411,30 +411,60 @@ def deck_detail(deck_id):
     # Game history
     participations = (
         GameParticipant.query
-        .filter_by(deck_id=deck.id)
-        .order_by(GameParticipant.game_id.desc())
+        .join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.deck_id == deck.id)
+        .order_by(Game.date.desc())
         .all()
     )
-
     
     history = []
+    matchups = {}
+    
     for part in participations:
         game = part.game
     
-        # Opponents (exclude self)
+        # Determine win/loss
+        won = game.winner_id == part.player_id
+    
+        # Opponents in this game
         opponents = (
             GameParticipant.query
-            .filter(GameParticipant.game_id == game.id,
-                    GameParticipant.player_id != part.player_id)
+            .filter(
+                GameParticipant.game_id == game.id,
+                GameParticipant.player_id != part.player_id
+            )
             .all()
         )
+    
+        opponent_names = []
+    
+        for o in opponents:
+            opponent_names.append(o.player.name)
+    
+            if o.player.name not in matchups:
+                matchups[o.player.name] = {"wins": 0, "losses": 0}
+    
+            if won:
+                matchups[o.player.name]["wins"] += 1
+            else:
+                matchups[o.player.name]["losses"] += 1
     
         history.append({
             "game_id": game.id,
             "date": game.date,
-            "won": game.winner_id == part.player_id,
-            "opponents": [o.player.name for o in opponents]
+            "won": won,
+            "opponents": opponent_names
         })
+
+# Compute winrate per opponent
+for name, data in matchups.items():
+    total = data["wins"] + data["losses"]
+    data["games"] = total
+    data["winrate"] = round((data["wins"] / total) * 100, 1) if total else 0
+
+# Sort by most played
+matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
+
     
     return render_template(
         "deck_detail.html",
@@ -445,6 +475,7 @@ def deck_detail(deck_id):
         winrate=winrate,
         participations=participations,
         history=history,
+        matchups=matchups,
     )
 
 
