@@ -96,6 +96,36 @@
   {% endfor %}
 </div>
 
+       <hr class="my-5">
+
+<h4>Opponent Breakdown</h4>
+
+{% if matchups %}
+<div class="row g-4 mt-2">
+
+  {% for name, m in matchups.items() %}
+  <div class="col-md-4">
+    <div class="card p-4 text-center matchup-card">
+
+      <h5 class="mb-2">{{ name }}</h5>
+
+      <div class="d-flex justify-content-center gap-3 my-2">
+        <span class="text-success">{{ m.wins }}W</span>
+        <span class="text-danger">{{ m.losses }}L</span>
+      </div>
+
+      <div class="fw-bold">{{ m.winrate }}%</div>
+      <small class="text-muted">{{ m.games }} games</small>
+
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+{% else %}
+<p class="text-muted mt-3">No matchup data yet.</p>
+{% endif %}
+
 
 </div>
 
