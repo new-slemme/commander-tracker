@@ -395,7 +395,7 @@ def deck_detail(deck_id):
     if not deck:
         return "Deck not found", 404
 
-    # Stats
+    # --- Overall Stats ---
     wins = (
         GameParticipant.query.join(Game)
         .filter(
@@ -404,11 +404,12 @@ def deck_detail(deck_id):
         )
         .count()
     )
+
     games = GameParticipant.query.filter_by(deck_id=deck.id).count()
     losses = max(0, games - wins)
     winrate = round((wins / games) * 100, 1) if games else 0
 
-    # Game history
+    # --- History + Matchups ---
     participations = (
         GameParticipant.query
         .join(Game, GameParticipant.game_id == Game.id)
@@ -416,17 +417,14 @@ def deck_detail(deck_id):
         .order_by(Game.date.desc())
         .all()
     )
-    
+
     history = []
     matchups = {}
-    
+
     for part in participations:
         game = part.game
-    
-        # Determine win/loss
         won = game.winner_id == part.player_id
-    
-        # Opponents in this game
+
         opponents = (
             GameParticipant.query
             .filter(
@@ -435,20 +433,21 @@ def deck_detail(deck_id):
             )
             .all()
         )
-    
+
         opponent_names = []
-    
+
         for o in opponents:
-            opponent_names.append(o.player.name)
-    
-            if o.player.name not in matchups:
-                matchups[o.player.name] = {"wins": 0, "losses": 0}
-    
+            name = o.player.name
+            opponent_names.append(name)
+
+            if name not in matchups:
+                matchups[name] = {"wins": 0, "losses": 0}
+
             if won:
-                matchups[o.player.name]["wins"] += 1
+                matchups[name]["wins"] += 1
             else:
-                matchups[o.player.name]["losses"] += 1
-    
+                matchups[name]["losses"] += 1
+
         history.append({
             "game_id": game.id,
             "date": game.date,
@@ -456,27 +455,25 @@ def deck_detail(deck_id):
             "opponents": opponent_names
         })
 
-# Compute winrate per opponent
-for name, data in matchups.items():
-    total = data["wins"] + data["losses"]
-    data["games"] = total
-    data["winrate"] = round((data["wins"] / total) * 100, 1) if total else 0
+    # Compute winrate per opponent
+    for name, data in matchups.items():
+        total = data["wins"] + data["losses"]
+        data["games"] = total
+        data["winrate"] = round((data["wins"] / total) * 100, 1) if total else 0
 
-# Sort by most played
-matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
+    # Sort by most played
+    matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
 
-    
-return render_template(
-    "deck_detail.html",
-    deck=deck,
-    wins=wins,
-    losses=losses,
-    games=games,
-    winrate=winrate,
-    participations=participations,
-    history=history,
-    matchups=matchups,
-)
+    return render_template(
+        "deck_detail.html",
+        deck=deck,
+        wins=wins,
+        losses=losses,
+        games=games,
+        winrate=winrate,
+        history=history,
+        matchups=matchups,
+    )
 
 
 
