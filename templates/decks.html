@@ -24,6 +24,25 @@
         Add Deck
       </button>
     </div>
+    <form method="get" action="{{ url_for('decks') }}" class="d-flex align-items-center gap-2">
+  {% if selected_player_id %}
+    <input type="hidden" name="player_id" value="{{ selected_player_id }}">
+  {% endif %}
+
+  <div class="form-check form-switch m-0">
+    <input class="form-check-input"
+           type="checkbox"
+           name="show_retired"
+           value="1"
+           id="showRetiredSwitch"
+           onchange="this.form.submit()"
+           {% if show_retired %}checked{% endif %}>
+    <label class="form-check-label" for="showRetiredSwitch">
+      Show Retired
+    </label>
+  </div>
+</form>
+
   </div>
 
   <div class="card p-3">
