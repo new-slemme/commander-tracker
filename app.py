@@ -438,14 +438,14 @@ def index():
         p = row["player"]
     
         # Find this player's most-played deck (by participations)
-        most_played = (
-            db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
-            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-            .filter(GameParticipant.player_id == p.id)
-            .group_by(Deck.id)
-            .order_by(text("plays DESC"))
-            .first()
-        )
+        #most_played = (
+        #    db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
+        #    .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        #    .filter(GameParticipant.player_id == p.id)
+        #    .group_by(Deck.id)
+        #    .order_by(text("plays DESC"))
+        #    .first()
+        #)
     
         if most_played:
             deck = most_played[0]
