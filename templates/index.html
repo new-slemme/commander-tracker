@@ -236,48 +236,66 @@
       {% set n = 1 %}
       {% endif %}
       {% set slice = (100 / n) %}
-      <div class="list-group-item recent-game-tile mb-2">
-         <div class="recent-game-bg"
-            style="
-            background-position:
-            {% for i in range(n) -%}
-            {{ (i * slice) }}% top{% if not loop.last %}, {% endif %}
-            {%- endfor %};
-            background-size:
-            {% for i in range(n) -%}
-            {{ slice }}% 100%{% if not loop.last %}, {% endif %}
-            {%- endfor %};
-            background-image:
-            {% for art in ns.arts -%}
-            url('{{ art }}'){% if not loop.last %}, {% endif %}
-            {%- endfor %};
-            "></div>
-         <div class="recent-game-overlay"></div>
-         <div class="recent-game-content p-3">
-            <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-               <div class="fw-bold text-white">
-                  {{ g.date.strftime('%Y-%m-%d %H:%M') }}
-               </div>
-               <div>
-                  <span class="badge bg-success">Winner: {{ g.winner.name }}</span>
-               </div>
-            </div>
-            <div class="mt-2 muted">
-               Players:
-               {% for gp in game_parts[g.id] %}
-               <span class="text-white">
-               {{ gp.player.name }} ({{ gp.deck.name }})
-               {% if gp.player_id == g.winner_id %}
-               <span class="badge bg-success ms-1">W</span>
-               {% endif %}
-               </span>
-               {% if not loop.last %}, {% endif %}
-               {% endfor %}
-            </div>
-         </div>
+<div class="list-group-item p-0 recent-game-tile mb-2">
+  <div class="recent-game-inner">
+
+    {# Collect commander art URLs for this game (up to 6) #}
+    {% set ns = namespace(arts=[]) %}
+    {% for gp in game_parts[g.id] %}
+      {% set art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
+      {% if art and (ns.arts|length) < 6 %}
+        {% set ns.arts = ns.arts + [art] %}
+      {% endif %}
+    {% endfor %}
+
+    {% set n = ns.arts|length %}
+    {% if n == 0 %}{% set n = 1 %}{% endif %}
+    {% set slice = (100 / n) %}
+
+    <div class="recent-game-bg"
+         style="
+           background-image:
+             {% for art in ns.arts -%}
+               url('{{ art }}'){% if not loop.last %}, {% endif %}
+             {%- endfor %};
+           background-position:
+             {% for i in range(n) -%}
+               {{ (i * slice) }}% top{% if not loop.last %}, {% endif %}
+             {%- endfor %};
+           background-size:
+             {% for i in range(n) -%}
+               {{ slice }}% 100%{% if not loop.last %}, {% endif %}
+             {%- endfor %};
+         "></div>
+
+    <div class="recent-game-overlay"></div>
+
+    <div class="recent-game-content p-3">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div class="fw-bold text-white">
+          {{ g.date.strftime('%Y-%m-%d %H:%M') }}
+        </div>
+        <div>
+          <span class="badge bg-success">Winner: {{ g.winner.name }}</span>
+        </div>
       </div>
-      {% endfor %}
-   </div>
+
+      <div class="mt-2 muted">
+        Players:
+        {% for gp in game_parts[g.id] %}
+          <span class="text-white">
+            {{ gp.player.name }} ({{ gp.deck.name }})
+            {% if gp.player_id == g.winner_id %}
+              <span class="badge bg-success ms-1">W</span>
+            {% endif %}
+          </span>
+          {% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+</div>
    {% endif %}
 </div>
 </div>
