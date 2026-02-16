@@ -9,7 +9,15 @@
 </form>
 <ul class="list-group">
     {% for p in players %}
-        <li class="list-group-item">{{ p.name }}</li>
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          <span>{{ p.name }}</span>
+        
+          <form method="post" action="{{ url_for('delete_player', player_id=p.id) }}"
+                onsubmit="return confirm('Delete player {{ p.name }}? This cannot be undone.');"
+                style="display:inline;">
+            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+          </form>
+        </li>
     {% endfor %}
 </ul>
 {% endblock %}
