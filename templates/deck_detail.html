@@ -18,6 +18,13 @@
   <div class="position-absolute bottom-0 start-0 p-5">
     <h1 class="display-3 fw-bold mb-2">{{ deck.name }}</h1>
     <div class="fs-5">{{ deck.commander_name or deck.commander }}</div>
+            {% if deck.color_identity %}
+     <div class="mt-3">
+       {% for c in deck.color_identity %}
+         <span class="mana mana-{{ c }}">{{ c }}</span>
+       {% endfor %}
+     </div>
+     {% endif %}
     <small class="text-light opacity-75">Owner: {{ deck.owner.name }}</small>
   </div>
 </div>
