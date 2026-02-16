@@ -75,128 +75,194 @@
          .card { padding: 15px !important; }
          table { font-size: 0.9rem; }
          }
+         .life-grid{
+         position: absolute;
+         inset: 0;
+         width: 100vw;
+         height: 100vh;
+         display: grid;
+         }
+         .life-card{ position: relative; overflow: hidden; }
+         /* 2: stacked */
+         .players-2{
+         grid-template-columns: 1fr;
+         grid-template-rows: 1fr 1fr;
+         grid-template-areas:
+         "p1"
+         "p2";
+         }
+         /* 3: 2 top, 1 full bottom */
+         .players-3{
+         grid-template-columns: 1fr 1fr;
+         grid-template-rows: 1fr 1fr;
+         grid-template-areas:
+         "p1 p2"
+         "p3 p3";
+         }
+         /* 4: 2x2 */
+         .players-4{
+         grid-template-columns: 1fr 1fr;
+         grid-template-rows: 1fr 1fr;
+         grid-template-areas:
+         "p1 p2"
+         "p3 p4";
+         }
+         /* 5: 3 top, 2 bottom (p4 spans two cols) */
+         .players-5{
+         grid-template-columns: 1fr 1fr 1fr;
+         grid-template-rows: 1fr 1fr;
+         grid-template-areas:
+         "p1 p2 p3"
+         "p4 p4 p5";
+         }
+         /* 6: 3x2 */
+         .players-6{
+         grid-template-columns: 1fr 1fr 1fr;
+         grid-template-rows: 1fr 1fr;
+         grid-template-areas:
+         "p1 p2 p3"
+         "p4 p5 p6";
+         }
+         /* Map cards to grid areas */
+         .pos-1{ grid-area: p1; }
+         .pos-2{ grid-area: p2; }
+         .pos-3{ grid-area: p3; }
+         .pos-4{ grid-area: p4; }
+         .pos-5{ grid-area: p5; }
+         .pos-6{ grid-area: p6; }
       </style>
    </head>
    <body>
       <div class="container mt-4">
-         <div id="lifeGrid" class="fixed-top start-0 w-100 vh-100 m-0 p-0 overflow-hidden bg-dark">
-            <div class="row g-0 h-100 w-100">
-               {% set n = participants|length %}
-               {% for p in participants %}
-               {# Make first half "top" (rotated), second half "bottom" #}
-               {% set is_top = loop.index0 < (n // 2) %}
-               <div
-                  class="col-6 h-50 position-relative life-card {% if is_top %}top-card{% endif %}"
-                  data-player-index="{{ p.player_id }}"
-                  style="background: linear-gradient(135deg, var({{ p.color }}), #000000);"
-                  >
-                  <div class="h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
-                     <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
-                     {{ p.player_name }}
-                     </small>
-                     <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">40</div>
-                  </div>
-               </div>
-               {% endfor %}
-            </div>
-            <!-- Central Hamburger -->
-            <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
-            <img src="/static/hamburger.svg" width="40" height="40">
-            </button>
-         </div>
-         <!-- Menu Modal -->
-         <div class="modal fade" id="menuModal">
-            <div class="modal-dialog modal-dialog-centered">
-               <div class="modal-content bg-dark text-light">
-                  <div class="modal-body text-center p-4">
-                     <button onclick="toggleFullscreen()" class="btn btn-primary w-100 mb-3 btn-lg">Toggle Fullscreen</button>
-                     <form method="post" action="/end_game">
-                        <select name="winner" class="form-select mb-3">
-                           <option>Select Winner</option>
-                           <option value="1">Tim</option>
-                           <option value="2">Jordan</option>
-                           <option value="3">Jerome</option>
-                           <option value="4">Marcel</option>
-                        </select>
-                        <button type="submit" class="btn btn-success w-100 btn-lg">End Game & Record</button>
-                     </form>
-                  </div>
+         {% set n = participants|length %}
+         <div class="life-grid players-{{ n }}">
+            {% for p in participants %}
+            {% set is_top =
+            (n == 2 and loop.index0 == 0) or
+            (n == 3 and loop.index0 < 2) or
+            (n == 4 and loop.index0 < 2) or
+            (n == 5 and loop.index0 < 3) or
+            (n == 6 and loop.index0 < 3)
+            %}
+            <div
+               class="life-card {% if is_top %}top-card{% endif %} pos-{{ loop.index }}"
+               data-player-index="{{ p.player_id }}"
+               style="background: linear-gradient(135deg, var({{ p.color }}), #000000);"
+               >
+               <div class="h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
+                  <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
+                  {{ p.player_name }}
+                  </small>
+                  <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">40</div>
                </div>
             </div>
+            {% endfor %}
          </div>
-         <script>
-            // Auto fullscreen on load
-            document.addEventListener('DOMContentLoaded', () => {
-            if (document.documentElement.requestFullscreen) {
-            document.documentElement.requestFullscreen().catch(() => {});
-            }
-            });
-            
-            // Tap left = -1, right = +1 (reverse for top rotated cards)
-            document.querySelectorAll('.life-card').forEach(card => {
-            const isTop = card.classList.contains('top-card');
-            
-            const handleTap = function(e) {
-            const rect = card.getBoundingClientRect();
-            const x = (e.type === 'touchstart' ? e.touches[0].clientX : e.clientX) - rect.left;
-            let amount = (x < rect.width / 2) ? -1 : 1;
-            if (isTop) amount = -amount;  // Reverse for top
-            const player = card.dataset.playerIndex;
-            adjustLife(player, amount);
-            e.preventDefault();
-            };
-            
-            card.addEventListener('click', handleTap);
-            card.addEventListener('touchstart', handleTap, { passive: false });
-            });
-            
-            function adjustLife(player, amount) {
-            const el = document.getElementById('life-' + player);
-            let life = parseInt(el.textContent) + amount;
-            if (life < 0) life = 0;
-            el.textContent = life;
-            
-            // Auto-end if only one >0
-            const lives = Array.from(document.querySelectorAll('.life-display')).map(e => parseInt(e.textContent));
-            const alive = lives.filter(l => l > 0).length;
-            if (alive <= 1) {
-            const winnerIndex = lives.findIndex(l => l > 0);
-            if (winnerIndex !== -1) {
-            const winnerPlayer = document.querySelectorAll('.life-card')[winnerIndex].dataset.playerIndex;
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/end_game';
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'winner';
-            input.value = winnerPlayer;
-            form.appendChild(input);
-            document.body.appendChild(form);
-            form.submit();
-            }
-            }
-            }
-            
-            function toggleFullscreen() {
-            if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
-            } else {
-            document.exitFullscreen();
-            }
-            }
-         </script>
-         <style>
-            .life-display {
-            font-size: 18vh;
-            font-weight: 900;
-            line-height: 1;
-            text-shadow: 0 0 30px black;
-            color: white;
-            }
-         </style>
+         <!-- Central Hamburger -->
+         <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
+         <img src="/static/hamburger.svg" width="40" height="40">
+         </button>
+      </div>
+      <!-- Menu Modal -->
+      <div class="modal fade" id="menuModal">
+         <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content bg-dark text-light">
+               <div class="modal-body text-center p-4">
+                  <button onclick="toggleFullscreen()" class="btn btn-primary w-100 mb-3 btn-lg">Toggle Fullscreen</button>
+                  <form method="post" action="/end_game">
+                     <select name="winner" class="form-select mb-3" required>
+                        <option value="" selected disabled>Select Winner</option>
+                        {% for p in participants %}
+                        <option value="{{ p.player_id }}">{{ p.player_name }}</option>
+                        {% endfor %}
+                     </select>
+                     <button type="submit" class="btn btn-success w-100 btn-lg">End Game & Record</button>
+                  </form>
+               </div>
+            </div>
+         </div>
+      </div>
+      <script>
+         // Auto fullscreen on load
+         document.addEventListener('DOMContentLoaded', () => {
+         if (document.documentElement.requestFullscreen) {
+         document.documentElement.requestFullscreen().catch(() => {});
+         }
+         });
+         
+         // Tap left = -1, right = +1 (reverse for top rotated cards)
+         document.querySelectorAll('.life-card').forEach(card => {
+         const isTop = card.classList.contains('top-card');
+         
+         const handleTap = function(e) {
+         const rect = card.getBoundingClientRect();
+         const x = (e.type === 'touchstart' ? e.touches[0].clientX : e.clientX) - rect.left;
+         let amount = (x < rect.width / 2) ? -1 : 1;
+         if (isTop) amount = -amount;  // Reverse for top
+         const player = card.dataset.playerIndex;
+         adjustLife(player, amount);
+         e.preventDefault();
+         };
+         
+         card.addEventListener('click', handleTap);
+         card.addEventListener('touchstart', handleTap, { passive: false });
+         });
+         
+         function adjustLife(player, amount) {
+         const el = document.getElementById('life-' + player);
+         if (!el) return;
+         
+         let life = parseInt(el.textContent, 10) + amount;
+         if (life < 0) life = 0;
+         el.textContent = life;
+         
+         // Auto-end if only one player has >0 life
+         const cards = Array.from(document.querySelectorAll('.life-card'));
+         const aliveCards = cards.filter(card => {
+         const pid = card.dataset.playerIndex;
+         const lifeEl = document.getElementById('life-' + pid);
+         return lifeEl && parseInt(lifeEl.textContent, 10) > 0;
+         });
+         
+         if (aliveCards.length === 1) {
+         const winnerPlayer = aliveCards[0].dataset.playerIndex;
+         
+         const form = document.createElement('form');
+         form.method = 'POST';
+         form.action = '/end_game';
+         
+         const input = document.createElement('input');
+         input.type = 'hidden';
+         input.name = 'winner';
+         input.value = winnerPlayer;
+         
+         form.appendChild(input);
+         document.body.appendChild(form);
+         form.submit();
+         }
+         }
+         
+         
+         function toggleFullscreen() {
+         if (!document.fullscreenElement) {
+         document.documentElement.requestFullscreen();
+         } else {
+         document.exitFullscreen();
+         }
+         }
+      </script>
+      <style>
+         .life-display {
+         font-size: 18vh;
+         font-weight: 900;
+         line-height: 1;
+         text-shadow: 0 0 30px black;
+         color: white;
+         }
+      </style>
       </div>
       <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>  <!-- For navbar toggle -->
-      <script src="/static/bootstrap.bundle.min.js"></script>
-      <script src="/static/bootstrap.bundle.min.js"></script>
+      <!-- <script src="/static/bootstrap.bundle.min.js"></script>
+         <script src="/static/bootstrap.bundle.min.js"></script> -->
    </body>
 </html>
