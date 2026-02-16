@@ -401,7 +401,7 @@ def admin_users():
 
 @app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
 @admin_required
-def approve_user(user_id):
+def admin_approve_user(user_id):
     u = db.session.get(User, user_id)
     if not u:
         abort(404)
@@ -409,6 +409,41 @@ def approve_user(user_id):
     u.approved_at = datetime.utcnow()
     db.session.commit()
     flash(f"Approved {u.display_name}")
+    return redirect(url_for("admin_users"))
+
+@app.route("/admin/users/<int:user_id>/deactivate", methods=["POST"])
+@admin_required
+def admin_deactivate_user(user_id):
+    u = db.session.get(User, user_id)
+    if not u:
+        abort(404)
+
+    # prevent self-lockout
+    me = get_current_user()
+    if me and me.id == u.id:
+        flash("You can't deactivate your own account.")
+        return redirect(url_for("admin_users"))
+
+    u.is_active = False
+    db.session.commit()
+    flash(f"Deactivated {u.display_name}")
+    return redirect(url_for("admin_users"))
+
+@app.route("/admin/users/<int:user_id>/toggle_admin", methods=["POST"])
+@admin_required
+def admin_toggle_admin(user_id):
+    u = db.session.get(User, user_id)
+    if not u:
+        abort(404)
+
+    me = get_current_user()
+    if me and me.id == u.id:
+        flash("You can't change your own admin status here.")
+        return redirect(url_for("admin_users"))
+
+    u.is_admin = not u.is_admin
+    db.session.commit()
+    flash(f"Admin for {u.display_name}: {u.is_admin}")
     return redirect(url_for("admin_users"))
 
 
