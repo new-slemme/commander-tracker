@@ -319,30 +319,36 @@
   		<img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="24" height="24">
 	    </button>
             <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="navbar-nav">
-    			<a class="nav-link" href="/">Home</a>
-    			<a class="nav-link" href="/players">Players</a>
-    			<a class="nav-link" href="/decks">Decks</a>
-    			<a class="nav-link" href="/games">Games</a>
-    			<a class="nav-link" href="/play_game">Play Game</a>
-    			<a class="nav-link" href="/manual_game">Manual Game</a>
-				{% if session.get("user_id") %}
-				  <a href="{{ url_for('profile') }}">Profile</a>
-				  {% if session.get("is_admin") %}
-				    <a href="{{ url_for('admin_users') }}">Admin</a>
-				  {% endif %}
-				  <a href="{{ url_for('logout') }}">Logout</a>
-				{% else %}
-				  <a href="{{ url_for('login') }}">Login</a>
-				  <a href="{{ url_for('register') }}">Register</a>
-				{% endif %}
-		</div>
-                <div class="navbar-nav ms-auto">
-                    {% if 'username' in session %}
-                        <span class="navbar-text me-3">Welcome, {{ session.username }}</span>
-                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-                    {% endif %}
-                </div>
+			  <!-- Left side -->
+			  <div class="navbar-nav">
+			    <a class="nav-link" href="/">Home</a>
+			    <a class="nav-link" href="/players">Players</a>
+			    <a class="nav-link" href="/decks">Decks</a>
+			    <a class="nav-link" href="/games">Games</a>
+			    <a class="nav-link" href="/play_game">Play Game</a>
+			    <a class="nav-link" href="/manual_game">Manual Game</a>
+			  </div>
+			
+			  <!-- Right side -->
+			  <div class="navbar-nav ms-auto align-items-lg-center">
+			    {% if session.get("user_id") %}
+			      <span class="navbar-text me-3">
+			        Welcome, {{ session.get("display_name") or session.get("username") }}
+			      </span>
+			
+			      <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+			
+			      {% if session.get("is_admin") %}
+			        <a class="nav-link" href="{{ url_for('admin_users') }}">Admin</a>
+			      {% endif %}
+			
+			      <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+			    {% else %}
+			      <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+			      <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+			    {% endif %}
+			  </div>
+			</div>
             </div>
         </div>
     </nav>
