@@ -1,27 +1,220 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Decks</h1>
-<form method="post" action="/add_deck" class="mb-3">
-    <div class="row g-2">
-        <div class="col-md-3"><input type="text" name="name" class="form-control" placeholder="Deck name" required></div>
-        <div class="col-md-3"><input type="text" name="commander" class="form-control" placeholder="Commander" required></div>
-        <div class="col-md-3">
-            <select name="player_id" class="form-select" required>
-                <option value="">Select owner</option>
-                {% for p in players %}
-                    <option value="{{ p.id }}">{{ p.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-3"><button class="btn btn-primary">Add Deck</button></div>
+
+<div class="container py-4">
+  <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
+    <h1 class="m-0">Decks</h1>
+
+    <div class="d-flex gap-2 flex-wrap">
+      <form method="get" action="{{ url_for('decks') }}" class="d-flex gap-2">
+        <select class="form-select" name="player_id" onchange="this.form.submit()">
+          <option value="">All owners</option>
+          {% for p in players %}
+            <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
+              {{ p.name }}
+            </option>
+          {% endfor %}
+        </select>
+        {% if selected_player_id %}
+          <a class="btn btn-secondary" href="{{ url_for('decks') }}">Clear</a>
+        {% endif %}
+      </form>
+
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeckModal">
+        Add Deck
+      </button>
     </div>
-</form>
-<table class="table table-striped">
-    <thead><tr><th>Deck</th><th>Commander</th><th>Owner</th></tr></thead>
-    <tbody>
-    {% for d in decks %}
-        <tr><td>{{ d.name }}</td><td>{{ d.commander }}</td><td>{{ d.owner.name }}</td></tr>
-    {% endfor %}
-    </tbody>
-</table>
+  </div>
+
+  <div class="card p-3">
+    <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Deck</th>
+            <th>Commander</th>
+            <th>Owner</th>
+            <th class="text-end">W</th>
+            <th class="text-end">L</th>
+            <th class="text-end">Games</th>
+            <th class="text-end">Win %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in decks %}
+            {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
+            <tr>
+              <td class="fw-bold">{{ d.name }}</td>
+              <td>
+                <span class="commander-link" data-commander="{{ d.commander|e }}" style="cursor:pointer; text-decoration: underline;">
+                  {{ d.commander }}
+                </span>
+              </td>
+              <td>{{ d.owner.name }}</td>
+              <td class="text-end">{{ s.wins }}</td>
+              <td class="text-end">{{ s.losses }}</td>
+              <td class="text-end">{{ s.uses }}</td>
+              <td class="text-end">{{ s.winrate }}%</td>
+            </tr>
+          {% endfor %}
+
+          {% if decks|length == 0 %}
+            <tr><td colspan="7" class="text-center py-4">No decks found.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Deck Modal -->
+<div class="modal fade" id="addDeckModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-body p-4">
+        <h4 class="mb-3">Add Deck</h4>
+
+        <form method="post" action="{{ url_for('add_deck') }}" id="addDeckForm">
+          <div class="mb-3">
+            <label class="form-label">Owner</label>
+            <select class="form-select" name="player_id" required>
+              <option value="" selected disabled>Select owner</option>
+              {% for p in players %}
+                <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
+                  {{ p.name }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Deck name</label>
+            <input class="form-control" name="name" required />
+          </div>
+
+          <div class="mb-2">
+            <label class="form-label">Commander</label>
+            <input class="form-control" id="commanderInput" name="commander" autocomplete="off" required />
+            <div class="form-text" style="color: var(--font-base-trans);">
+              Start typing a card name; suggestions come from Scryfall.
+            </div>
+          </div>
+
+          <div id="commanderPreview" class="mt-3" style="display:none;">
+            <img id="commanderImg" alt="Commander preview" style="max-width:100%; border-radius: 12px;" />
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-success w-100 btn-lg" type="submit">Add</button>
+            <button class="btn btn-secondary w-100 btn-lg" type="button" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- Commander autocomplete + preview via Scryfall (client-side) ---
+  // Autocomplete endpoint: /cards/autocomplete :contentReference[oaicite:1]{index=1}
+  // Card lookup endpoint: /cards/named :contentReference[oaicite:2]{index=2}
+  const commanderInput = document.getElementById('commanderInput');
+  const previewWrap = document.getElementById('commanderPreview');
+  const previewImg = document.getElementById('commanderImg');
+
+  let acTimer = null;
+
+  async function scryfallAutocomplete(q) {
+    const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(q)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.data || [];
+  }
+
+  async function scryfallCardByExactName(name) {
+    const url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  function attachDropdown(items) {
+    // simple inline dropdown (no extra libs)
+    let box = document.getElementById('commanderSuggest');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'commanderSuggest';
+      box.style.position = 'relative';
+      commanderInput.parentNode.appendChild(box);
+
+      const menu = document.createElement('div');
+      menu.id = 'commanderSuggestMenu';
+      menu.className = 'list-group';
+      menu.style.position = 'absolute';
+      menu.style.zIndex = '2000';
+      menu.style.width = '100%';
+      menu.style.maxHeight = '260px';
+      menu.style.overflowY = 'auto';
+      box.appendChild(menu);
+    }
+
+    const menu = document.getElementById('commanderSuggestMenu');
+    menu.innerHTML = '';
+    if (!items.length) return;
+
+    for (const name of items.slice(0, 12)) {
+      const a = document.createElement('button');
+      a.type = 'button';
+      a.className = 'list-group-item list-group-item-action';
+      a.textContent = name;
+      a.addEventListener('click', async () => {
+        commanderInput.value = name;
+        menu.innerHTML = '';
+        const card = await scryfallCardByExactName(name);
+        if (card && card.image_uris && card.image_uris.normal) {
+          previewImg.src = card.image_uris.normal;
+          previewWrap.style.display = '';
+        } else {
+          previewWrap.style.display = 'none';
+        }
+      });
+      menu.appendChild(a);
+    }
+  }
+
+  if (commanderInput) {
+    commanderInput.addEventListener('input', () => {
+      clearTimeout(acTimer);
+      const q = commanderInput.value.trim();
+      previewWrap.style.display = 'none';
+      if (q.length < 3) {
+        attachDropdown([]);
+        return;
+      }
+      acTimer = setTimeout(async () => {
+        const items = await scryfallAutocomplete(q);
+        attachDropdown(items);
+      }, 200);
+    });
+
+    // Hide suggestions if user clicks outside
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('commanderSuggestMenu');
+      if (!menu) return;
+      if (e.target === commanderInput || menu.contains(e.target)) return;
+      menu.innerHTML = '';
+    });
+  }
+
+  // Bonus: clicking a commander name in the table opens Scryfall preview in new tab
+  document.querySelectorAll('.commander-link').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.dataset.commander;
+      const url = `https://scryfall.com/search?q=!${encodeURIComponent(name)}`;
+      window.open(url, '_blank');
+    });
+  });
+</script>
+
 {% endblock %}
