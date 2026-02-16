@@ -82,7 +82,7 @@
          height: 100vh;
          display: grid;
          }
-         .life-card{ position: relative; overflow: hidden; }
+         .life-card{ position: relative; overflow: hidden; background-blend-mode: overlay;}
          /* 2: stacked */
          .players-2{
          grid-template-columns: 1fr;
@@ -149,14 +149,14 @@
             data-player-index="{{ p.player_id }}"
             {% set bg = p.deck_commander_art if p.deck_commander_art else "" %}
             style="
-            {% if bg %}
-            background-image:
-            linear-gradient(135deg, rgba(0,0,0,.65), rgba(0,0,0,.85)),
-            url('{{ bg }}');
-            background-size: cover;
-            background-position: center;
+            {% if p.commander_art %}
+              background-image:
+                linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
+                url('{{ p.commander_art }}');
+              background-size: cover;
+              background-position: center;
             {% else %}
-            background: linear-gradient(135deg, var({{ p.color }}), #000000);
+              background: linear-gradient(135deg, var({{ p.color }}), #000000);
             {% endif %}
             "
             >
@@ -264,11 +264,13 @@
       </script>
       <style>
          .life-display {
-         font-size: 18vh;
-         font-weight: 900;
-         line-height: 1;
-         text-shadow: 0 0 30px black;
-         color: white;
+           font-size: 18vh;
+           font-weight: 900;
+           line-height: 1;
+           text-shadow:
+             0 0 10px rgba(0,0,0,0.9),
+             0 0 30px rgba(0,0,0,0.8);
+           color: white;
          }
       </style>
       </div>
