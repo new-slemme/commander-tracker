@@ -90,8 +90,6 @@ with app.app_context():
 # -------------------------
 # Scryfall helper functions
 # -------------------------
-ART_DIR = os.path.join(app.root_path, "static", "commander_art")
-
 
 def _safe_filename(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", s).strip("_")
@@ -239,6 +237,18 @@ def logout():
 @app.route("/art/<path:filename>")
 def art(filename):
     return send_from_directory(ART_DIR, filename)
+
+@app.route("/admin/fix_art_paths")
+def fix_art_paths():
+    decks = Deck.query.all()
+    changed = 0
+    for d in decks:
+        if d.commander_local_art and d.commander_local_art.startswith("/static/commander_art/"):
+            d.commander_local_art = None
+            changed += 1
+    db.session.commit()
+    return f"Fixed {changed} decks"
+
 
 @app.route("/")
 def index():
