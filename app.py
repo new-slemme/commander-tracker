@@ -263,7 +263,7 @@ def require_login():
 def register():
     if request.method == "POST":
         username = request.form["username"].strip()
-        display_name = request.form["display_name"].strip()
+        display_name = request.form.get("display_name", "").strip()
         password = request.form["password"]
         confirm = request.form["confirm"]
 
