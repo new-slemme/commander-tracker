@@ -310,6 +310,45 @@ def decks():
     )
 
 
+@app.route("/deck/<int:deck_id>")
+def deck_detail(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        return "Deck not found", 404
+
+    # Stats
+    wins = (
+        GameParticipant.query.join(Game)
+        .filter(
+            GameParticipant.deck_id == deck.id,
+            Game.winner_id == GameParticipant.player_id,
+        )
+        .count()
+    )
+    games = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    losses = max(0, games - wins)
+    winrate = round((wins / games) * 100, 1) if games else 0
+
+    # Game history
+    participations = (
+        GameParticipant.query
+        .filter_by(deck_id=deck.id)
+        .order_by(GameParticipant.game_id.desc())
+        .all()
+    )
+
+    return render_template(
+        "deck_detail.html",
+        deck=deck,
+        wins=wins,
+        losses=losses,
+        games=games,
+        winrate=winrate,
+        participations=participations,
+    )
+
+
+
 @app.route("/add_deck", methods=["POST"])
 def add_deck():
     name = request.form.get("name", "").strip()
