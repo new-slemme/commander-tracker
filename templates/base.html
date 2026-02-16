@@ -98,12 +98,19 @@
   min-height: 86px;
 }
 
-.recent-game-bg {
-  position: absolute;
-  inset: 0;
-  background-repeat: no-repeat;
-  filter: saturate(1.05);
+.recent-game-bg{
+  position:absolute;
+  inset:0;
+  display:flex;
+  gap:0;
+}
+
+.recent-game-slice{
+  flex:1 1 0;
+  background-size: cover;
   background-position: top;
+  background-repeat:no-repeat;
+  filter: saturate(1.05);
 }
 
 .recent-game-overlay {
