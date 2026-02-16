@@ -154,9 +154,48 @@ def add_player():
 
 @app.route('/decks')
 def decks():
-    decks_list = Deck.query.all()
-    players_list = Player.query.all()
-    return render_template('decks.html', decks=decks_list, players=players_list)
+    players_list = Player.query.order_by(Player.name.asc()).all()
+
+    # Filter by owner via query param: /decks?player_id=1
+    player_id = request.args.get('player_id', type=int)
+
+    q = Deck.query
+    if player_id:
+        q = q.filter(Deck.player_id == player_id)
+
+    decks_list = q.order_by(Deck.name.asc()).all()
+
+    # --- Deck stats (wins / uses / losses / winrate) ---
+    stats = {}
+    for d in decks_list:
+        wins = (
+            GameParticipant.query
+            .join(Game, GameParticipant.game_id == Game.id)
+            .filter(
+                GameParticipant.deck_id == d.id,
+                Game.winner_id == GameParticipant.player_id
+            )
+            .count()
+        )
+        uses = GameParticipant.query.filter_by(deck_id=d.id).count()
+        losses = max(0, uses - wins)
+        winrate = round((wins / uses) * 100, 1) if uses else 0.0
+
+        stats[d.id] = {
+            "wins": wins,
+            "uses": uses,
+            "losses": losses,
+            "winrate": winrate
+        }
+
+    return render_template(
+        'decks.html',
+        decks=decks_list,
+        players=players_list,
+        selected_player_id=player_id,
+        deck_stats=stats
+    )
+
 
 @app.route('/add_deck', methods=['POST'])
 def add_deck():
