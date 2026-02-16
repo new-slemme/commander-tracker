@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="deck-banner"
+     style="
+     {% if deck.commander_local_art or deck.commander_art_crop_url %}
+       background-image:
+         linear-gradient(rgba(0,0,0,.6), rgba(0,0,0,.85)),
+         url('{{ deck.commander_local_art or deck.commander_art_crop_url }}');
+       background-size: cover;
+       background-position: center;
+     {% else %}
+       background: var(--darker);
+     {% endif %}
+     ">
+  <div class="container py-5 text-white">
+    <h1 class="display-4">{{ deck.name }}</h1>
+    <p class="lead">{{ deck.commander_name or deck.commander }}</p>
+    <p>Owner: {{ deck.owner.name }}</p>
+  </div>
+</div>
+
+<div class="container py-4">
+
+  <div class="row g-4">
+    <div class="col-md-3">
+      <div class="card p-3 text-center">
+        <h3>{{ wins }}</h3>
+        <small>Wins</small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card p-3 text-center">
+        <h3>{{ losses }}</h3>
+        <small>Losses</small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card p-3 text-center">
+        <h3>{{ games }}</h3>
+        <small>Games</small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card p-3 text-center">
+        <h3>{{ winrate }}%</h3>
+        <small>Win Rate</small>
+      </div>
+    </div>
+  </div>
+
+  <hr class="my-4">
+
+  <h4>Game History</h4>
+
+  <div class="list-group">
+    {% for part in participations %}
+      <div class="list-group-item d-flex justify-content-between align-items-center">
+        Game #{{ part.game_id }}
+        {% if part.game.winner_id == part.player_id %}
+          <span class="badge bg-success">Win</span>
+        {% else %}
+          <span class="badge bg-danger">Loss</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+{% endblock %}
