@@ -1,11 +1,13 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
+from pathlib import Path
 from datetime import datetime
 import json
 import os
 import re
 import requests
 from urllib.parse import quote
+from urllib.request import urlopen
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func, text, inspect
 
@@ -14,6 +16,8 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-i
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
+ART_DIR = Path("/data/art")
+ART_DIR.mkdir(parents=True, exist_ok=True)
 
 # -------------------------
 # Models
@@ -126,8 +130,8 @@ def extract_art_crop(card: dict):
 
 def download_art_crop(art_url: str, scryfall_id: str, commander_name: str):
     """
-    Downloads art_crop into static/commander_art.
-    Returns a web path like '/static/commander_art/<file>.jpg' or None.
+    Downloads art_crop into /data/commander_art (persistent).
+    Returns a web path like '/commander_art/<file>.jpg' or None.
     """
     if not (art_url and scryfall_id and commander_name):
         return None
@@ -135,7 +139,7 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str):
     os.makedirs(ART_DIR, exist_ok=True)
     filename = f"{_safe_filename(commander_name)}_{scryfall_id}.jpg"
     abs_path = os.path.join(ART_DIR, filename)
-    web_path = f"/static/commander_art/{filename}"
+    web_path = f"/commander_art/{filename}"
 
     if os.path.exists(abs_path):
         return web_path
@@ -147,7 +151,7 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str):
         with open(abs_path, "wb") as f:
             f.write(img.content)
         return web_path
-    except requests.RequestException:
+    except Exception:
         return None
 
 
@@ -216,6 +220,10 @@ def logout():
 # -------------------------
 # Main App Routes
 # -------------------------
+@app.route("/art/<path:filename>")
+def art(filename):
+    return send_from_directory(ART_DIR, filename)
+
 @app.route("/")
 def index():
     # Player stats
