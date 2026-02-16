@@ -6,17 +6,23 @@
 
 <div class="pyramid mb-5">
   {% if top_players|length > 0 %}
-  <div class="leader-card p-top position-relative">
-  
+  <div class="leader-card p-top {% if top_players[0].bg_art %}has-bg{% endif %}"
+     {% if top_players[0].bg_art %}
+     style="background-image:url('{{ top_players[0].bg_art }}');"
+     {% endif %}>
     <!-- Erzfeind Badge -->
     <span class="erzfeind-badge">
       ERZFEIND
     </span>
-  
     <div class="d-flex justify-content-between align-items-start">
       <span class="rank-badge">#1</span>
     </div>
     <h3 class="mt-3 mb-1 text-white">{{ top_players[0].player.name }}</h3>
+    {% if top_players[0].most_played_deck %}
+      <div class="muted" style="font-size: 0.9rem;">
+        Most played: {{ top_players[0].most_played_deck.name }}
+      </div>
+    {% endif %}
     <div class="d-flex gap-3 muted">
       <div><strong class="text-white">{{ top_players[0].wins }}</strong> wins</div>
       <div><strong class="text-white">{{ top_players[0].played }}</strong> games</div>
@@ -27,11 +33,19 @@
 
 
   {% if top_players|length > 1 %}
-  <div class="leader-card p-left">
+  <div class="leader-card p-left {% if top_players[1].bg_art %}has-bg{% endif %}"
+     {% if top_players[1].bg_art %}
+     style="background-image:url('{{ top_players[1].bg_art }}');"
+     {% endif %}>
     <div class="d-flex justify-content-between align-items-start">
       <span class="rank-badge">#2</span>
     </div>
     <h4 class="mt-3 mb-1 text-white">{{ top_players[1].player.name }}</h4>
+    {% if top_players[0].most_played_deck %}
+      <div class="muted" style="font-size: 0.9rem;">
+        Most played: {{ top_players[0].most_played_deck.name }}
+      </div>
+    {% endif %}
     <div class="d-flex gap-3 muted">
       <div><strong class="text-white">{{ top_players[1].wins }}</strong> wins</div>
       <div><strong class="text-white">{{ top_players[1].winrate }}%</strong></div>
@@ -41,11 +55,19 @@
 
 
   {% if top_players|length > 2 %}
-  <div class="leader-card p-right">
+  <div class="leader-card p-right {% if top_players[2].bg_art %}has-bg{% endif %}"
+     {% if top_players[2].bg_art %}
+     style="background-image:url('{{ top_players[2].bg_art }}');"
+     {% endif %}>
     <div class="d-flex justify-content-between align-items-start">
       <span class="rank-badge">#3</span>
     </div>
     <h4 class="mt-3 mb-1 text-white">{{ top_players[2].player.name }}</h4>
+    {% if top_players[0].most_played_deck %}
+      <div class="muted" style="font-size: 0.9rem;">
+        Most played: {{ top_players[0].most_played_deck.name }}
+      </div>
+    {% endif %}
     <div class="d-flex gap-3 muted">
       <div><strong class="text-white">{{ top_players[2].wins }}</strong> wins</div>
       <div><strong class="text-white">{{ top_players[2].winrate }}%</strong></div>
