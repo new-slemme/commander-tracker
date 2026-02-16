@@ -32,6 +32,29 @@
      {% endif %}
     <small class="text-light opacity-75">Owner: {{ deck.owner.name }}</small>
   </div>
+     <div class="position-absolute bottom-0 end-0 p-3 d-flex gap-2">
+       {% if deck.retired %}
+         <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
+           <button type="submit" class="btn btn-warning btn-sm">
+             Unretire
+           </button>
+         </form>
+       {% else %}
+         <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
+               onsubmit="return confirm('Retire {{ deck.name }}?');">
+           <button type="submit" class="btn btn-warning btn-sm">
+             Retire
+           </button>
+         </form>
+       {% endif %}
+     
+       <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
+             onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
+         <button type="submit" class="btn btn-danger btn-sm">
+           Delete
+         </button>
+       </form>
+     </div>
 </div>
 
 
@@ -93,29 +116,6 @@
       {% endif %}
     </div>
   {% endfor %}
-<div class="position-absolute bottom-0 end-0 p-3 d-flex gap-2">
-  {% if deck.retired %}
-    <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
-      <button type="submit" class="btn btn-warning btn-sm">
-        Unretire
-      </button>
-    </form>
-  {% else %}
-    <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
-          onsubmit="return confirm('Retire {{ deck.name }}?');">
-      <button type="submit" class="btn btn-warning btn-sm">
-        Retire
-      </button>
-    </form>
-  {% endif %}
-
-  <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
-        onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
-    <button type="submit" class="btn btn-danger btn-sm">
-      Delete
-    </button>
-  </form>
-</div>
 
 </div>
 
