@@ -385,14 +385,19 @@ def add_player():
 def decks():
     players_list = Player.query.order_by(Player.name.asc()).all()
 
-    # Filter by owner via query param: /decks?player_id=1
     player_id = request.args.get("player_id", type=int)
+    show_retired = request.args.get("show_retired", type=int)
 
-    q = Deck.query.filter(Deck.retired == False)
+    q = Deck.query
+
+    if not show_retired:
+        q = q.filter(Deck.retired == False)
+
     if player_id:
         q = q.filter(Deck.player_id == player_id)
 
-    decks_list = q.order_by(Deck.name.asc()).all()
+    decks_list = q.order_by(Deck.retired.asc(), Deck.name.asc()).all()
+
 
     # Deck stats (wins / uses / losses / winrate)
     stats = {}
