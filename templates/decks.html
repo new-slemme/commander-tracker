@@ -44,7 +44,11 @@
           {% for d in decks %}
             {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
             <tr>
-              <td class="fw-bold">{{ d.name }}</td>
+              <td class="fw-bold">
+                <a href="{{ url_for('deck_detail', deck_id=d.id) }}">
+                  {{ d.name }}
+                </a>
+              </td>
               <td>
                 <span class="commander-link" data-commander="{{ d.commander|e }}" style="cursor:pointer; text-decoration: underline;">
                   {{ d.commander }}
