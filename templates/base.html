@@ -291,6 +291,16 @@
     			<a class="nav-link" href="/games">Games</a>
     			<a class="nav-link" href="/play_game">Play Game</a>
     			<a class="nav-link" href="/manual_game">Manual Game</a>
+				{% if session.get("user_id") %}
+				  <a href="{{ url_for('profile') }}">Profile</a>
+				  {% if session.get("is_admin") %}
+				    <a href="{{ url_for('admin_users') }}">Admin</a>
+				  {% endif %}
+				  <a href="{{ url_for('logout') }}">Logout</a>
+				{% else %}
+				  <a href="{{ url_for('login') }}">Login</a>
+				  <a href="{{ url_for('register') }}">Register</a>
+				{% endif %}
 		</div>
                 <div class="navbar-nav ms-auto">
                     {% if 'username' in session %}
