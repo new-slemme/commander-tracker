@@ -60,6 +60,7 @@ class GameParticipant(db.Model):
     deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False)
     player = db.relationship("Player", backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
+    game = db.relationship("Game", backref="participants", lazy=True)
 
     __table_args__ = (
         db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),
