@@ -310,6 +310,9 @@ def decks():
     )
 
 
+@app.route("/deck/<int:deck_id>/resync")
+
+
 @app.route("/deck/<int:deck_id>")
 def deck_detail(deck_id):
     deck = db.session.get(Deck, deck_id)
