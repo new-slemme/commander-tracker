@@ -61,11 +61,18 @@
               <td class="text-end">{{ s.uses }}</td>
               <td class="text-end">{{ s.winrate }}%</td>
               <td class="text-end">
-                <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
-                      onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
-                      style="display:inline;">
-                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                </form>
+                {% if deck_can_delete.get(d.id) %}
+                  <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
+                        onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
+                        style="display:inline;">
+                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                  </form>
+                {% else %}
+                  <button type="button" class="btn btn-sm btn-danger" disabled
+                          title="Can't delete: deck has recorded games">
+                    Delete
+                  </button>
+                {% endif %}
               </td>
             </tr>
           {% endfor %}
