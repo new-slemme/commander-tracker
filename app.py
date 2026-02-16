@@ -9,7 +9,6 @@ from urllib.parse import quote
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import text, inspect
 
-
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
@@ -252,12 +251,36 @@ def index():
     for g in recent_games:
         game_parts[g.id] = GameParticipant.query.filter_by(game_id=g.id).all()
 
+    # --- Top 3 players for pyramid ---
+    top_players = player_stats[:3]
+    
+    # --- Best deck by winrate (prefer decks with >= min_games) ---
+    min_games = 3  # change to 1 if you want "any deck"
+    best_deck = None
+    
+    best_candidates = []
+    for row in deck_stats:
+        d = row["deck"]
+        uses = row["uses"]
+        wins = row["wins"]
+        winrate = row["winrate"]
+        if uses >= min_games:
+            best_candidates.append((winrate, uses, wins, d))
+    
+    if best_candidates:
+        # highest winrate, then most games as tiebreak
+        best_candidates.sort(key=lambda t: (t[0], t[1]), reverse=True)
+        best_deck = best_candidates[0][3]
+
+    
     return render_template(
         "index.html",
         player_stats=player_stats,
         deck_stats=deck_stats,
         recent_games=recent_games,
         game_parts=game_parts,
+        top_players=top_players,
+        best_deck=best_deck,
     )
 
 @app.route("/delete_deck/<int:deck_id>", methods=["POST"])
