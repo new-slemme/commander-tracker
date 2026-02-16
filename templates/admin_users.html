@@ -17,6 +17,11 @@
             <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" style="display:inline;">
               <button type="submit" class="btn btn-sm btn-outline-warning">Approve</button>
             </form>
+            <button type="submit"
+                    class="btn btn-sm btn-outline-danger"
+                    onclick="return confirm('Are you sure you want to deny and permanently delete this user?')">
+                Deny
+            </button>
           </td>
         </tr>
       {% endfor %}
