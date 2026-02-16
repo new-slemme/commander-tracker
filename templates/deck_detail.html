@@ -58,20 +58,28 @@
 
   <hr class="my-4">
 
-  <h4>Game History</h4>
+<h4 class="mt-4">Game History</h4>
 
-  <div class="list-group">
-    {% for part in participations %}
-      <div class="list-group-item d-flex justify-content-between align-items-center">
-        Game #{{ part.game_id }}
-        {% if part.game.winner_id == part.player_id %}
-          <span class="badge bg-success">Win</span>
-        {% else %}
-          <span class="badge bg-danger">Loss</span>
-        {% endif %}
+<div class="list-group mt-3">
+  {% for h in history %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+      <div>
+        <strong>Game #{{ h.game_id }}</strong><br>
+        <small class="text-muted">
+          {{ h.date.strftime("%Y-%m-%d") }}
+          • vs {{ h.opponents | join(", ") }}
+        </small>
       </div>
-    {% endfor %}
-  </div>
+
+      {% if h.won %}
+        <span class="badge bg-success">Win</span>
+      {% else %}
+        <span class="badge bg-danger">Loss</span>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+
 
 </div>
 
