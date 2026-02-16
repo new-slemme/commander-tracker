@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<h2>Player Stats</h2>
+<table class="table table-striped">
+    <thead><tr><th>Player</th><th>Wins</th><th>Games</th><th>Win %</th></tr></thead>
+    <tbody>
+    {% for s in player_stats %}
+        <tr><td>{{ s.player.name }}</td><td>{{ s.wins }}</td><td>{{ s.played }}</td><td>{{ s.winrate }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Deck Stats</h2>
+<table class="table table-striped">
+    <thead><tr><th>Deck (Commander)</th><th>Owner</th><th>Wins</th><th>Uses</th><th>Win %</th></tr></thead>
+    <tbody>
+    {% for s in deck_stats %}
+        <tr><td>{{ s.deck.name }} ({{ s.deck.commander }})</td><td>{{ s.deck.owner.name }}</td>
+            <td>{{ s.wins }}</td><td>{{ s.uses }}</td><td>{{ s.winrate }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+
+<h2>Recent Games</h2>
+<ul class="list-group">
+{% for g in recent_games %}
+    <li class="list-group-item">
+        <strong>{{ g.date.strftime('%Y-%m-%d %H:%M') }}</strong> - 
+        Winner: <strong>{{ g.winner.name }}</strong><br>
+        Players: 
+        {% for gp in game_parts[g.id] %}
+            {{ gp.player.name }} ({{ gp.deck.name }}) {% if gp.player_id == g.winner_id %}(Winner){% endif %}{{ ', ' if not loop.last }}
+        {% endfor %}
+    </li>
+{% endfor %}
+</ul>
+{% endblock %}

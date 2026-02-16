@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Players</h1>
+<form method="post" action="/add_player" class="mb-3">
+    <div class="input-group w-50">
+        <input type="text" name="name" class="form-control" placeholder="New player name" required>
+        <button class="btn btn-primary">Add Player</button>
+    </div>
+</form>
+<ul class="list-group">
+    {% for p in players %}
+        <li class="list-group-item">{{ p.name }}</li>
+    {% endfor %}
+</ul>
+{% endblock %}

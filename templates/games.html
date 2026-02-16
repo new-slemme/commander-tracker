@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>All Games</h1>
+<ul class="list-group">
+{% for g in games %}
+    <li class="list-group-item">
+        <strong>{{ g.date.strftime('%Y-%m-%d %H:%M') }}</strong> - 
+        Winner: <strong>{{ g.winner.name }}</strong><br>
+        Players: 
+        {% for gp in game_parts[g.id] %}
+            {{ gp.player.name }} ({{ gp.deck.name }}) {% if gp.player_id == g.winner_id %}(Winner){% endif %}{{ ', ' if not loop.last }}
+        {% endfor %}
+    </li>
+{% endfor %}
+</ul>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Play Game</h1>
+<form method="post" action="/start_game" id="gameForm">
+    <div class="row" id="playerContainer">
+        {% for i in range(1,5) %}  <!-- Base 4 players -->
+        <div class="col-md-6 mb-3 player-card">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Player {{ i }}</h5>
+                    <select name="player{{ i }}" id="player{{ i }}" class="form-select mb-2">
+                        <option value="">- None -</option>
+                        {% for p in players %}
+                            <option value="{{ p.id }}">{{ p.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <select name="deck{{ i }}" id="deck{{ i }}" class="form-select mb-2" disabled>
+                        <option>Select player first</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <button type="button" id="addPlayer" class="btn btn-secondary mb-3">Add Player (up to 6)</button>
+    <button type="submit" class="btn btn-success btn-lg">Start Game</button>
+</form>
+
+<script>
+    const decksData = {{ decks_json | safe }};
+    let playerCount = 4;  // Start with 4
+
+    function setupPlayerListeners(i) {
+        const playerSel = document.getElementById('player' + i);
+        const deckSel = document.getElementById('deck' + i);
+
+        playerSel.addEventListener('change', function() {
+            const pid = this.value;
+            deckSel.innerHTML = '<option value="">Select deck</option>';
+            deckSel.disabled = true;
+
+            if (pid && decksData[pid]) {
+                decksData[pid].forEach(d => {
+                    const opt = new Option(d.name, d.id);
+                    deckSel.add(opt);
+                });
+                deckSel.disabled = false;
+            }
+        });
+    }
+
+    // Setup initial 4
+    for (let i = 1; i <= 4; i++) {
+        setupPlayerListeners(i);
+    }
+
+    // Add player button
+    document.getElementById('addPlayer').addEventListener('click', function() {
+        if (playerCount >= 6) return;
+
+        playerCount++;
+        const container = document.getElementById('playerContainer');
+        const newCard = container.querySelector('.player-card').cloneNode(true);
+        newCard.querySelector('h5').textContent = 'Player ' + playerCount;
+        newCard.querySelector('select:first-of-type').id = 'player' + playerCount;
+        newCard.querySelector('select:first-of-type').name = 'player' + playerCount;
+        newCard.querySelector('select:first-of-type').value = '';
+        newCard.querySelector('select:last-of-type').id = 'deck' + playerCount;
+        newCard.querySelector('select:last-of-type').name = 'deck' + playerCount;
+        newCard.querySelector('select:last-of-type').innerHTML = '<option>Select player first</option>';
+        newCard.querySelector('select:last-of-type').disabled = true;
+        container.appendChild(newCard);
+        setupPlayerListeners(playerCount);
+
+        if (playerCount === 6) this.disabled = true;
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">  <!-- For mobile scaling -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Commander Tracker</title>
+    <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+    <style>
+        :root {
+            --darkest: #10121a;
+            --darkest-trans: #10121ae0;
+            --darker: #171a26;
+            --darker-trans: #171a26d9;
+            --base: #162d3d;
+            --base-trans: #162d3da8;
+            --light: #465493;
+
+            --green: #3a6b54;
+            --green-trans: #3a6b54a8;
+            --blue: #1e3a5f;
+            --blue-trans: #1e3a5fa8;
+            --red: #A63232;
+            --red-trans: #A63232A8;
+            --purple: #5A3A6B;
+            --purple-trans: #5A3A6Ba8;
+            --orange: #FF6B35;
+            --orange-trans: #FF6B35a8;
+            --yellow: #F2C94C;
+            --yellow-trans: #F2C94Ca8;
+            
+            --font-base: #8f99c5;
+            --font-base-trans: #8f99c57d;
+            --font-highlight: #e55c36;
+            --font-highlight-trans: #e55c36a8;
+            --font-danger: #e53636;
+            --font-danger-trans: #e53636a8;
+            --font-warning: #FF9900;
+            --font-warning-trans: #FF9900a8;
+            --font-accent: #6e7cb7;
+        }
+
+        body { background-color: var(--darkest); color: var(--font-base); font-family: 'Arial', sans-serif; }
+        .navbar { background-color: var(--darker) !important; border-bottom: 1px solid var(--font-base); }
+        .navbar-brand, .nav-link { color: var(--font-base) !important; }
+        .navbar-brand:hover, .nav-link:hover { color: #ffffff !important; }
+        .navbar-toggler img { filter: invert(0.7); }  /* Adjust color to match theme (e.g., to #8f99c5) */
+        .navbar-toggler:focus { box-shadow: none; }  /* Optional: remove default focus outline */
+        a { color: var(--font-base); text-decoration: none; }
+        a:hover { color: #ffffff; }
+        .table { --bs-table-bg: var(--darker); color: var(--font-base); border-color: var(--font-base); }
+        .table thead { background-color: var(--darkest); color: #ffffff; }
+        .table td, .table th { border-color: var(--font-base); }
+        .list-group-item { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
+        .card { background-color: var(--darker); border: 1px solid var(--font-base); color: var(--font-base); box-shadow: 0 0 10px rgba(143, 153, 197, 0.2); }
+        .form-control, .form-select { 
+            background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); 
+        }
+        .form-control:focus, .form-select:focus { 
+            background-color: var(--darker); color: var(--font-base); border-color: #ffffff; 
+            box-shadow: 0 0 0 0.25rem rgba(143, 153, 197, 0.25); 
+        }
+        .form-label { color: var(--font-base); }
+        .btn-primary { background-color: var(--font-base); border-color: var(--font-base); color: var(--darkest); }
+        .btn-primary:hover { background-color: #a0b0d0; border-color: #a0b0d0; color: var(--darkest); }
+        .btn-success { background-color: var(--green); border-color: var(--green); color: #ffffff; }
+        .btn-success:hover { background-color: var(--green-trans); border-color: var(--green); }
+        .alert-danger { background-color: var(--red-trans); border-color: var(--red); color: var(--font-danger); }
+        .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
+        h1, h2, h5 { color: #ffffff; }
+        .card:hover { box-shadow: 0 0 15px rgba(143, 153, 197, 0.3); transition: box-shadow 0.3s; }
+
+        /* Responsiveness tweaks */
+        @media (max-width: 576px) {
+            .container { padding: 0 15px; }
+            .card { padding: 15px !important; }
+            table { font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+    {% if request.endpoint != 'life_counter' %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Commander Tracker</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+  		<img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="24" height="24">
+	    </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav">
+    			<a class="nav-link" href="/">Home</a>
+    			<a class="nav-link" href="/players">Players</a>
+    			<a class="nav-link" href="/decks">Decks</a>
+    			<a class="nav-link" href="/games">Games</a>
+    			<a class="nav-link" href="/play_game">Play Game</a>
+    			<a class="nav-link" href="/manual_game">Manual Game</a>
+		</div>
+                <div class="navbar-nav ms-auto">
+                    {% if 'username' in session %}
+                        <span class="navbar-text me-3">Welcome, {{ session.username }}</span>
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+    {% endif %}
+    <div class="container mt-4">
+        {% if request.endpoint != 'life_counter' %}
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="alert alert-info mb-4">
+            {% for message in messages %}
+            {{ message }}<br>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>  <!-- For navbar toggle -->
+    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>

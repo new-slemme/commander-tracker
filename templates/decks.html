@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Decks</h1>
+<form method="post" action="/add_deck" class="mb-3">
+    <div class="row g-2">
+        <div class="col-md-3"><input type="text" name="name" class="form-control" placeholder="Deck name" required></div>
+        <div class="col-md-3"><input type="text" name="commander" class="form-control" placeholder="Commander" required></div>
+        <div class="col-md-3">
+            <select name="player_id" class="form-select" required>
+                <option value="">Select owner</option>
+                {% for p in players %}
+                    <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3"><button class="btn btn-primary">Add Deck</button></div>
+    </div>
+</form>
+<table class="table table-striped">
+    <thead><tr><th>Deck</th><th>Commander</th><th>Owner</th></tr></thead>
+    <tbody>
+    {% for d in decks %}
+        <tr><td>{{ d.name }}</td><td>{{ d.commander }}</td><td>{{ d.owner.name }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

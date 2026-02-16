@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  commander-tracker:
+    build: .
+    container_name: commander-tracker
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    environment:
+#      - APP_PASSWORD=  # <<< CHANGE THIS!
+      - FLASK_SECRET_KEY=YxbJdOs4KSc8e1avKUK2kIQl  # Optional but recommended
+    networks:
+      - npm_default
+
+networks:
+  npm_default:
+    external: true
