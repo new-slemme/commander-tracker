@@ -248,6 +248,53 @@ def index():
         game_parts=game_parts,
     )
 
+@app.route("/delete_deck/<int:deck_id>", methods=["POST"])
+def delete_deck(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    used = GameParticipant.query.filter_by(deck_id=deck_id).count()
+    if used > 0:
+        flash("Can't delete this deck: it has been used in recorded games.")
+        return redirect(url_for("deck_detail", deck_id=deck_id))
+
+    db.session.delete(deck)
+    db.session.commit()
+    flash("Deck deleted.")
+    return redirect(url_for("decks"))
+
+
+@app.route("/delete_player/<int:player_id>", methods=["POST"])
+def delete_player(player_id):
+    player = db.session.get(Player, player_id)
+    if not player:
+        flash("Player not found.")
+        return redirect(url_for("players"))
+
+    played = GameParticipant.query.filter_by(player_id=player_id).count()
+    won = Game.query.filter_by(winner_id=player_id).count()
+    if played > 0 or won > 0:
+        flash("Can't delete this player: they appear in recorded games.")
+        return redirect(url_for("players"))
+
+    # If player has decks, only delete if those decks aren't used in games
+    for d in player.decks:
+        used = GameParticipant.query.filter_by(deck_id=d.id).count()
+        if used > 0:
+            flash(f"Can't delete {player.name}: deck '{d.name}' has recorded games.")
+            return redirect(url_for("players"))
+
+    # Safe to delete decks first, then player
+    for d in list(player.decks):
+        db.session.delete(d)
+
+    db.session.delete(player)
+    db.session.commit()
+    flash("Player deleted.")
+    return redirect(url_for("players"))
+
 
 @app.route("/games")
 def games():
