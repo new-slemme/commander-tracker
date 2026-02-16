@@ -59,6 +59,11 @@
               <td class="text-end">{{ s.losses }}</td>
               <td class="text-end">{{ s.uses }}</td>
               <td class="text-end">{{ s.winrate }}%</td>
+              <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
+                    onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
+                    style="display:inline;">
+                <button class="btn btn-sm btn-danger">Delete</button>
+              </form>
             </tr>
           {% endfor %}
 
