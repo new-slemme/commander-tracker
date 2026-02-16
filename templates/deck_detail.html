@@ -15,6 +15,12 @@
      min-height: 320px;
      ">
 
+<form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
+      onsubmit="return confirm('Delete deck {{ deck.name }}? This cannot be undone.');">
+  <button class="btn btn-danger">Delete Deck</button>
+</form>
+
+     
   <div class="position-absolute bottom-0 start-0 p-5">
     <h1 class="display-3 fw-bold mb-2">{{ deck.name }}</h1>
     <div class="fs-5">{{ deck.commander_name or deck.commander }}</div>
