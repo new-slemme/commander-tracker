@@ -444,6 +444,28 @@ def fix_art_paths():
     db.session.commit()
     return f"Fixed {changed} decks"
 
+@app.route("/admin/users/<int:user_id>/deny", methods=["POST"])
+@admin_required
+def admin_deny_user(user_id):
+    u = db.session.get(User, user_id)
+    if not u:
+        abort(404)
+
+    # Only allow denying inactive (pending) users
+    if u.is_active:
+        flash("Only pending users can be denied.")
+        return redirect(url_for("admin_users"))
+
+    # Delete linked player first (if exists)
+    if u.player:
+        db.session.delete(u.player)
+
+    db.session.delete(u)
+    db.session.commit()
+
+    flash(f"Denied and removed user '{u.username}'.")
+    return redirect(url_for("admin_users"))
+
 
 @app.route("/")
 def index():
