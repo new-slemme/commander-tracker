@@ -1,25 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="deck-banner text-white position-relative"
+<div class="deck-banner position-relative text-white rounded-4 overflow-hidden mb-4"
      style="
      {% if deck.commander_local_art or deck.commander_art_crop_url %}
        background-image:
-         linear-gradient(rgba(0,0,0,.55), rgba(0,0,0,.85)),
+         linear-gradient(rgba(0,0,0,.4), rgba(0,0,0,.8)),
          url('{{ deck.commander_local_art or deck.commander_art_crop_url }}');
        background-size: cover;
        background-position: center;
      {% else %}
        background: var(--darker);
      {% endif %}
-     min-height: 280px;
-     border-radius: 16px;
-     overflow: hidden;
+     min-height: 320px;
      ">
-  <div class="container py-5">
-    <h1 class="display-4 fw-bold">{{ deck.name }}</h1>
-    <p class="lead mb-1">{{ deck.commander_name or deck.commander }}</p>
-    <small>Owner: {{ deck.owner.name }}</small>
+
+  <div class="position-absolute bottom-0 start-0 p-5">
+    <h1 class="display-3 fw-bold mb-2">{{ deck.name }}</h1>
+    <div class="fs-5">{{ deck.commander_name or deck.commander }}</div>
+    <small class="text-light opacity-75">Owner: {{ deck.owner.name }}</small>
   </div>
 </div>
 
