@@ -33,34 +33,38 @@
 <div class="container py-4">
 
   <div class="row g-4">
-    <div class="col-md-3">
-      <div class="card p-3 text-center">
-        <h3>{{ wins }}</h3>
-        <small>Wins</small>
-      </div>
-    </div>
+     <div class="row g-4 mb-4">
+     
+       <div class="col-md-3">
+         <div class="card p-4 text-center stat-card">
+           <h2>{{ wins }}</h2>
+           <small>Wins</small>
+         </div>
+       </div>
+     
+       <div class="col-md-3">
+         <div class="card p-4 text-center stat-card">
+           <h2>{{ losses }}</h2>
+           <small>Losses</small>
+         </div>
+       </div>
+     
+       <div class="col-md-3">
+         <div class="card p-4 text-center stat-card">
+           <h2>{{ games }}</h2>
+           <small>Games Played</small>
+         </div>
+       </div>
+     
+       <div class="col-md-3">
+         <div class="card p-4 text-center stat-card">
+           <h2>{{ winrate }}%</h2>
+           <small>Win Rate</small>
+         </div>
+       </div>
+     
+     </div>
 
-    <div class="col-md-3">
-      <div class="card p-3 text-center">
-        <h3>{{ losses }}</h3>
-        <small>Losses</small>
-      </div>
-    </div>
-
-    <div class="col-md-3">
-      <div class="card p-3 text-center">
-        <h3>{{ games }}</h3>
-        <small>Games</small>
-      </div>
-    </div>
-
-    <div class="col-md-3">
-      <div class="card p-3 text-center">
-        <h3>{{ winrate }}%</h3>
-        <small>Win Rate</small>
-      </div>
-    </div>
-  </div>
 
   <hr class="my-4">
 
