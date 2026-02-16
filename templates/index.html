@@ -2,15 +2,19 @@
 {% block content %}
 <h1>Dashboard</h1>
 
-<h2>Player Stats</h2>
 <h2 class="mb-3">Top Players</h2>
 
 <div class="pyramid mb-5">
   {% if top_players|length > 0 %}
-  <div class="stat-card p-top">
+  <div class="stat-card p-top position-relative">
+  
+    <!-- Erzfeind Badge -->
+    <span class="erzfeind-badge">
+      ERZFEIND
+    </span>
+  
     <div class="d-flex justify-content-between align-items-start">
       <span class="rank-badge">#1</span>
-      <div class="text-end muted">Best overall</div>
     </div>
     <h3 class="mt-3 mb-1 text-white">{{ top_players[0].player.name }}</h3>
     <div class="d-flex gap-3 muted">
@@ -47,6 +51,9 @@
   </div>
   {% endif %}
 </div>
+
+<h2>Player Stats</h2>
+
 <table class="table table-striped">
     <thead><tr><th>Player</th><th>Wins</th><th>Games</th><th>Win %</th></tr></thead>
     <tbody>
