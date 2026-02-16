@@ -282,17 +282,15 @@ def register():
                 display_name=display_name,
                 password_hash=hashed,
                 is_active=False,
-                is_admin=False,
+                is_admin=False
             )
-
-            # Auto-create linked Player
-            user.player = Player(name=display_name)
-
+        
             db.session.add(user)
             db.session.commit()
-
+        
             flash("Registration submitted! Your account is pending admin approval.")
             return redirect(url_for("login"))
+
 
     return render_template("register.html")
 
@@ -389,11 +387,28 @@ def admin_approve_user(user_id):
     u = db.session.get(User, user_id)
     if not u:
         abort(404)
+
+    if u.is_active:
+        flash("User is already active.")
+        return redirect(url_for("admin_users"))
+
+    # Before approving, ensure display_name won't collide with an existing Player
+    existing_player = Player.query.filter_by(name=u.display_name).first()
+    if existing_player:
+        flash(f"Can't approve: display name '{u.display_name}' is already used by a Player.")
+        return redirect(url_for("admin_users"))
+
+    # Create linked player if missing
+    if not u.player:
+        u.player = Player(name=u.display_name)
+
     u.is_active = True
     u.approved_at = datetime.utcnow()
+
     db.session.commit()
     flash(f"Approved {u.display_name}")
     return redirect(url_for("admin_users"))
+
 
 
 @app.route("/admin/users/<int:user_id>/deactivate", methods=["POST"])
