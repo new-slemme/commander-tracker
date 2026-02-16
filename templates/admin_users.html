@@ -1,61 +1,134 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Admin: Users</h2>
 
-  <h3>Pending approval</h3>
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="mb-1">Admin: Users</h1>
+    <div class="text-muted">Approve registrations, manage access, and assign roles.</div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <span class="badge rounded-pill text-bg-secondary">
+      Pending: {{ pending|length }}
+    </span>
+    <span class="badge rounded-pill text-bg-secondary">
+      Active: {{ active|length }}
+    </span>
+  </div>
+</div>
+
+<!-- Pending -->
+<div class="card p-3 mb-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">Pending approval</h3>
+    <span class="text-muted small">New users awaiting activation</span>
+  </div>
+
   {% if pending %}
-    <table>
-      <tr>
-        <th>Username</th><th>Display name</th><th>Created</th><th>Actions</th>
-      </tr>
-      {% for u in pending %}
-        <tr>
-          <td>{{ u.username }}</td>
-          <td>{{ u.display_name }}</td>
-          <td>{{ u.created_at }}</td>
-          <td>
-            <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" style="display:inline;">
-              <button type="submit" class="btn btn-sm btn-outline-warning">Approve</button>
-            </form>
-            <button type="submit"
-                    class="btn btn-sm btn-outline-danger"
-                    onclick="return confirm('Are you sure you want to deny and permanently delete this user?')">
-                Deny
-            </button>
-          </td>
-        </tr>
-      {% endfor %}
-    </table>
-  {% else %}
-    <p>No pending users.</p>
-  {% endif %}
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Display name</th>
+            <th class="text-nowrap">Created</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in pending %}
+            <tr>
+              <td class="fw-semibold">{{ u.username }}</td>
+              <td>{{ u.display_name }}</td>
+              <td class="text-muted text-nowrap">
+                {{ u.created_at }}
+              </td>
+              <td class="text-end">
+                <div class="d-inline-flex gap-2">
+                  <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-success">
+                      Approve
+                    </button>
+                  </form>
 
-  <h3>Active users</h3>
-  {% if active %}
-    <table>
-      <tr>
-        <th>Username</th><th>Display name</th><th>Admin</th><th>Approved</th><th>Actions</th>
-      </tr>
-      {% for u in active %}
-        <tr>
-          <td>{{ u.username }}</td>
-          <td>{{ u.display_name }}</td>
-          <td>{{ "Yes" if u.is_admin else "No" }}</td>
-          <td>{{ u.approved_at }}</td>
-          <td>
-            <form method="post" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" class="d-inline">
-                <button type="submit" class="btn btn-sm btn-outline-danger">
-                    Deactivate
-                </button>
-            </form>
-            <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" style="display:inline;">
-              <button type="submit" class="btn btn-sm btn-outline-warning">{{ "Remove admin" if u.is_admin else "Make admin" }}</button>
-            </form>
-          </td>
-        </tr>
-      {% endfor %}
-    </table>
+                  <form method="POST" action="{{ url_for('admin_deny_user', user_id=u.id) }}" class="d-inline">
+                    <button
+                      type="submit"
+                      class="btn btn-sm btn-outline-danger"
+                      onclick="return confirm('Deny this registration and permanently delete the user?')">
+                      Deny
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   {% else %}
-    <p>No active users.</p>
+    <div class="text-muted">No pending users.</div>
   {% endif %}
+</div>
+
+<!-- Active -->
+<div class="card p-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h3 class="mb-0">Active users</h3>
+    <span class="text-muted small">Currently enabled accounts</span>
+  </div>
+
+  {% if active %}
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Display name</th>
+            <th class="text-nowrap">Role</th>
+            <th class="text-nowrap">Approved</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in active %}
+            <tr>
+              <td class="fw-semibold">{{ u.username }}</td>
+              <td>{{ u.display_name }}</td>
+              <td class="text-nowrap">
+                {% if u.is_admin %}
+                  <span class="badge rounded-pill text-bg-warning">Admin</span>
+                {% else %}
+                  <span class="badge rounded-pill text-bg-secondary">User</span>
+                {% endif %}
+              </td>
+              <td class="text-muted text-nowrap">
+                {{ u.approved_at }}
+              </td>
+              <td class="text-end">
+                <div class="d-inline-flex gap-2">
+                  <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('Deactivate {{ u.username }}? They will not be able to log in.')">
+                      Deactivate
+                    </button>
+                  </form>
+
+                  <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                      {{ "Remove admin" if u.is_admin else "Make admin" }}
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-muted">No active users.</div>
+  {% endif %}
+</div>
+
 {% endblock %}
