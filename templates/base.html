@@ -85,7 +85,31 @@
 	  box-shadow: 0 0 30px rgba(0,0,0,0.4);
   	  background-position: top;
   }
+    .recent-game-tile {
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid rgba(143,153,197,0.25);
+  }
 
+  .recent-game-bg {
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+    filter: saturate(1.05);
+    transform: scale(1.02);
+  }
+
+  .recent-game-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.35));
+  }
+
+  .recent-game-content {
+    position: relative;
+    z-index: 1;
+  }
   /* Mana pips */
   .mana {
     display: inline-flex;
