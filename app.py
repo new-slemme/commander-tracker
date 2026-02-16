@@ -3,6 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
 import os
+import requests
+from urllib.parse import quote
 from urllib.parse import quote
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -28,6 +30,11 @@ class Deck(db.Model):
     name = db.Column(db.String(100), nullable=False)
     commander = db.Column(db.String(100), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey('player.id'), nullable=False)
+    commander_name = db.Column(db.String(120))
+    commander_scryfall_id = db.Column(db.String(40), index=True)
+    commander_art_crop_url = db.Column(db.String(300))
+    commander_local_art = db.Column(db.String(300))
+    color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
 
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -201,6 +208,24 @@ def decks():
 def add_deck():
     name = request.form['name'].strip()
     commander = request.form['commander'].strip()
+    commander_input = request.form.get('commander', '').strip()
+    card = scryfall_named_exact(commander_input)
+if card:
+    scry_id = card.get("id")
+    canonical_name = card.get("name") or commander_input
+    art_crop = extract_art_crop(card)
+    color_identity = "".join(card.get("color_identity") or [])
+
+    local_art = None
+    if art_crop and scry_id:
+        local_art = download_art_crop(art_crop, scry_id, canonical_name)
+
+    deck.commander_name = canonical_name
+    deck.commander_scryfall_id = scry_id
+    deck.commander_art_crop_url = art_crop
+    deck.commander_local_art = local_art
+    deck.color_identity = color_identity
+
     player_id = request.form['player_id']
     if name and commander and player_id:
         db.session.add(Deck(name=name, commander=commander, player_id=player_id))
