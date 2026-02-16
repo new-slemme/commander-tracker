@@ -95,57 +95,7 @@ class GameParticipant(db.Model):
 # Create DB tables (note: this won't add columns to an existing SQLite table; use ALTER TABLE for that)
 with app.app_context():
     db.create_all()
-
-    inspector = inspect(db.engine)
-
-    # -------------------------
-    # Migration: deck.retired
-    # -------------------------
-    deck_cols = [col["name"] for col in inspector.get_columns("deck")]
-    if "retired" not in deck_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE deck ADD COLUMN retired BOOLEAN NOT NULL DEFAULT 0"))
-
-    # -------------------------
-    # Migration: user management
-    # -------------------------
-    user_cols = [col["name"] for col in inspector.get_columns("user")]
-
-    # display_name (required going forward; for existing rows we backfill from username)
-    if "display_name" not in user_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN display_name VARCHAR(100)"))
-            conn.execute(text("UPDATE user SET display_name = username WHERE display_name IS NULL"))
-            # SQLite can't easily add UNIQUE/NOT NULL constraints via ALTER TABLE.
-            # Enforce uniqueness in app logic + consider a full migration later.
-
-    if "is_active" not in user_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 0"))
-
-    if "is_admin" not in user_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
-
-    if "created_at" not in user_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN created_at DATETIME"))
-            conn.execute(text("UPDATE user SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
-
-    if "approved_at" not in user_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE user ADD COLUMN approved_at DATETIME"))
-
-    # -------------------------
-    # Migration: link Player -> User
-    # -------------------------
-    player_cols = [col["name"] for col in inspector.get_columns("player")]
-    if "user_id" not in player_cols:
-        with db.engine.begin() as conn:
-            conn.execute(text("ALTER TABLE player ADD COLUMN user_id INTEGER"))
-            # Note: SQLite can't add FK/UNIQUE constraints easily with ALTER TABLE.
-            # We'll enforce one-player-per-user in app logic.
-
+    
     # -------------------------
     # Bootstrap admin (5a)
     # -------------------------
@@ -308,16 +258,23 @@ def register():
             flash('Display name already taken')
         else:
             hashed = generate_password_hash(password)
-            user = User(username=username, display_name=display_name, password_hash=hashed, is_active=False, is_admin=False)
+            user = User(
+                username=username,
+                display_name=display_name,
+                password_hash=hashed,
+                is_active=False,
+                is_admin=False
+            )
+
+            # Create the player via relationship (cleaner)
+            user.player = Player(name=display_name)
+
             db.session.add(user)
-            db.session.flush()  # get user.id without committing yet
-
-            player = Player(name=display_name, user_id=user.id)
-            db.session.add(player)
-
             db.session.commit()
+
             flash('Registration submitted! Your account is pending admin approval.')
             return redirect(url_for('login'))
+
 
     return render_template('register.html')
 
@@ -334,7 +291,11 @@ def login():
             if not user.is_active:
                 flash('Account pending approval. Please contact an admin.')
                 return render_template('login.html')
-        
+                # safety net: ensure player exists
+            if not user.player:
+                # should not happen, but keeps prod stable
+                user.player = Player(name=user.display_name)
+            db.session.commit()
             session['user_id'] = user.id
             session['username'] = user.username
             session['display_name'] = user.display_name
@@ -608,7 +569,9 @@ def delete_player(player_id):
     if not player:
         flash("Player not found.")
         return redirect(url_for("players"))
-
+    if player.user_id is not None:
+    flash("Can't delete a user-linked player.")
+    return redirect(url_for("players"))
     played = GameParticipant.query.filter_by(player_id=player_id).count()
     won = Game.query.filter_by(winner_id=player_id).count()
     if played > 0 or won > 0:
@@ -645,7 +608,9 @@ def games():
 def players():
     players_list = Player.query.all()
 
-    player_can_delete = {}
+    player_can_delete[p.id] = (
+        p.user_id is None and played == 0 and won == 0 and not deck_used
+    )
     for p in players_list:
         played = GameParticipant.query.filter_by(player_id=p.id).count()
         won = Game.query.filter_by(winner_id=p.id).count()
@@ -820,16 +785,29 @@ def deck_detail(deck_id):
 
 
 @app.route("/add_deck", methods=["POST"])
+@login_required
 def add_deck():
+    u = get_current_user()
+
     name = request.form.get("name", "").strip()
     commander_input = request.form.get("commander", "").strip()
-    player_id = request.form.get("player_id", type=int)
 
-    if not (name and commander_input and player_id):
-        flash("Deck name, commander, and owner are required.")
+    if not (name and commander_input):
+        flash("Deck name and commander are required.")
         return redirect(url_for("decks"))
 
-    # Create deck first
+    # Decide owner:
+    if u.is_admin:
+        player_id = request.form.get("player_id", type=int)  # admin can choose
+        if not player_id:
+            flash("Owner is required.")
+            return redirect(url_for("decks"))
+    else:
+        if not u.player:
+            flash("No player profile found for your account.")
+            return redirect(url_for("decks"))
+        player_id = u.player.id
+
     deck = Deck(name=name, commander=commander_input, player_id=player_id)
 
     # Enrich from Scryfall (if you have these helpers)
