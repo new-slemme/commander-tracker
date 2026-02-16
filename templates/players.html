@@ -12,11 +12,18 @@
         <li class="list-group-item d-flex justify-content-between align-items-center">
           <span>{{ p.name }}</span>
         
-          <form method="post" action="{{ url_for('delete_player', player_id=p.id) }}"
-                onsubmit="return confirm('Delete player {{ p.name }}? This cannot be undone.');"
-                style="display:inline;">
-            <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-          </form>
+          {% if player_can_delete.get(p.id) %}
+            <form method="post" action="{{ url_for('delete_player', player_id=p.id) }}"
+                  onsubmit="return confirm('Delete player {{ p.name }}? This cannot be undone.');"
+                  style="display:inline;">
+              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+            </form>
+          {% else %}
+            <button type="button" class="btn btn-sm btn-danger" disabled
+                    title="Can't delete: player appears in recorded games or has decks used in games">
+              Delete
+            </button>
+          {% endif %}
         </li>
     {% endfor %}
 </ul>
