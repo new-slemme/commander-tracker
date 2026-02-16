@@ -134,6 +134,22 @@
     color: #fff;
     font-weight: 800;
   }
+/* Top Players cards (separate from generic stat-card) */
+	.leader-card {
+	  position: relative;
+	  border: 1px solid rgba(143,153,197,0.35);
+	  border-radius: 18px;
+	  padding: 18px;
+	  background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.35));
+	  box-shadow: 0 0 22px rgba(0,0,0,0.45);
+	  backdrop-filter: blur(3px);
+	}
+	
+	.leader-card:hover {
+	  transform: translateY(-4px);
+	  transition: 0.2s ease;
+	  box-shadow: 0 0 30px rgba(143,153,197,0.25);
+	}
 
   /* Erzfeind badge */
   @keyframes erz-pulse {
