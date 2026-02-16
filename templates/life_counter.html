@@ -145,23 +145,34 @@
             (n == 6 and loop.index0 < 3)
             %}
             <div
-               class="life-card {% if is_top %}top-card{% endif %} pos-{{ loop.index }}"
-               data-player-index="{{ p.player_id }}"
-               style="background: linear-gradient(135deg, var({{ p.color }}), #000000);"
-               >
-               <div class="h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
-                  <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
-                  {{ p.player_name }}
-                  </small>
-                  <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">40</div>
-               </div>
+            class="life-card {% if is_top %}top-card{% endif %} pos-{{ loop.index }}"
+            data-player-index="{{ p.player_id }}"
+            {% set bg = p.deck_commander_art if p.deck_commander_art else "" %}
+            style="
+            {% if bg %}
+            background-image:
+            linear-gradient(135deg, rgba(0,0,0,.65), rgba(0,0,0,.85)),
+            url('{{ bg }}');
+            background-size: cover;
+            background-position: center;
+            {% else %}
+            background: linear-gradient(135deg, var({{ p.color }}), #000000);
+            {% endif %}
+            "
+            >
+            <div class="h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
+               <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
+               {{ p.player_name }}
+               </small>
+               <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">40</div>
             </div>
-            {% endfor %}
          </div>
-         <!-- Central Hamburger -->
-         <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
-         <img src="/static/hamburger.svg" width="40" height="40">
-         </button>
+         {% endfor %}
+      </div>
+      <!-- Central Hamburger -->
+      <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
+      <img src="/static/hamburger.svg" width="40" height="40">
+      </button>
       </div>
       <!-- Menu Modal -->
       <div class="modal fade" id="menuModal">
