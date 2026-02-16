@@ -14,25 +14,6 @@
      {% endif %}
      min-height: 320px;
      ">
-
-{% if deck.retired %}
-  <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}" style="display:inline;">
-    <button class="btn btn-warning">Unretire</button>
-  </form>
-  <span class="badge bg-secondary ms-2">Retired</span>
-{% else %}
-  <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
-        onsubmit="return confirm('Retire {{ deck.name }}? It will be hidden and not selectable for new games.');"
-        style="display:inline;">
-    <button class="btn btn-warning">Retire</button>
-  </form>
-{% endif %}
-
-<form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
-      onsubmit="return confirm('Delete deck {{ deck.name }}? This cannot be undone.');">
-  <button class="btn btn-danger">Delete Deck</button>
-</form>
-
      
   <div class="position-absolute bottom-0 start-0 p-5">
     <h1 class="display-3 fw-bold mb-2">
@@ -112,6 +93,30 @@
       {% endif %}
     </div>
   {% endfor %}
+<div class="position-absolute bottom-0 end-0 p-3 d-flex gap-2">
+  {% if deck.retired %}
+    <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
+      <button type="submit" class="btn btn-warning btn-sm">
+        Unretire
+      </button>
+    </form>
+  {% else %}
+    <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
+          onsubmit="return confirm('Retire {{ deck.name }}?');">
+      <button type="submit" class="btn btn-warning btn-sm">
+        Retire
+      </button>
+    </form>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
+        onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
+    <button type="submit" class="btn btn-danger btn-sm">
+      Delete
+    </button>
+  </form>
+</div>
+
 </div>
 
        <hr class="my-5">
