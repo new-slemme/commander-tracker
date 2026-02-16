@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Admin: Users</h2>
+
+  <h3>Pending approval</h3>
+  {% if pending %}
+    <table>
+      <tr>
+        <th>Username</th><th>Display name</th><th>Created</th><th>Actions</th>
+      </tr>
+      {% for u in pending %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ u.display_name }}</td>
+          <td>{{ u.created_at }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" style="display:inline;">
+              <button type="submit">Approve</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No pending users.</p>
+  {% endif %}
+
+  <h3>Active users</h3>
+  {% if active %}
+    <table>
+      <tr>
+        <th>Username</th><th>Display name</th><th>Admin</th><th>Approved</th><th>Actions</th>
+      </tr>
+      {% for u in active %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ u.display_name }}</td>
+          <td>{{ "Yes" if u.is_admin else "No" }}</td>
+          <td>{{ u.approved_at }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" style="display:inline;">
+              <button type="submit">Deactivate</button>
+            </form>
+            <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" style="display:inline;">
+              <button type="submit">{{ "Remove admin" if u.is_admin else "Make admin" }}</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No active users.</p>
+  {% endif %}
+{% endblock %}
