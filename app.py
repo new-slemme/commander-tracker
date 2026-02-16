@@ -308,7 +308,29 @@ def games():
 @app.route("/players")
 def players():
     players_list = Player.query.all()
-    return render_template("players.html", players=players_list)
+
+    player_can_delete = {}
+    for p in players_list:
+        played = GameParticipant.query.filter_by(player_id=p.id).count()
+        won = Game.query.filter_by(winner_id=p.id).count()
+
+        # Also block if any of their decks are used
+        deck_used = (
+            db.session.query(GameParticipant.id)
+            .join(Deck, GameParticipant.deck_id == Deck.id)
+            .filter(Deck.player_id == p.id)
+            .first()
+            is not None
+        )
+
+        player_can_delete[p.id] = (played == 0 and won == 0 and not deck_used)
+
+    return render_template(
+        "players.html",
+        players=players_list,
+        player_can_delete=player_can_delete,
+    )
+
 
 
 @app.route("/add_player", methods=["POST"])
@@ -348,13 +370,19 @@ def decks():
         losses = max(0, uses - wins)
         winrate = round((wins / uses) * 100, 1) if uses else 0.0
         stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate}
-
+    
+    deck_can_delete = {}
+    for d in decks_list:
+        used = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_can_delete[d.id] = (used == 0)
+    
     return render_template(
         "decks.html",
         decks=decks_list,
         players=players_list,
         selected_player_id=player_id,
         deck_stats=stats,
+        deck_can_delete=deck_can_delete,
     )
 
 
