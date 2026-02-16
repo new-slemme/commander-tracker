@@ -35,7 +35,12 @@
 
      
   <div class="position-absolute bottom-0 start-0 p-5">
-    <h1 class="display-3 fw-bold mb-2">{{ deck.name }}</h1>
+    <h1 class="display-3 fw-bold mb-2">
+       {{ deck.name }}
+       {% if deck.retired %}
+         <span class="badge bg-warning text-dark">Retired</span>
+       {% endif %}
+     </h1>
     <div class="fs-5">{{ deck.commander_name or deck.commander }}</div>
             {% if deck.color_identity %}
      <div class="mt-3">
