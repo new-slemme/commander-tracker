@@ -49,6 +49,10 @@
                 <a href="{{ url_for('deck_detail', deck_id=d.id) }}">
                   {{ d.name }}
                 </a>
+              
+                {% if d.retired %}
+                  <span class="badge bg-warning text-dark ms-2">Retired</span>
+                {% endif %}
               </td>
               <td>
                 <span class="commander-link" data-commander="{{ d.commander|e }}" style="cursor:pointer; text-decoration: underline;">
