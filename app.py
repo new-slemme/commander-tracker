@@ -419,9 +419,17 @@ def life_counter():
         return redirect(url_for("play_game"))
 
     colors = ["--blue", "--red", "--green", "--purple", "--orange", "--yellow"]
+
     for i, p in enumerate(participants, 1):
         p["index"] = i
         p["color"] = colors[(i - 1) % len(colors)]
+
+        # Load deck art dynamically
+        deck = db.session.get(Deck, p["deck_id"])
+        if deck:
+            p["commander_art"] = deck.commander_local_art or deck.commander_art_crop_url
+        else:
+            p["commander_art"] = None
 
     return render_template("life_counter.html", participants=participants)
 
