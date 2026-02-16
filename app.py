@@ -251,14 +251,27 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
         return None
 
 
+def get_current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return db.session.get(User, uid)
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return wrapper
+
 def admin_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
-        user_id = session.get("user_id")
-        if not user_id:
+        u = get_current_user()
+        if not u:
             return redirect(url_for("login"))
-        user = db.session.get(User, user_id)
-        if not user or not user.is_admin:
+        if not getattr(u, "is_admin", False):
             abort(403)
         return f(*args, **kwargs)
     return wrapper
@@ -340,6 +353,37 @@ def logout():
     flash("Logged out successfully")
     return redirect(url_for("login"))
 
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    u = get_current_user()
+    if not u:
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        new_display = request.form.get("display_name", "").strip()
+
+        if not new_display:
+            flash("Display name cannot be empty.")
+            return redirect(url_for("profile"))
+
+        # Uniqueness checks: both User.display_name and Player.name (since games use Player)
+        existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
+        existing_player = Player.query.filter(Player.name == new_display).first()
+
+        if existing_user or (existing_player and (not u.player or existing_player.id != u.player.id)):
+            flash("That display name is already taken.")
+            return redirect(url_for("profile"))
+
+        u.display_name = new_display
+        if u.player:
+            u.player.name = new_display  # keep in sync with game tracking
+        db.session.commit()
+        session["display_name"] = new_display
+        flash("Display name updated.")
+        return redirect(url_for("profile"))
+
+    return render_template("profile.html", user=u)
 
 # -------------------------
 # Main App Routes
