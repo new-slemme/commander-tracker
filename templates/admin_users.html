@@ -15,7 +15,7 @@
           <td>{{ u.created_at }}</td>
           <td>
             <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" style="display:inline;">
-              <button type="submit">Approve</button>
+              <button type="submit" class="btn btn-sm btn-outline-warning">Approve</button>
             </form>
           </td>
         </tr>
@@ -38,11 +38,13 @@
           <td>{{ "Yes" if u.is_admin else "No" }}</td>
           <td>{{ u.approved_at }}</td>
           <td>
-            <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" style="display:inline;">
-              <button type="submit">Deactivate</button>
+            <form method="post" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                    Deactivate
+                </button>
             </form>
             <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" style="display:inline;">
-              <button type="submit">{{ "Remove admin" if u.is_admin else "Make admin" }}</button>
+              <button type="submit" class="btn btn-sm btn-outline-warning">{{ "Remove admin" if u.is_admin else "Make admin" }}</button>
             </form>
           </td>
         </tr>
