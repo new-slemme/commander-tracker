@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Profile</h2>
+
+  <div class="card">
+    <p><strong>Username:</strong> {{ user.username }}</p>
+    <p><strong>Display name:</strong> {{ user.display_name }}</p>
+    <p><strong>Status:</strong>
+      {% if user.is_active %}Active{% else %}Pending approval{% endif %}
+    </p>
+    <p><strong>Role:</strong>
+      {% if user.is_admin %}Admin{% else %}User{% endif %}
+    </p>
+  </div>
+
+  <h3>Change display name</h3>
+  <form method="POST">
+    <input name="display_name" value="{{ user.display_name }}" maxlength="100" required>
+    <button type="submit">Save</button>
+  </form>
+{% endblock %}
