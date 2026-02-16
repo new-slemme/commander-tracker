@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, abort
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 from datetime import datetime
@@ -11,6 +11,8 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func, text, inspect
+from functools import wraps
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
@@ -23,15 +25,31 @@ ART_DIR.mkdir(parents=True, exist_ok=True)
 # -------------------------
 # Models
 # -------------------------
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+
     username = db.Column(db.String(100), unique=True, nullable=False)
+    display_name = db.Column(db.String(100), unique=True, nullable=False)
+
     password_hash = db.Column(db.String(128), nullable=False)
 
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    is_admin  = db.Column(db.Boolean, default=False, nullable=False)
+
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+
+    player = db.relationship("Player", backref="user", uselist=False)
 
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+
+    # keep name for stats display, but it now comes from user.display_name at creation
     name = db.Column(db.String(100), unique=True, nullable=False)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=True)
+
     decks = db.relationship("Deck", backref="owner", lazy=True)
 
 
@@ -78,15 +96,80 @@ class GameParticipant(db.Model):
 with app.app_context():
     db.create_all()
 
-    # --- Migration: ensure retired column exists (SQLAlchemy 2.x) ---
     inspector = inspect(db.engine)
-    columns = [col["name"] for col in inspector.get_columns("deck")]
 
-    if "retired" not in columns:
+    # -------------------------
+    # Migration: deck.retired
+    # -------------------------
+    deck_cols = [col["name"] for col in inspector.get_columns("deck")]
+    if "retired" not in deck_cols:
         with db.engine.begin() as conn:
             conn.execute(text("ALTER TABLE deck ADD COLUMN retired BOOLEAN NOT NULL DEFAULT 0"))
 
+    # -------------------------
+    # Migration: user management
+    # -------------------------
+    user_cols = [col["name"] for col in inspector.get_columns("user")]
 
+    # display_name (required going forward; for existing rows we backfill from username)
+    if "display_name" not in user_cols:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN display_name VARCHAR(100)"))
+            conn.execute(text("UPDATE user SET display_name = username WHERE display_name IS NULL"))
+            # SQLite can't easily add UNIQUE/NOT NULL constraints via ALTER TABLE.
+            # Enforce uniqueness in app logic + consider a full migration later.
+
+    if "is_active" not in user_cols:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT 0"))
+
+    if "is_admin" not in user_cols:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
+
+    if "created_at" not in user_cols:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN created_at DATETIME"))
+            conn.execute(text("UPDATE user SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+
+    if "approved_at" not in user_cols:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user ADD COLUMN approved_at DATETIME"))
+
+    # -------------------------
+    # Migration: link Player -> User
+    # -------------------------
+    player_cols = [col["name"] for col in inspector.get_columns("player")]
+    if "user_id" not in player_cols:
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE player ADD COLUMN user_id INTEGER"))
+            # Note: SQLite can't add FK/UNIQUE constraints easily with ALTER TABLE.
+            # We'll enforce one-player-per-user in app logic.
+
+    # -------------------------
+    # Bootstrap admin (5a)
+    # -------------------------
+    admin_username = os.getenv("BOOTSTRAP_ADMIN_USERNAME")
+    if admin_username:
+        u = User.query.filter_by(username=admin_username).first()
+        if u:
+            changed = False
+            if not getattr(u, "is_admin", False):
+                u.is_admin = True
+                changed = True
+            if not getattr(u, "is_active", False):
+                u.is_active = True
+                u.approved_at = datetime.utcnow()
+                changed = True
+            if not getattr(u, "display_name", None):
+                u.display_name = u.username
+                changed = True
+
+            if changed:
+                db.session.commit()
+                print(f"[bootstrap_admin] Promoted '{admin_username}' to admin and activated account.")
+        else:
+            print(f"[bootstrap_admin] No user '{admin_username}' found (yet).")
 # -------------------------
 # Scryfall helper functions
 # -------------------------
@@ -168,6 +251,17 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
         return None
 
 
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        user_id = session.get("user_id")
+        if not user_id:
+            return redirect(url_for("login"))
+        user = db.session.get(User, user_id)
+        if not user or not user.is_admin:
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
 
 # -------------------------
 # Login Required
@@ -183,27 +277,37 @@ def require_login():
 # -------------------------
 # Auth Routes
 # -------------------------
-@app.route("/register", methods=["GET", "POST"])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == "POST":
-        username = request.form["username"].strip()
-        password = request.form["password"]
-        confirm = request.form["confirm"]
+    if request.method == 'POST':
+        username = request.form['username'].strip()
+        display_name = request.form['display_name'].strip()
+        password = request.form['password']
+        confirm = request.form['confirm']
 
-        if not username or not password:
-            flash("Username and password required")
+        if not username or not display_name or not password:
+            flash('Username, display name, and password required')
         elif password != confirm:
-            flash("Passwords do not match")
+            flash('Passwords do not match')
         elif User.query.filter_by(username=username).first():
-            flash("Username already taken")
+            flash('Username already taken')
+        elif User.query.filter_by(display_name=display_name).first() or Player.query.filter_by(name=display_name).first():
+            flash('Display name already taken')
         else:
             hashed = generate_password_hash(password)
-            db.session.add(User(username=username, password_hash=hashed))
-            db.session.commit()
-            flash("Registration successful! Please log in.")
-            return redirect(url_for("login"))
+            user = User(username=username, display_name=display_name, password_hash=hashed, is_active=False, is_admin=False)
+            db.session.add(user)
+            db.session.flush()  # get user.id without committing yet
 
-    return render_template("register.html")
+            player = Player(name=display_name, user_id=user.id)
+            db.session.add(player)
+
+            db.session.commit()
+            flash('Registration submitted! Your account is pending admin approval.')
+            return redirect(url_for('login'))
+
+    return render_template('register.html')
+
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -214,8 +318,14 @@ def login():
         user = User.query.filter_by(username=username).first()
 
         if user and check_password_hash(user.password_hash, password):
-            session["user_id"] = user.id
-            session["username"] = user.username
+            if not user.is_active:
+                flash('Account pending approval. Please contact an admin.')
+                return render_template('login.html')
+        
+            session['user_id'] = user.id
+            session['username'] = user.username
+            session['display_name'] = user.display_name
+            session['is_admin'] = user.is_admin
             next_url = request.args.get("next")
             return redirect(next_url or url_for("index"))
 
@@ -237,6 +347,26 @@ def logout():
 @app.route("/art/<path:filename>")
 def art(filename):
     return send_from_directory(ART_DIR, filename)
+
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    pending = User.query.filter_by(is_active=False).order_by(User.created_at.asc()).all()
+    active = User.query.filter_by(is_active=True).order_by(User.created_at.desc()).all()
+    return render_template("admin_users.html", pending=pending, active=active)
+
+@app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
+@admin_required
+def approve_user(user_id):
+    u = db.session.get(User, user_id)
+    if not u:
+        abort(404)
+    u.is_active = True
+    u.approved_at = datetime.utcnow()
+    db.session.commit()
+    flash(f"Approved {u.display_name}")
+    return redirect(url_for("admin_users"))
+
 
 @app.route("/admin/fix_art_paths")
 def fix_art_paths():
