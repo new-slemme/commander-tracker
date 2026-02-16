@@ -74,7 +74,26 @@
         .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
         h1, h2, h5 { color: #ffffff; }
         .card:hover { box-shadow: 0 0 15px rgba(143, 153, 197, 0.3); transition: box-shadow 0.3s; }
+		.mana {
+		  display: inline-flex;
+		  align-items: center;
+		  justify-content: center;
+		  width: 34px;
+		  height: 34px;
+		  border-radius: 50%;
+		  font-weight: bold;
+		  margin-right: 6px;
+		  font-size: 0.9rem;
+		  box-shadow: 0 0 6px rgba(0,0,0,0.6);
+		}
+		
+		.mana-W { background: #F8F6D8; color: #000; }
+		.mana-U { background: #0E68AB; color: #fff; }
+		.mana-B { background: #150B00; color: #fff; }
+		.mana-R { background: #D3202A; color: #fff; }
+		.mana-G { background: #00733E; color: #fff; }
 
+		
         /* Responsiveness tweaks */
         @media (max-width: 576px) {
             .container { padding: 0 15px; }
