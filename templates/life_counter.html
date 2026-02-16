@@ -18,121 +18,91 @@
          --base: #162d3d;
          --base-trans: #162d3da8;
          --light: #465493;
-                     --green: #3a6b54;
-                     --green-trans: #3a6b54a8;
-                     --blue: #1e3a5f;
-                     --blue-trans: #1e3a5fa8;
-                     --red: #A63232;
-                     --red-trans: #A63232A8;
-                     --purple: #5A3A6B;
-                     --purple-trans: #5A3A6Ba8;
-                     --orange: #FF6B35;
-                     --orange-trans: #FF6B35a8;
-                     --yellow: #F2C94C;
-                     --yellow-trans: #F2C94Ca8;
-                     
-                     --font-base: #8f99c5;
-                     --font-base-trans: #8f99c57d;
-                     --font-highlight: #e55c36;
-                     --font-highlight-trans: #e55c36a8;
-                     --font-danger: #e53636;
-                     --font-danger-trans: #e53636a8;
-                     --font-warning: #FF9900;
-                     --font-warning-trans: #FF9900a8;
-                     --font-accent: #6e7cb7;
-                 }
-                 body { background-color: var(--darkest); color: var(--font-base); font-family: 'Arial', sans-serif; }
-                 .navbar { background-color: var(--darker) !important; border-bottom: 1px solid var(--font-base); }
-                 .navbar-brand, .nav-link { color: var(--font-base) !important; }
-                 .navbar-brand:hover, .nav-link:hover { color: #ffffff !important; }
-                 .navbar-toggler img { filter: invert(0.7); }  /* Adjust color to match theme (e.g., to #8f99c5) */
-                 .navbar-toggler:focus { box-shadow: none; }  /* Optional: remove default focus outline */
-                 a { color: var(--font-base); text-decoration: none; }
-                 a:hover { color: #ffffff; }
-                 .table { --bs-table-bg: var(--darker); color: var(--font-base); border-color: var(--font-base); }
-                 .table thead { background-color: var(--darkest); color: #ffffff; }
-                 .table td, .table th { border-color: var(--font-base); }
-                 .list-group-item { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
-                 .card { background-color: var(--darker); border: 1px solid var(--font-base); color: var(--font-base); box-shadow: 0 0 10px rgba(143, 153, 197, 0.2); }
-                 .form-control, .form-select {
-                     background-color: var(--darker); border-color: var(--font-base); color: var(--font-base);
-                 }
-                 .form-control:focus, .form-select:focus {
-                     background-color: var(--darker); color: var(--font-base); border-color: #ffffff;
-                     box-shadow: 0 0 0 0.25rem rgba(143, 153, 197, 0.25);
-                 }
-                 .form-label { color: var(--font-base); }
-                 .btn-primary { background-color: var(--font-base); border-color: var(--font-base); color: var(--darkest); }
-                 .btn-primary:hover { background-color: #a0b0d0; border-color: #a0b0d0; color: var(--darkest); }
-                 .btn-success { background-color: var(--green); border-color: var(--green); color: #ffffff; }
-                 .btn-success:hover { background-color: var(--green-trans); border-color: var(--green); }
-                 .alert-danger { background-color: var(--red-trans); border-color: var(--red); color: var(--font-danger); }
-                 .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
-                 h1, h2, h5 { color: #ffffff; }
-                 .card:hover { box-shadow: 0 0 15px rgba(143, 153, 197, 0.3); transition: box-shadow 0.3s; }
-                 /* Responsiveness tweaks */
-                 @media (max-width: 576px) {
-                     .container { padding: 0 15px; }
-                     .card { padding: 15px !important; }
-                     table { font-size: 0.9rem; }
-                 }
-             
+         --green: #3a6b54;
+         --green-trans: #3a6b54a8;
+         --blue: #1e3a5f;
+         --blue-trans: #1e3a5fa8;
+         --red: #A63232;
+         --red-trans: #A63232A8;
+         --purple: #5A3A6B;
+         --purple-trans: #5A3A6Ba8;
+         --orange: #FF6B35;
+         --orange-trans: #FF6B35a8;
+         --yellow: #F2C94C;
+         --yellow-trans: #F2C94Ca8;
+         --font-base: #8f99c5;
+         --font-base-trans: #8f99c57d;
+         --font-highlight: #e55c36;
+         --font-highlight-trans: #e55c36a8;
+         --font-danger: #e53636;
+         --font-danger-trans: #e53636a8;
+         --font-warning: #FF9900;
+         --font-warning-trans: #FF9900a8;
+         --font-accent: #6e7cb7;
+         }
+         body { background-color: var(--darkest); color: var(--font-base); font-family: 'Arial', sans-serif; }
+         .navbar { background-color: var(--darker) !important; border-bottom: 1px solid var(--font-base); }
+         .navbar-brand, .nav-link { color: var(--font-base) !important; }
+         .navbar-brand:hover, .nav-link:hover { color: #ffffff !important; }
+         .navbar-toggler img { filter: invert(0.7); }  /* Adjust color to match theme (e.g., to #8f99c5) */
+         .navbar-toggler:focus { box-shadow: none; }  /* Optional: remove default focus outline */
+         a { color: var(--font-base); text-decoration: none; }
+         a:hover { color: #ffffff; }
+         .table { --bs-table-bg: var(--darker); color: var(--font-base); border-color: var(--font-base); }
+         .table thead { background-color: var(--darkest); color: #ffffff; }
+         .table td, .table th { border-color: var(--font-base); }
+         .list-group-item { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
+         .card { background-color: var(--darker); border: 1px solid var(--font-base); color: var(--font-base); box-shadow: 0 0 10px rgba(143, 153, 197, 0.2); }
+         .form-control, .form-select {
+         background-color: var(--darker); border-color: var(--font-base); color: var(--font-base);
+         }
+         .form-control:focus, .form-select:focus {
+         background-color: var(--darker); color: var(--font-base); border-color: #ffffff;
+         box-shadow: 0 0 0 0.25rem rgba(143, 153, 197, 0.25);
+         }
+         .form-label { color: var(--font-base); }
+         .btn-primary { background-color: var(--font-base); border-color: var(--font-base); color: var(--darkest); }
+         .btn-primary:hover { background-color: #a0b0d0; border-color: #a0b0d0; color: var(--darkest); }
+         .btn-success { background-color: var(--green); border-color: var(--green); color: #ffffff; }
+         .btn-success:hover { background-color: var(--green-trans); border-color: var(--green); }
+         .alert-danger { background-color: var(--red-trans); border-color: var(--red); color: var(--font-danger); }
+         .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
+         h1, h2, h5 { color: #ffffff; }
+         .card:hover { box-shadow: 0 0 15px rgba(143, 153, 197, 0.3); transition: box-shadow 0.3s; }
+         /* Responsiveness tweaks */
+         @media (max-width: 576px) {
+         .container { padding: 0 15px; }
+         .card { padding: 15px !important; }
+         table { font-size: 0.9rem; }
+         }
       </style>
    </head>
    <body>
       <div class="container mt-4">
-                 
          <div id="lifeGrid" class="fixed-top start-0 w-100 vh-100 m-0 p-0 overflow-hidden bg-dark">
             <div class="row g-0 h-100 w-100">
-               <!-- Top Left - Green - Rotated -->
-               <div class="col-6 h-50 position-relative life-card top-card" data-player-index="4" style="background: linear-gradient(135deg, var(--green), #000000);">
-                  <div class="h-100 w-100" style="transform: rotate(180deg);">
-                     <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">Marcel</small>
-                     <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-4">40</div>
+               {% set n = participants|length %}
+               {% for p in participants %}
+               {# Make first half "top" (rotated), second half "bottom" #}
+               {% set is_top = loop.index0 < (n // 2) %}
+               <div
+                  class="col-6 h-50 position-relative life-card {% if is_top %}top-card{% endif %}"
+                  data-player-index="{{ p.player_id }}"
+                  style="background: linear-gradient(135deg, var({{ p.color }}), #000000);"
+                  >
+                  <div class="h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
+                     <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
+                     {{ p.player_name }}
+                     </small>
+                     <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">40</div>
                   </div>
                </div>
-                       <!-- Top Right - Blue - Rotated -->
-                       
-               <div class="col-6 h-50 position-relative life-card top-card" data-player-index="1" style="background: linear-gradient(135deg, var(--blue), #000000);">
-                              
-                  <div class="h-100 w-100" style="transform: rotate(180deg);">
-                                     <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">Tim</small>
-                                     
-                     <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-1">40</div>
-                                 
-                  </div>
-                          
-               </div>
-                       <!-- Bottom Left - Red -->
-                       
-               <div class="col-6 h-50 position-relative life-card" data-player-index="2" style="background: linear-gradient(135deg, var(--red), #000000);">
-                              
-                  <div class="h-100 w-100">
-                                     
-                     <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-2">40</div>
-                                     <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">Jordan</small>
-                                 
-                  </div>
-                          
-               </div>
-                       <!-- Bottom Right - Purple -->
-                       
-               <div class="col-6 h-50 position-relative life-card" data-player-index="3" style="background: linear-gradient(135deg, var(--purple), #000000);">
-                              
-                  <div class="h-100 w-100">
-                                     
-                     <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-3">40</div>
-                                     <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">Jerome</small>
-                                 
-                  </div>
-                          
-               </div>
-                   
+               {% endfor %}
             </div>
-                <!-- Central Hamburger -->
-                <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
-                    <img src="/static/hamburger.svg" width="40" height="40">
-                </button>
+            <!-- Central Hamburger -->
+            <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
+            <img src="/static/hamburger.svg" width="40" height="40">
+            </button>
          </div>
          <!-- Menu Modal -->
          <div class="modal fade" id="menuModal">
@@ -224,10 +194,9 @@
             color: white;
             }
          </style>
-             
       </div>
-          <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>  <!-- For navbar toggle -->
-          <script src="/static/bootstrap.bundle.min.js"></script>
-          <script src="/static/bootstrap.bundle.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>  <!-- For navbar toggle -->
+      <script src="/static/bootstrap.bundle.min.js"></script>
+      <script src="/static/bootstrap.bundle.min.js"></script>
    </body>
 </html>
