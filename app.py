@@ -7,6 +7,8 @@ import re
 import requests
 from urllib.parse import quote
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import text, inspect
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
@@ -71,11 +73,15 @@ class GameParticipant(db.Model):
 # Create DB tables (note: this won't add columns to an existing SQLite table; use ALTER TABLE for that)
 with app.app_context():
     db.create_all()
-    # --- Migration: ensure retired column exists ---
-    inspector = db.inspect(db.engine)
+
+    # --- Migration: ensure retired column exists (SQLAlchemy 2.x) ---
+    inspector = inspect(db.engine)
     columns = [col["name"] for col in inspector.get_columns("deck")]
+
     if "retired" not in columns:
-        db.engine.execute("ALTER TABLE deck ADD COLUMN retired BOOLEAN NOT NULL DEFAULT 0")
+        with db.engine.begin() as conn:
+            conn.execute(text("ALTER TABLE deck ADD COLUMN retired BOOLEAN NOT NULL DEFAULT 0"))
+
 
 # -------------------------
 # Scryfall helper functions
