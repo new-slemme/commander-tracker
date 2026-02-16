@@ -466,17 +466,17 @@ for name, data in matchups.items():
 matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
 
     
-    return render_template(
-        "deck_detail.html",
-        deck=deck,
-        wins=wins,
-        losses=losses,
-        games=games,
-        winrate=winrate,
-        participations=participations,
-        history=history,
-        matchups=matchups,
-    )
+return render_template(
+    "deck_detail.html",
+    deck=deck,
+    wins=wins,
+    losses=losses,
+    games=games,
+    winrate=winrate,
+    participations=participations,
+    history=history,
+    matchups=matchups,
+)
 
 
 
