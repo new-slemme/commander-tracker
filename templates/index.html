@@ -151,65 +151,7 @@
    <div class="muted">No deck has enough games yet to spotlight.</div>
 </div>
 {% endif %}
-<!-- =========================
-   DECK STATS TABLE
-   ========================== -->
-<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
-   <h2 class="m-0">Deck Stats</h2>
-</div>
-<div class="card p-3 mb-5">
-   <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-         <thead>
-            <tr>
-               <th>Deck</th>
-               <th>Commander</th>
-               <th>Owner</th>
-               <th class="text-end">Wins</th>
-               <th class="text-end">Games</th>
-               <th class="text-end">Win %</th>
-               <th style="width:220px;">&nbsp;</th>
-            </tr>
-         </thead>
-         <tbody>
-            {% for s in deck_stats %}
-            <tr {% if s.deck.retired %}style="opacity:0.6;"{% endif %}>
-            <td class="fw-bold">
-               <a href="{{ url_for('deck_detail', deck_id=s.deck.id) }}">
-               {{ s.deck.name }}
-               </a>
-               {% if s.deck.retired %}
-               <span class="badge bg-warning text-dark ms-2">Retired</span>
-               {% endif %}
-            </td>
-            <td class="muted">{{ s.deck.commander_name or s.deck.commander }}</td>
-            <td>{{ s.deck.owner.name }}</td>
-            <td class="text-end">{{ s.wins }}</td>
-            <td class="text-end">{{ s.uses }}</td>
-            <td class="text-end">
-               <span class="badge {% if s.winrate >= 60 %}bg-success{% elif s.winrate >= 45 %}bg-primary{% else %}bg-secondary{% endif %}">
-               {{ s.winrate }}%
-               </span>
-            </td>
-            <td>
-               <div class="progress" style="height:10px; background: rgba(255,255,255,0.08);">
-                  <div class="progress-bar"
-                     role="progressbar"
-                     style="width: {{ s.winrate }}%;"
-                     aria-valuenow="{{ s.winrate }}" aria-valuemin="0" aria-valuemax="100"></div>
-               </div>
-            </td>
-            </tr>
-            {% endfor %}
-            {% if deck_stats|length == 0 %}
-            <tr>
-               <td colspan="7" class="text-center py-4 muted">No decks yet.</td>
-            </tr>
-            {% endif %}
-         </tbody>
-      </table>
-   </div>
-</div>
+
 <!-- =========================
    RECENT GAMES
    ========================== -->
@@ -282,6 +224,66 @@
       {% endfor %}
     </div>
   {% endif %}
+</div>
+   
+<!-- =========================
+   DECK STATS TABLE
+   ========================== -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+   <h2 class="m-0">Deck Stats</h2>
+</div>
+<div class="card p-3 mb-5">
+   <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+         <thead>
+            <tr>
+               <th>Deck</th>
+               <th>Commander</th>
+               <th>Owner</th>
+               <th class="text-end">Wins</th>
+               <th class="text-end">Games</th>
+               <th class="text-end">Win %</th>
+               <th style="width:220px;">&nbsp;</th>
+            </tr>
+         </thead>
+         <tbody>
+            {% for s in deck_stats %}
+            <tr {% if s.deck.retired %}style="opacity:0.6;"{% endif %}>
+            <td class="fw-bold">
+               <a href="{{ url_for('deck_detail', deck_id=s.deck.id) }}">
+               {{ s.deck.name }}
+               </a>
+               {% if s.deck.retired %}
+               <span class="badge bg-warning text-dark ms-2">Retired</span>
+               {% endif %}
+            </td>
+            <td class="muted">{{ s.deck.commander_name or s.deck.commander }}</td>
+            <td>{{ s.deck.owner.name }}</td>
+            <td class="text-end">{{ s.wins }}</td>
+            <td class="text-end">{{ s.uses }}</td>
+            <td class="text-end">
+               <span class="badge {% if s.winrate >= 60 %}bg-success{% elif s.winrate >= 45 %}bg-primary{% else %}bg-secondary{% endif %}">
+               {{ s.winrate }}%
+               </span>
+            </td>
+            <td>
+               <div class="progress" style="height:10px; background: rgba(255,255,255,0.08);">
+                  <div class="progress-bar"
+                     role="progressbar"
+                     style="width: {{ s.winrate }}%;"
+                     aria-valuenow="{{ s.winrate }}" aria-valuemin="0" aria-valuemax="100"></div>
+               </div>
+            </td>
+            </tr>
+            {% endfor %}
+            {% if deck_stats|length == 0 %}
+            <tr>
+               <td colspan="7" class="text-center py-4 muted">No decks yet.</td>
+            </tr>
+            {% endif %}
+         </tbody>
+      </table>
+   </div>
 </div>
 
 </div>
