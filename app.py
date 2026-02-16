@@ -1,4 +1,14 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, abort
+from flask import (
+    Flask,
+    render_template,
+    request,
+    redirect,
+    url_for,
+    session,
+    flash,
+    send_from_directory,
+    abort,
+)
 from flask_sqlalchemy import SQLAlchemy
 from pathlib import Path
 from datetime import datetime
@@ -10,21 +20,22 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, text, inspect
+from sqlalchemy import func, text
 from functools import wraps
-
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
+
 ART_DIR = Path("/data/art")
 ART_DIR.mkdir(parents=True, exist_ok=True)
 
 # -------------------------
 # Models
 # -------------------------
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -35,19 +46,21 @@ class User(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
 
     is_active = db.Column(db.Boolean, default=False, nullable=False)
-    is_admin  = db.Column(db.Boolean, default=False, nullable=False)
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
 
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     approved_at = db.Column(db.DateTime, nullable=True)
 
     player = db.relationship("Player", backref="user", uselist=False)
 
+
 class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
-    # keep name for stats display, but it now comes from user.display_name at creation
+    # Stats display name (mirrors user.display_name for accounts)
     name = db.Column(db.String(100), unique=True, nullable=False)
 
+    # Nullable to allow guest/manual players
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=True)
 
     decks = db.relationship("Deck", backref="owner", lazy=True)
@@ -83,35 +96,34 @@ class GameParticipant(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False)
+
     player = db.relationship("Player", backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
     game = db.relationship("Game", backref="participants", lazy=True)
 
-    __table_args__ = (
-        db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),
-    )
+    __table_args__ = (db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),)
 
 
-# Create DB tables (note: this won't add columns to an existing SQLite table; use ALTER TABLE for that)
+# -------------------------
+# DB init (you said you'll reset DB, so no migrations)
+# -------------------------
 with app.app_context():
     db.create_all()
-    
-    # -------------------------
-    # Bootstrap admin (5a)
-    # -------------------------
+
+    # Bootstrap admin (env var BOOTSTRAP_ADMIN_USERNAME)
     admin_username = os.getenv("BOOTSTRAP_ADMIN_USERNAME")
     if admin_username:
         u = User.query.filter_by(username=admin_username).first()
         if u:
             changed = False
-            if not getattr(u, "is_admin", False):
+            if not u.is_admin:
                 u.is_admin = True
                 changed = True
-            if not getattr(u, "is_active", False):
+            if not u.is_active:
                 u.is_active = True
                 u.approved_at = datetime.utcnow()
                 changed = True
-            if not getattr(u, "display_name", None):
+            if not u.display_name:
                 u.display_name = u.username
                 changed = True
 
@@ -120,19 +132,19 @@ with app.app_context():
                 print(f"[bootstrap_admin] Promoted '{admin_username}' to admin and activated account.")
         else:
             print(f"[bootstrap_admin] No user '{admin_username}' found (yet).")
+
+
 # -------------------------
 # Scryfall helper functions
 # -------------------------
+
 
 def _safe_filename(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", s).strip("_")
 
 
 def scryfall_named_exact(name: str):
-    """
-    Best-effort exact-name lookup.
-    Returns dict or None.
-    """
+    """Best-effort exact-name lookup. Returns dict or None."""
     if not name:
         return None
     url = f"https://api.scryfall.com/cards/named?exact={quote(name)}"
@@ -146,10 +158,7 @@ def scryfall_named_exact(name: str):
 
 
 def extract_art_crop(card: dict):
-    """
-    Returns art_crop URL or None.
-    Handles DFC cards (card_faces).
-    """
+    """Returns art_crop URL or None. Handles DFC cards (card_faces)."""
     if not card:
         return None
     if card.get("image_uris") and card["image_uris"].get("art_crop"):
@@ -201,11 +210,17 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
         return None
 
 
+# -------------------------
+# Auth helpers / guards
+# -------------------------
+
+
 def get_current_user():
     uid = session.get("user_id")
     if not uid:
         return None
     return db.session.get(User, uid)
+
 
 def login_required(f):
     @wraps(f)
@@ -213,7 +228,9 @@ def login_required(f):
         if not session.get("user_id"):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
+
     return wrapper
+
 
 def admin_required(f):
     @wraps(f)
@@ -224,7 +241,9 @@ def admin_required(f):
         if not getattr(u, "is_admin", False):
             abort(403)
         return f(*args, **kwargs)
+
     return wrapper
+
 
 # -------------------------
 # Login Required
@@ -232,30 +251,30 @@ def admin_required(f):
 @app.before_request
 def require_login():
     if "user_id" not in session:
-        # Allow auth routes + static assets
-        if request.endpoint not in ("login", "register", "static"):
+        # Allow auth routes + static assets + art
+        if request.endpoint not in ("login", "register", "static", "art"):
             return redirect(url_for("login") + "?next=" + quote(request.full_path))
 
 
 # -------------------------
 # Auth Routes
 # -------------------------
-@app.route('/register', methods=['GET', 'POST'])
+@app.route("/register", methods=["GET", "POST"])
 def register():
-    if request.method == 'POST':
-        username = request.form['username'].strip()
-        display_name = request.form['display_name'].strip()
-        password = request.form['password']
-        confirm = request.form['confirm']
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        display_name = request.form["display_name"].strip()
+        password = request.form["password"]
+        confirm = request.form["confirm"]
 
         if not username or not display_name or not password:
-            flash('Username, display name, and password required')
+            flash("Username, display name, and password required")
         elif password != confirm:
-            flash('Passwords do not match')
+            flash("Passwords do not match")
         elif User.query.filter_by(username=username).first():
-            flash('Username already taken')
+            flash("Username already taken")
         elif User.query.filter_by(display_name=display_name).first() or Player.query.filter_by(name=display_name).first():
-            flash('Display name already taken')
+            flash("Display name already taken")
         else:
             hashed = generate_password_hash(password)
             user = User(
@@ -263,21 +282,19 @@ def register():
                 display_name=display_name,
                 password_hash=hashed,
                 is_active=False,
-                is_admin=False
+                is_admin=False,
             )
 
-            # Create the player via relationship (cleaner)
+            # Auto-create linked Player
             user.player = Player(name=display_name)
 
             db.session.add(user)
             db.session.commit()
 
-            flash('Registration submitted! Your account is pending admin approval.')
-            return redirect(url_for('login'))
+            flash("Registration submitted! Your account is pending admin approval.")
+            return redirect(url_for("login"))
 
-
-    return render_template('register.html')
-
+    return render_template("register.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -289,17 +306,19 @@ def login():
 
         if user and check_password_hash(user.password_hash, password):
             if not user.is_active:
-                flash('Account pending approval. Please contact an admin.')
-                return render_template('login.html')
-                # safety net: ensure player exists
+                flash("Account pending approval. Please contact an admin.")
+                return render_template("login.html")
+
+            # safety net: ensure player exists (shouldn't happen, but avoids broken accounts)
             if not user.player:
-                # should not happen, but keeps prod stable
                 user.player = Player(name=user.display_name)
-            db.session.commit()
-            session['user_id'] = user.id
-            session['username'] = user.username
-            session['display_name'] = user.display_name
-            session['is_admin'] = user.is_admin
+                db.session.commit()
+
+            session["user_id"] = user.id
+            session["username"] = user.username
+            session["display_name"] = user.display_name
+            session["is_admin"] = user.is_admin
+
             next_url = request.args.get("next")
             return redirect(next_url or url_for("index"))
 
@@ -313,6 +332,7 @@ def logout():
     session.clear()
     flash("Logged out successfully")
     return redirect(url_for("login"))
+
 
 @app.route("/profile", methods=["GET", "POST"])
 @login_required
@@ -328,7 +348,6 @@ def profile():
             flash("Display name cannot be empty.")
             return redirect(url_for("profile"))
 
-        # Uniqueness checks: both User.display_name and Player.name (since games use Player)
         existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
         existing_player = Player.query.filter(Player.name == new_display).first()
 
@@ -339,12 +358,14 @@ def profile():
         u.display_name = new_display
         if u.player:
             u.player.name = new_display  # keep in sync with game tracking
+
         db.session.commit()
         session["display_name"] = new_display
         flash("Display name updated.")
         return redirect(url_for("profile"))
 
     return render_template("profile.html", user=u)
+
 
 # -------------------------
 # Main App Routes
@@ -353,12 +374,14 @@ def profile():
 def art(filename):
     return send_from_directory(ART_DIR, filename)
 
+
 @app.route("/admin/users")
 @admin_required
 def admin_users():
     pending = User.query.filter_by(is_active=False).order_by(User.created_at.asc()).all()
     active = User.query.filter_by(is_active=True).order_by(User.created_at.desc()).all()
     return render_template("admin_users.html", pending=pending, active=active)
+
 
 @app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
 @admin_required
@@ -372,6 +395,7 @@ def admin_approve_user(user_id):
     flash(f"Approved {u.display_name}")
     return redirect(url_for("admin_users"))
 
+
 @app.route("/admin/users/<int:user_id>/deactivate", methods=["POST"])
 @admin_required
 def admin_deactivate_user(user_id):
@@ -379,7 +403,6 @@ def admin_deactivate_user(user_id):
     if not u:
         abort(404)
 
-    # prevent self-lockout
     me = get_current_user()
     if me and me.id == u.id:
         flash("You can't deactivate your own account.")
@@ -389,6 +412,7 @@ def admin_deactivate_user(user_id):
     db.session.commit()
     flash(f"Deactivated {u.display_name}")
     return redirect(url_for("admin_users"))
+
 
 @app.route("/admin/users/<int:user_id>/toggle_admin", methods=["POST"])
 @admin_required
@@ -409,6 +433,7 @@ def admin_toggle_admin(user_id):
 
 
 @app.route("/admin/fix_art_paths")
+@admin_required
 def fix_art_paths():
     decks = Deck.query.all()
     changed = 0
@@ -428,25 +453,25 @@ def index():
     for p in players:
         wins = Game.query.filter_by(winner_id=p.id).count()
         played = GameParticipant.query.filter_by(player_id=p.id).count()
-        winrate = round(wins / played * 100, 1) if played > 0 else 0
+        winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"player": p, "wins": wins, "played": played, "winrate": winrate})
+
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
-        # --- Enrich top players with most-played deck art ---
+
+    # Enrich top players with most-played deck art
     top_players = player_stats[:3]
-    
     for row in top_players:
         p = row["player"]
-    
-        # Find this player's most-played deck (by participations)
-        #most_played = (
-        #    db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
-        #    .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-        #    .filter(GameParticipant.player_id == p.id)
-        #    .group_by(Deck.id)
-        #    .order_by(text("plays DESC"))
-        #    .first()
-        #)
-    
+
+        most_played = (
+            db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
+            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+            .filter(GameParticipant.player_id == p.id)
+            .group_by(Deck.id)
+            .order_by(text("plays DESC"))
+            .first()
+        )
+
         if most_played:
             deck = most_played[0]
             row["most_played_deck"] = deck
@@ -461,30 +486,22 @@ def index():
     for d in decks:
         wins = (
             GameParticipant.query.join(Game)
-            .filter(
-                GameParticipant.deck_id == d.id,
-                Game.winner_id == GameParticipant.player_id,
-            )
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
             .count()
         )
         uses = GameParticipant.query.filter_by(deck_id=d.id).count()
-        winrate = round(wins / uses * 100, 1) if uses > 0 else 0
+        winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate})
+
     deck_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
 
     # Recent games
     recent_games = Game.query.order_by(Game.date.desc()).limit(10).all()
-    game_parts = {}
-    for g in recent_games:
-        game_parts[g.id] = GameParticipant.query.filter_by(game_id=g.id).all()
+    game_parts = {g.id: GameParticipant.query.filter_by(game_id=g.id).all() for g in recent_games}
 
-    # --- Top 3 players for pyramid ---
-    top_players = player_stats[:3]
-    
-    # --- Best deck by winrate (prefer decks with >= min_games) ---
-    min_games = 3  # change to 1 if you want "any deck"
+    # Best deck by winrate (prefer decks with >= min_games)
+    min_games = 3
     best_deck = None
-    
     best_candidates = []
     for row in deck_stats:
         d = row["deck"]
@@ -493,21 +510,11 @@ def index():
         winrate = row["winrate"]
         if uses >= min_games:
             best_candidates.append((winrate, uses, wins, d))
-    
+
     if best_candidates:
-        # highest winrate, then most games as tiebreak
         best_candidates.sort(key=lambda t: (t[0], t[1]), reverse=True)
         best_deck = best_candidates[0][3]
 
-    most_played = (
-        db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
-        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-        .filter(GameParticipant.player_id == p.id)
-        .group_by(Deck.id)
-        .order_by(text("plays DESC"))
-        .first()
-    )
-    
     return render_template(
         "index.html",
         player_stats=player_stats,
@@ -517,6 +524,7 @@ def index():
         top_players=top_players,
         best_deck=best_deck,
     )
+
 
 @app.route("/delete_deck/<int:deck_id>", methods=["POST"])
 def delete_deck(deck_id):
@@ -562,16 +570,18 @@ def unretire_deck(deck_id):
     return redirect(url_for("decks"))
 
 
-
 @app.route("/delete_player/<int:player_id>", methods=["POST"])
 def delete_player(player_id):
     player = db.session.get(Player, player_id)
     if not player:
         flash("Player not found.")
         return redirect(url_for("players"))
+
+    # Never allow deleting a user-linked player through this route
     if player.user_id is not None:
-    flash("Can't delete a user-linked player.")
-    return redirect(url_for("players"))
+        flash("Can't delete a user-linked player.")
+        return redirect(url_for("players"))
+
     played = GameParticipant.query.filter_by(player_id=player_id).count()
     won = Game.query.filter_by(winner_id=player_id).count()
     if played > 0 or won > 0:
@@ -598,9 +608,7 @@ def delete_player(player_id):
 @app.route("/games")
 def games():
     all_games = Game.query.order_by(Game.date.desc()).all()
-    game_parts = {}
-    for g in all_games:
-        game_parts[g.id] = GameParticipant.query.filter_by(game_id=g.id).all()
+    game_parts = {g.id: GameParticipant.query.filter_by(game_id=g.id).all() for g in all_games}
     return render_template("games.html", games=all_games, game_parts=game_parts)
 
 
@@ -608,14 +616,11 @@ def games():
 def players():
     players_list = Player.query.all()
 
-    player_can_delete[p.id] = (
-        p.user_id is None and played == 0 and won == 0 and not deck_used
-    )
+    player_can_delete = {}
     for p in players_list:
         played = GameParticipant.query.filter_by(player_id=p.id).count()
         won = Game.query.filter_by(winner_id=p.id).count()
 
-        # Also block if any of their decks are used
         deck_used = (
             db.session.query(GameParticipant.id)
             .join(Deck, GameParticipant.deck_id == Deck.id)
@@ -624,27 +629,27 @@ def players():
             is not None
         )
 
-        player_can_delete[p.id] = (played == 0 and won == 0 and not deck_used)
+        # Only deletable if:
+        # - not linked to a user
+        # - not in any game (played or won)
+        # - none of their decks are used
+        player_can_delete[p.id] = (p.user_id is None and played == 0 and won == 0 and not deck_used)
 
-    return render_template(
-        "players.html",
-        players=players_list,
-        player_can_delete=player_can_delete,
-    )
-
+    return render_template("players.html", players=players_list, player_can_delete=player_can_delete)
 
 
 @app.route("/add_player", methods=["POST"])
 def add_player():
     name = request.form["name"].strip()
     if name and not Player.query.filter_by(name=name).first():
-        db.session.add(Player(name=name))
+        db.session.add(Player(name=name))  # guest/manual player
         db.session.commit()
     return redirect(url_for("players"))
 
 
 @app.route("/decks")
 def decks():
+    u = get_current_user()
     players_list = Player.query.order_by(Player.name.asc()).all()
 
     player_id = request.args.get("player_id", type=int)
@@ -653,35 +658,40 @@ def decks():
     q = Deck.query
 
     if not show_retired:
-        q = q.filter(Deck.retired == False)
+        q = q.filter(Deck.retired == False)  # noqa: E712
 
-    if player_id:
+    # Non-admins: force filter to their own player (so they don't browse others by accident)
+    if u and not u.is_admin:
+        if u.player:
+            q = q.filter(Deck.player_id == u.player.id)
+            player_id = u.player.id
+        else:
+            q = q.filter(text("1=0"))  # show nothing
+
+    # Admins: allow filtering by selected player
+    if u and u.is_admin and player_id:
         q = q.filter(Deck.player_id == player_id)
 
     decks_list = q.order_by(Deck.retired.asc(), Deck.name.asc()).all()
 
-
-    # Deck stats (wins / uses / losses / winrate)
+    # Deck stats
     stats = {}
     for d in decks_list:
         wins = (
             GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-            .filter(
-                GameParticipant.deck_id == d.id,
-                Game.winner_id == GameParticipant.player_id,
-            )
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
             .count()
         )
         uses = GameParticipant.query.filter_by(deck_id=d.id).count()
         losses = max(0, uses - wins)
         winrate = round((wins / uses) * 100, 1) if uses else 0.0
         stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate}
-    
+
     deck_can_delete = {}
     for d in decks_list:
         used = GameParticipant.query.filter_by(deck_id=d.id).count()
         deck_can_delete[d.id] = (used == 0)
-    
+
     return render_template(
         "decks.html",
         decks=decks_list,
@@ -693,33 +703,24 @@ def decks():
     )
 
 
-@app.route("/deck/<int:deck_id>/resync")
-
-
 @app.route("/deck/<int:deck_id>")
 def deck_detail(deck_id):
     deck = db.session.get(Deck, deck_id)
     if not deck:
         return "Deck not found", 404
 
-    # --- Overall Stats ---
     wins = (
         GameParticipant.query.join(Game)
-        .filter(
-            GameParticipant.deck_id == deck.id,
-            Game.winner_id == GameParticipant.player_id,
-        )
+        .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
         .count()
     )
 
     games = GameParticipant.query.filter_by(deck_id=deck.id).count()
     losses = max(0, games - wins)
-    winrate = round((wins / games) * 100, 1) if games else 0
+    winrate = round((wins / games) * 100, 1) if games else 0.0
 
-    # --- History + Matchups ---
     participations = (
-        GameParticipant.query
-        .join(Game, GameParticipant.game_id == Game.id)
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
         .filter(GameParticipant.deck_id == deck.id)
         .order_by(Game.date.desc())
         .all()
@@ -730,19 +731,15 @@ def deck_detail(deck_id):
 
     for part in participations:
         game = part.game
-        won = game.winner_id == part.player_id
+        won_game = game.winner_id == part.player_id
 
         opponents = (
-            GameParticipant.query
-            .filter(
-                GameParticipant.game_id == game.id,
-                GameParticipant.player_id != part.player_id
-            )
-            .all()
+            GameParticipant.query.filter(
+                GameParticipant.game_id == game.id, GameParticipant.player_id != part.player_id
+            ).all()
         )
 
         opponent_names = []
-
         for o in opponents:
             name = o.player.name
             opponent_names.append(name)
@@ -750,25 +747,20 @@ def deck_detail(deck_id):
             if name not in matchups:
                 matchups[name] = {"wins": 0, "losses": 0}
 
-            if won:
+            if won_game:
                 matchups[name]["wins"] += 1
             else:
                 matchups[name]["losses"] += 1
 
-        history.append({
-            "game_id": game.id,
-            "date": game.date,
-            "won": won,
-            "opponents": opponent_names
-        })
+        history.append(
+            {"game_id": game.id, "date": game.date, "won": won_game, "opponents": opponent_names}
+        )
 
-    # Compute winrate per opponent
     for name, data in matchups.items():
         total = data["wins"] + data["losses"]
         data["games"] = total
-        data["winrate"] = round((data["wins"] / total) * 100, 1) if total else 0
+        data["winrate"] = round((data["wins"] / total) * 100, 1) if total else 0.0
 
-    # Sort by most played
     matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
 
     return render_template(
@@ -781,7 +773,6 @@ def deck_detail(deck_id):
         history=history,
         matchups=matchups,
     )
-
 
 
 @app.route("/add_deck", methods=["POST"])
@@ -810,7 +801,6 @@ def add_deck():
 
     deck = Deck(name=name, commander=commander_input, player_id=player_id)
 
-    # Enrich from Scryfall (if you have these helpers)
     card = scryfall_named_exact(commander_input)
     if card:
         scry_id = card.get("id")
@@ -840,7 +830,9 @@ def add_game():
     players = Player.query.all()
     decks_by_player = {}
     for p in players:
-        active_decks = Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        active_decks = (
+            Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        )
         decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
     return render_template("add_game.html", players=players, decks_json=decks_json)
@@ -851,7 +843,9 @@ def play_game():
     players = Player.query.all()
     decks_by_player = {}
     for p in players:
-        active_decks = Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        active_decks = (
+            Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        )
         decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
     return render_template("play_game.html", players=players, decks_json=decks_json)
@@ -883,7 +877,6 @@ def start_game():
                     "deck_id": d_id,
                     "player_name": deck.owner.name,
                     "deck_name": deck.name,
-                    # Useful for life_counter backgrounds later
                     "commander_art": deck.commander_local_art or deck.commander_art_crop_url,
                 }
             )
@@ -909,12 +902,8 @@ def life_counter():
         p["index"] = i
         p["color"] = colors[(i - 1) % len(colors)]
 
-        # Load deck art dynamically
         deck = db.session.get(Deck, p["deck_id"])
-        if deck:
-            p["commander_art"] = deck.commander_local_art or deck.commander_art_crop_url
-        else:
-            p["commander_art"] = None
+        p["commander_art"] = (deck.commander_local_art or deck.commander_art_crop_url) if deck else None
 
     return render_template("life_counter.html", participants=participants)
 
@@ -938,7 +927,9 @@ def end_game():
     db.session.flush()
 
     for p in participants:
-        db.session.add(GameParticipant(game_id=game.id, player_id=p["player_id"], deck_id=p["deck_id"]))
+        db.session.add(
+            GameParticipant(game_id=game.id, player_id=p["player_id"], deck_id=p["deck_id"])
+        )
 
     db.session.commit()
     session.pop("game_participants", None)
@@ -950,7 +941,9 @@ def manual_game():
     players = Player.query.all()
     decks_by_player = {}
     for p in players:
-        active_decks = Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        active_decks = (
+            Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        )
         decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
     return render_template("manual_game.html", players=players, decks_json=decks_json)
@@ -999,9 +992,7 @@ def manual_record_game():
 
 @app.route("/record_game", methods=["POST"])
 def record_game():
-    """
-    Legacy 4-player record route (kept for compatibility with old forms).
-    """
+    """Legacy 4-player record route (kept for compatibility with old forms)."""
     winner_id = request.form.get("winner")
     if not winner_id:
         return "Must select a winner", 400
