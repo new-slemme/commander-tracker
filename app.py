@@ -341,6 +341,26 @@ def deck_detail(deck_id):
         .all()
     )
 
+    
+    history = []
+    for part in participations:
+        game = part.game
+    
+        # Opponents (exclude self)
+        opponents = (
+            GameParticipant.query
+            .filter(GameParticipant.game_id == game.id,
+                    GameParticipant.player_id != part.player_id)
+            .all()
+        )
+    
+        history.append({
+            "game_id": game.id,
+            "date": game.date,
+            "won": game.winner_id == part.player_id,
+            "opponents": [o.player.name for o in opponents]
+        })
+    
     return render_template(
         "deck_detail.html",
         deck=deck,
@@ -349,6 +369,7 @@ def deck_detail(deck_id):
         games=games,
         winrate=winrate,
         participations=participations,
+        history=history,
     )
 
 
