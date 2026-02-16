@@ -427,6 +427,7 @@ def decks():
         selected_player_id=player_id,
         deck_stats=stats,
         deck_can_delete=deck_can_delete,
+        show_retired=show_retired,
     )
 
 
