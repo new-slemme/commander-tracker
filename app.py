@@ -71,6 +71,11 @@ class GameParticipant(db.Model):
 # Create DB tables (note: this won't add columns to an existing SQLite table; use ALTER TABLE for that)
 with app.app_context():
     db.create_all()
+    # --- Migration: ensure retired column exists ---
+    inspector = db.inspect(db.engine)
+    columns = [col["name"] for col in inspector.get_columns("deck")]
+    if "retired" not in columns:
+        db.engine.execute("ALTER TABLE deck ADD COLUMN retired BOOLEAN NOT NULL DEFAULT 0")
 
 # -------------------------
 # Scryfall helper functions
@@ -267,6 +272,33 @@ def delete_deck(deck_id):
     return redirect(url_for("decks"))
 
 
+@app.route("/deck/<int:deck_id>/retire", methods=["POST"])
+def retire_deck(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    deck.retired = True
+    db.session.commit()
+    flash(f"Retired deck: {deck.name}")
+    return redirect(url_for("decks"))
+
+
+@app.route("/deck/<int:deck_id>/unretire", methods=["POST"])
+def unretire_deck(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    deck.retired = False
+    db.session.commit()
+    flash(f"Unretired deck: {deck.name}")
+    return redirect(url_for("decks"))
+
+
+
 @app.route("/delete_player/<int:player_id>", methods=["POST"])
 def delete_player(player_id):
     player = db.session.get(Player, player_id)
@@ -350,7 +382,7 @@ def decks():
     # Filter by owner via query param: /decks?player_id=1
     player_id = request.args.get("player_id", type=int)
 
-    q = Deck.query
+    q = Deck.query.filter(Deck.retired == False)
     if player_id:
         q = q.filter(Deck.player_id == player_id)
 
@@ -525,7 +557,8 @@ def add_game():
     players = Player.query.all()
     decks_by_player = {}
     for p in players:
-        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in p.decks]
+        active_decks = Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
     return render_template("add_game.html", players=players, decks_json=decks_json)
 
@@ -535,7 +568,8 @@ def play_game():
     players = Player.query.all()
     decks_by_player = {}
     for p in players:
-        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in p.decks]
+        active_decks = Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
     return render_template("play_game.html", players=players, decks_json=decks_json)
 
@@ -557,7 +591,7 @@ def start_game():
             seen.add(p_id)
 
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.player_id != p_id:
+            if not deck or deck.player_id != p_id or deck.retired:
                 return "Invalid deck for player", 400
 
             participants.append(
@@ -633,7 +667,8 @@ def manual_game():
     players = Player.query.all()
     decks_by_player = {}
     for p in players:
-        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in p.decks]
+        active_decks = Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
     return render_template("manual_game.html", players=players, decks_json=decks_json)
 
@@ -658,7 +693,7 @@ def manual_record_game():
             seen.add(p_id)
 
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.player_id != p_id:
+            if not deck or deck.player_id != p_id or deck.retired:
                 return "Invalid deck for player", 400
 
             participants.append((p_id, d_id))
