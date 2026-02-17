@@ -22,6 +22,7 @@
         </div>
         {% endfor %}
     </div>
+
     <div class="mb-3">
       <label class="form-label">Starting Player</label>
       <select name="starting_player" id="startingPlayer" class="form-select" required>
@@ -29,8 +30,9 @@
       </select>
       <div class="form-text">Only selected players appear here.</div>
     </div>
+
     <button type="button" id="addPlayer" class="btn btn-secondary mb-3">Add Player (up to 6)</button>
-    <button type="submit" class="btn btn-success btn-lg">Start Game</button>
+    <button type="submit" class="btn btn-success btn-lg" id="startGameBtn">Start Game</button>
 </form>
 
 <script>
@@ -43,6 +45,7 @@
 
         playerSel.addEventListener('change', function() {
             const pid = this.value;
+
             // Prevent duplicate players in UI
             for (let j = 1; j <= playerCount; j++) {
               if (j === i) continue;
@@ -54,10 +57,11 @@
                 return;
               }
             }
+
             deckSel.innerHTML = '<option value="">Select deck</option>';
             deckSel.disabled = true;
             refreshStartingPlayerOptions();
-            
+
             if (pid && decksData[pid]) {
                 decksData[pid].forEach(d => {
                     const opt = new Option(d.name, d.id);
@@ -69,14 +73,13 @@
     }
 
     function selectedPlayersMap() {
-      // returns Map(playerId -> playerName) from current selects
       const map = new Map();
       for (let i = 1; i <= playerCount; i++) {
         const sel = document.getElementById("player" + i);
         if (!sel) continue;
         const pid = sel.value;
         if (!pid) continue;
-    
+
         const name = sel.options[sel.selectedIndex]?.text || pid;
         map.set(pid, name);
       }
@@ -86,27 +89,23 @@
     function refreshStartingPlayerOptions() {
       const startSel = document.getElementById("startingPlayer");
       if (!startSel) return;
-    
+
       const prev = startSel.value;
       const players = selectedPlayersMap();
-    
-      // rebuild options
+
       startSel.innerHTML = `<option value="" disabled ${prev ? "" : "selected"}>Select starting player</option>`;
       for (const [pid, name] of players.entries()) {
         const opt = new Option(name, pid);
         startSel.add(opt);
       }
-    
-      // preserve selection if still valid
+
       if (prev && players.has(prev)) {
         startSel.value = prev;
       }
     }
-    
+
     // Setup initial 4
-    for (let i = 1; i <= 4; i++) {
-        setupPlayerListeners(i);
-    }
+    for (let i = 1; i <= 4; i++) setupPlayerListeners(i);
 
     // Add player button
     document.getElementById('addPlayer').addEventListener('click', function() {
@@ -115,19 +114,59 @@
         playerCount++;
         const container = document.getElementById('playerContainer');
         const newCard = container.querySelector('.player-card').cloneNode(true);
+
         newCard.querySelector('h5').textContent = 'Player ' + playerCount;
-        newCard.querySelector('select:first-of-type').id = 'player' + playerCount;
-        newCard.querySelector('select:first-of-type').name = 'player' + playerCount;
-        newCard.querySelector('select:first-of-type').value = '';
-        newCard.querySelector('select:last-of-type').id = 'deck' + playerCount;
-        newCard.querySelector('select:last-of-type').name = 'deck' + playerCount;
-        newCard.querySelector('select:last-of-type').innerHTML = '<option>Select player first</option>';
-        newCard.querySelector('select:last-of-type').disabled = true;
+
+        const pSel = newCard.querySelector('select:first-of-type');
+        pSel.id = 'player' + playerCount;
+        pSel.name = 'player' + playerCount;
+        pSel.value = '';
+
+        const dSel = newCard.querySelector('select:last-of-type');
+        dSel.id = 'deck' + playerCount;
+        dSel.name = 'deck' + playerCount;
+        dSel.innerHTML = '<option>Select player first</option>';
+        dSel.disabled = true;
+
         container.appendChild(newCard);
         setupPlayerListeners(playerCount);
         refreshStartingPlayerOptions();
 
         if (playerCount === 6) this.disabled = true;
+    });
+
+    // ---- Fullscreen + Landscape on Start Game (user gesture) ----
+    async function requestLifeCounterImmersive() {
+      // Fullscreen
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (e) {}
+
+      // Landscape lock (mostly works on Android Chrome when fullscreen)
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock("landscape");
+        }
+      } catch (e) {}
+    }
+
+    document.getElementById("gameForm").addEventListener("submit", async (e) => {
+      // Let browser validate required fields first:
+      if (!e.target.checkValidity()) return;
+
+      // Intercept, go immersive, then submit
+      e.preventDefault();
+
+      // Optional: disable button to avoid double submits
+      const btn = document.getElementById("startGameBtn");
+      if (btn) btn.disabled = true;
+
+      await requestLifeCounterImmersive();
+
+      // Now submit for real
+      e.target.submit();
     });
 </script>
 {% endblock %}
