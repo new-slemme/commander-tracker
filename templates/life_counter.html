@@ -124,11 +124,12 @@
       box-shadow: 0 5px 18px rgba(0,0,0,0.40);
     }
 
-    /* Top-row cards: PASS must be upright to the viewer */
-    .top-card .pass-btn{
-      transform: rotate(180deg); /* counteracts the 180° card-inner rotation */
+    /* Top-row cards: rotate ONLY the label so button transforms (:active) still work */
+    .top-card .pass-label{
+      display:inline-block;
+      transform: rotate(180deg);
+      transform-origin:center;
     }
-
     /* Place PASS in the OUTER corner based on left/right half of screen */
     .life-card.pass-left  .pass-btn{ left:18px; right:auto; }
     .life-card.pass-right .pass-btn{ right:18px; left:auto; }
@@ -329,7 +330,7 @@
           <button class="btn btn-sm btn-light pass-btn"
                   id="pass-{{ p.player_id }}"
                   type="button">
-            Pass →
+            <span class="pass-label">PASS →</span>
           </button>
         </div>
 
