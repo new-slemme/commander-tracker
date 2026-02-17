@@ -280,11 +280,50 @@
     }
 
     /* Grid layouts */
-    .players-2{grid-template-columns:1fr 1fr; grid-template-rows:1fr;}
     .players-3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-5{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
+    /* ==================== 2 PLAYER (LEFT/RIGHT) ROTATION ==================== */
+    /* Grid: left/right */
+    .players-2{
+      grid-template-columns:1fr 1fr;
+      grid-template-rows:1fr;
+    }
+    
+    /* Rotate content so each player reads “upright” from their side */
+    .players-2 .life-card.left-card  .card-inner{ transform:rotate(90deg);  transform-origin:center; }
+    .players-2 .life-card.right-card .card-inner{ transform:rotate(-90deg); transform-origin:center; }
+    
+    /* Rotate the background art the same way, so it matches the rotated content */
+    .players-2 .life-card.left-card { --bg-rotate: rotate(90deg); }
+    .players-2 .life-card.right-card{ --bg-rotate: rotate(-90deg); }
+    
+    /* ==================== BADGE DE-CONFLICT (ACTIVE vs TURN PILL) ==================== */
+    
+    /* In 2-player mode, keep ONLY the top TURN pill (bottom one causes clutter/overlap) */
+    .players-2 ~ .turn-pill.bottom,
+    .life-wrapper .turn-pill.bottom{
+      /* default stays for other modes; override below */
+    }
+    .life-wrapper:has(.life-grid.players-2) .turn-pill.bottom{
+      display:none;
+    }
+    
+    /* Move ACTIVE badge away from center-top where TURN pill lives */
+    .life-wrapper:has(.life-grid.players-2) .life-card .turn-badge{
+      top:14px;
+      left:auto;
+      transform:none;
+      padding:8px 16px;
+      font-size:0.95rem;
+      min-width:auto;
+    }
+    
+    /* Put ACTIVE near the OUTER top corners */
+    .life-wrapper:has(.life-grid.players-2) .life-card.left-card  .turn-badge{ left:14px;  right:auto; }
+    .life-wrapper:has(.life-grid.players-2) .life-card.right-card .turn-badge{ right:14px; left:auto; }
+
   </style>
 </head>
 
@@ -305,6 +344,8 @@
 
     <div class="life-grid players-{{ n }}" id="lifeGrid">
       {% for p in participants %}
+      {% set is_left = (n == 2 and loop.index0 == 0) %}
+      {% set is_right = (n == 2 and loop.index0 == 1) %}
       {% set is_top =
           (n == 3 and loop.index0 < 2) or
           (n == 4 and loop.index0 < 2) or
@@ -313,7 +354,10 @@
       %}
 
       <div
-        class="life-card {% if is_top %}top-card{% endif %}"
+        class="life-card
+               {% if is_top %}top-card{% endif %}
+               {% if is_left %}left-card{% endif %}
+               {% if is_right %}right-card{% endif %}"
         data-player="{{ p.player_id }}"
         style="
           {% if p.commander_art %}
