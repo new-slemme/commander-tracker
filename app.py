@@ -889,6 +889,7 @@ def play_game():
 
 
 @app.route("/start_game", methods=["POST"])
+@login_required
 def start_game():
     participants = []
     seen = set()
@@ -919,27 +920,20 @@ def start_game():
     if len(participants) < 2:
         return "Need at least 2 players", 400
 
-    # Starting player selection
-    starting_player = request.form.get("starting_player")
-    if not starting_player:
-        return "Must select starting player", 400
-
     starting_player = request.form.get("starting_player", type=int)
     if not starting_player:
         return "Starting player required", 400
-    
+
     if starting_player not in seen:
         return "Starting player must be a participant", 400
-    
-    session["active_player_id"] = starting_player
+
     session["game_participants"] = participants
-    session["active_player"] = starting_player
+    session["active_player_id"] = starting_player
     session["turn_number"] = 1
     session.modified = True
 
-    
-    
     return redirect(url_for("life_counter"))
+
 
 
 @app.route("/cancel_game", methods=["POST"])
@@ -953,6 +947,7 @@ def cancel_game():
 
 
 @app.route("/life_counter")
+@login_required
 def life_counter():
     participants = session.get("game_participants")
     if not participants or len(participants) < 2:
