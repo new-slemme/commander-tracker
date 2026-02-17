@@ -117,22 +117,114 @@
   }
 
   @media (max-width: 992px) { .deck-tile { grid-column: span 12; } }
+
+  /* =========================
+     NEW: Pretty top section
+     ========================= */
+  .deck-head-title {
+    margin: 0;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    line-height: 1.05;
+    background: linear-gradient(90deg,#ffffff,#8f99c5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .head-badges {
+    display:flex;
+    flex-wrap:wrap;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  .head-pill {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(255,255,255,0.04);
+    color: var(--font-base);
+    white-space: nowrap;
+    font-size: 0.92rem;
+  }
+  .head-pill b { color:#fff; }
+
+  .head-pill.good { border-color: rgba(58,107,84,0.55); background: rgba(58,107,84,0.18); }
+  .head-pill.mid  { border-color: rgba(30,58,95,0.55); background: rgba(30,58,95,0.18); }
+
+  .add-deck-btn {
+    border-radius: 14px;
+    padding: 10px 18px;
+    font-weight: 800;
+    box-shadow: 0 0 14px rgba(143,153,197,0.25);
+  }
+
+  /* Mobile floating Add button (keeps normal button on desktop) */
+  .fab-add-deck {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 9990;
+    border-radius: 999px;
+    padding: 12px 16px;
+    font-weight: 900;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
+    display: none;
+  }
+
+  @media (max-width: 576px) {
+    .fab-add-deck { display: inline-flex; }
+    .desktop-add { display: none !important; }
+  }
 </style>
 
+{# =========================
+   NEW: compute summary stats
+   (no backend changes required)
+   ========================= #}
+{% set ns = namespace(total_decks=0, total_wins=0, total_games=0, best_games=-1, best_name="", best_commander="") %}
+{% for d in decks %}
+  {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
+  {% set ns.total_decks = ns.total_decks + 1 %}
+  {% set ns.total_wins = ns.total_wins + (s.wins or 0) %}
+  {% set ns.total_games = ns.total_games + (s.uses or 0) %}
+  {% if (s.uses or 0) > ns.best_games %}
+    {% set ns.best_games = (s.uses or 0) %}
+    {% set ns.best_name = d.name %}
+    {% set ns.best_commander = (d.commander_name or d.commander) %}
+  {% endif %}
+{% endfor %}
+{% set overall_wr = 0 %}
+{% if ns.total_games > 0 %}
+  {% set overall_wr = ((ns.total_wins * 100) // ns.total_games) %}
+{% endif %}
+{% set wr_class = 'mid' %}
+{% if overall_wr >= 60 %}
+  {% set wr_class = 'good' %}
+{% elif overall_wr < 45 %}
+  {% set wr_class = '' %}
+{% endif %}
+
 <div class="container py-4">
+
+  <!-- Header card (enhanced, nothing removed) -->
   <div class="card p-4 mb-4" style="
     background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.9));
     border: 1px solid rgba(143,153,197,0.25);
     border-radius: 22px;
     box-shadow: 0 0 28px rgba(0,0,0,0.55);
   ">
+
     <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
       <!-- LEFT SIDE -->
-      <div>
-        <h1 class="mb-1 fw-bold" style="letter-spacing:0.02em;">
+      <div style="min-width: min(520px, 100%);">
+        <h1 class="deck-head-title">
           Decks
         </h1>
-  
+
         <div class="muted" style="font-size:0.95rem;">
           {% if is_admin %}
             Browse all decks <span style="opacity:0.6;">(admin view)</span>
@@ -140,9 +232,34 @@
             Your active decks
           {% endif %}
         </div>
+
+        <!-- NEW: summary pills -->
+        <div class="head-badges">
+          <div class="head-pill">
+            <span class="muted">Total</span>
+            <b class="js-count" data-to="{{ ns.total_decks }}">0</b>
+            <span class="muted">decks</span>
+          </div>
+
+          <div class="head-pill {{ wr_class }}">
+            <span class="muted">Overall</span>
+            <b class="js-count" data-to="{{ overall_wr }}">0</b><b>%</b>
+            <span class="muted">winrate</span>
+          </div>
+
+          <div class="head-pill">
+            <span class="muted">Most played</span>
+            <b style="max-width: 180px; overflow:hidden; text-overflow:ellipsis; display:inline-block; vertical-align:bottom;">
+              {{ ns.best_name if ns.best_games >= 0 else "—" }}
+            </b>
+            <span class="muted">({{ ns.best_games if ns.best_games >= 0 else 0 }} games)</span>
+          </div>
+        </div>
       </div>
+
       <!-- RIGHT SIDE -->
       <div class="d-flex flex-wrap align-items-center gap-2">
+
         {% if is_admin %}
         <form method="get" action="{{ url_for('decks') }}" class="d-flex gap-2 align-items-center">
           <select class="form-select form-select-sm" name="player_id" onchange="this.form.submit()">
@@ -160,7 +277,7 @@
           {% endif %}
         </form>
         {% endif %}
-  
+
         <form method="get" action="{{ url_for('decks') }}" class="d-flex align-items-center gap-2 m-0">
           {% if is_admin and selected_player_id %}
             <input type="hidden" name="player_id" value="{{ selected_player_id }}">
@@ -178,19 +295,14 @@
             </label>
           </div>
         </form>
-  
-        <button class="btn btn-primary btn-lg"
-                style="
-                  border-radius: 14px;
-                  padding: 10px 18px;
-                  font-weight: 700;
-                  box-shadow: 0 0 14px rgba(143,153,197,0.25);
-                "
+
+        <!-- Desktop button stays -->
+        <button class="btn btn-primary btn-lg add-deck-btn desktop-add"
                 data-bs-toggle="modal"
                 data-bs-target="#addDeckModal">
           + Add Deck
         </button>
-  
+
       </div>
     </div>
   </div>
@@ -271,6 +383,14 @@
   {% endif %}
 </div>
 
+<!-- Mobile floating Add Deck button -->
+<button class="btn btn-primary fab-add-deck"
+        data-bs-toggle="modal"
+        data-bs-target="#addDeckModal"
+        aria-label="Add Deck">
+  + Add Deck
+</button>
+
 <!-- Add Deck Modal -->
 <div class="modal fade" id="addDeckModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -321,6 +441,51 @@
     </div>
   </div>
 </div>
+
+<script>
+  // =========================
+  // NEW: animated counters
+  // =========================
+  (function () {
+    const els = document.querySelectorAll('.js-count');
+    if (!els.length) return;
+
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function animate(el) {
+      const to = parseInt(el.getAttribute('data-to') || '0', 10);
+      if (prefersReduced) { el.textContent = String(to); return; }
+
+      const dur = 650;
+      const start = performance.now();
+      const from = 0;
+
+      function tick(now) {
+        const t = Math.min(1, (now - start) / dur);
+        // easeOutCubic
+        const eased = 1 - Math.pow(1 - t, 3);
+        const val = Math.round(from + (to - from) * eased);
+        el.textContent = String(val);
+        if (t < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    }
+
+    // Only animate once when header is in view
+    const head = els[0].closest('.card');
+    if ('IntersectionObserver' in window && head) {
+      const io = new IntersectionObserver((entries) => {
+        if (entries.some(e => e.isIntersecting)) {
+          els.forEach(animate);
+          io.disconnect();
+        }
+      }, { threshold: 0.35 });
+      io.observe(head);
+    } else {
+      els.forEach(animate);
+    }
+  })();
+</script>
 
 <script>
   // --- Commander autocomplete + preview via Scryfall (client-side) ---
