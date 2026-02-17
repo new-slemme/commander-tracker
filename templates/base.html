@@ -443,65 +443,74 @@
         {% block content %}{% endblock %}
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>  <!-- For navbar toggle -->
-	<script>
-	(function () {
-	  const isMobile = matchMedia("(pointer: coarse)").matches;
-	  if (!isMobile) return;
-	
-	  // Don’t show on login/register if you don’t want it there:
-	  // if (location.pathname === "/login" || location.pathname === "/register") return;
-	
-	  function inFs() { return !!document.fullscreenElement; }
-	
-	  // If already fullscreen, don’t annoy
-	  if (inFs()) return;
-	
-	  // If user previously dismissed for this session/device, skip
-	  if (localStorage.getItem("fsDismissed") === "1") return;
-	
-	  const overlay = document.createElement("div");
-	  overlay.style.cssText = `
-	    position:fixed; inset:0; z-index:99999;
-	    display:grid; place-items:center;
-	    background:rgba(0,0,0,0.85);
-	    padding:24px; text-align:center;
-	  `;
-	  overlay.innerHTML = `
-	    <div>
-	      <button id="fsGo" style="font-size:18px;padding:14px 18px;border-radius:12px;">
-	        Tap for Fullscreen
-	      </button>
-	      <div style="margin-top:10px;opacity:.75;font-size:13px;">
-	        (Required by your browser)
-	      </div>
-	      <div style="margin-top:16px;">
-	        <button id="fsSkip" style="opacity:.8;font-size:14px;background:transparent;border:1px solid #777;color:#ddd;padding:8px 12px;border-radius:10px;">
-	          Not now
-	        </button>
-	      </div>
-	    </div>
-	  `;
-	  document.body.appendChild(overlay);
-	
-	  async function goFs() {
-	    try {
-	      await document.documentElement.requestFullscreen();
-	    } catch (e) {}
-	    try {
-	      if (screen.orientation && screen.orientation.lock) {
-	        await screen.orientation.lock("landscape");
-	      }
-	    } catch (e) {}
-	    overlay.remove();
-	  }
-	
-	  overlay.querySelector("#fsGo").addEventListener("click", goFs);
-	  overlay.querySelector("#fsSkip").addEventListener("click", () => {
-	    localStorage.setItem("fsDismissed", "1");
-	    overlay.remove();
-	  });
-	})();
-	</script>
+<script>
+(function () {
+  const isMobile = matchMedia("(pointer: coarse)").matches;
+  if (!isMobile) return;
+
+  function inFs() { return !!document.fullscreenElement; }
+  if (inFs()) return;
+
+  if (localStorage.getItem("fsDismissed") === "1") return;
+
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position:fixed; inset:0; z-index:99999;
+    display:grid; place-items:center;
+    background:rgba(0,0,0,0.85);
+    padding:24px; text-align:center;
+  `;
+  overlay.innerHTML = `
+    <div>
+      <button id="fsGo" style="font-size:18px;padding:14px 18px;border-radius:12px;">
+        Tap for Fullscreen
+      </button>
+      <div style="margin-top:10px;opacity:.75;font-size:13px;">
+        (Required by your browser)
+      </div>
+      <div style="margin-top:16px;">
+        <button id="fsSkip" style="opacity:.8;font-size:14px;background:transparent;border:1px solid #777;color:#ddd;padding:8px 12px;border-radius:10px;">
+          Not now
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  async function goFs() {
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch (e) {}
+
+    // ✅ Only lock landscape on the life counter route
+    const isLifeCounter = (location.pathname === "/life_counter");
+    if (isLifeCounter) {
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock("landscape");
+        }
+      } catch (e) {}
+    } else {
+      // ✅ If we’re NOT on life_counter, try to keep portrait
+      // (May be ignored by some browsers; harmless if it fails)
+      try {
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock("portrait");
+        }
+      } catch (e) {}
+    }
+
+    overlay.remove();
+  }
+
+  overlay.querySelector("#fsGo").addEventListener("click", goFs);
+  overlay.querySelector("#fsSkip").addEventListener("click", () => {
+    localStorage.setItem("fsDismissed", "1");
+    overlay.remove();
+  });
+})();
+</script>
+
     <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
 </body>
 </html>
