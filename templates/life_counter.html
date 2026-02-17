@@ -135,6 +135,7 @@
     .top-card .turn-badge {
       top: auto;
       bottom: 16px;
+      transform: translateX(-50%) rotate(180deg);
     }
 
     /* Show automatically when card is active */
@@ -288,7 +289,7 @@
         </div>
 
         <!-- TURN BADGE MOVED OUTSIDE card-inner (fixed!) -->
-        <div class="turn-badge" id="turn-badge-{{ p.player_id }}">TURN</div>
+        <div class="turn-badge" id="turn-badge-{{ p.player_id }}">○</div>
       </div>
       {% endfor %}
     </div>
@@ -500,7 +501,7 @@ function nextPlayer(){
   if(passed.size === ids.length){
     turn++;
     passed.clear();
-    updateTurnPill();
+    updateTurnPills();
   }
 
   setActive(ids[(idx+1) % ids.length]);
@@ -572,7 +573,7 @@ cards.forEach(card=>{
 /* ---------- INIT ---------- */
 if(cards.length){
   const ids = getIdsClockwise();
-  setActive(cards[0].dataset.player);
+  setActive(ids[0]);
   updateTurnPills();
   resetTurnDamage();
 }
