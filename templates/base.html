@@ -19,32 +19,10 @@
       --darkest-trans: #10121ae0;
       --darker: #171a26;
       --darker-trans: #171a26d9;
-      --base: #162d3d;
-      --base-trans: #162d3da8;
-      --light: #465493;
-
-      --green: #3a6b54;
-      --green-trans: #3a6b54a8;
-      --blue: #1e3a5f;
-      --blue-trans: #1e3a5fa8;
-      --red: #A63232;
-      --red-trans: #A63232A8;
-      --purple: #5A3A6B;
-      --purple-trans: #5A3A6Ba8;
-      --orange: #FF6B35;
-      --orange-trans: #FF6B35a8;
-      --yellow: #F2C94C;
-      --yellow-trans: #F2C94Ca8;
 
       --font-base: #8f99c5;
       --font-base-trans: #8f99c57d;
       --font-highlight: #e55c36;
-      --font-highlight-trans: #e55c36a8;
-      --font-danger: #e53636;
-      --font-danger-trans: #e53636a8;
-      --font-warning: #FF9900;
-      --font-warning-trans: #FF9900a8;
-      --font-accent: #6e7cb7;
     }
 
     html, body { height: 100%; }
@@ -58,14 +36,10 @@
       padding-right: env(safe-area-inset-right);
     }
 
-    /* ---- Navbar (DO NOT override Bootstrap layout) ---- */
+    /* Navbar: do NOT fight bootstrap layout */
     .navbar {
       border-bottom: 1px solid rgba(255,255,255,0.08);
       background: var(--darker-trans);
-    }
-
-    .navbar .navbar-brand {
-      opacity: 0.85;
     }
 
     .nav-link { color: var(--font-base); opacity: 0.85; }
@@ -79,7 +53,10 @@
     }
     .navbar-toggler:focus { box-shadow: none !important; }
 
-    /* Offcanvas styling */
+    /* Hardening: Offcanvas must always be above everything */
+    .offcanvas { z-index: 2000 !important; }
+    .offcanvas-backdrop { z-index: 1990 !important; }
+
     .offcanvas.text-bg-dark {
       background: var(--darker);
       color: var(--font-base);
@@ -96,146 +73,16 @@
       background-color: rgba(255,255,255,0.04);
     }
 
-    /* General site styles */
-    a { color: var(--font-base); text-decoration: none; }
-    a:hover { color: #ffffff; }
-
-    .table-dark {
-      --bs-table-bg: var(--darker);
-      --bs-table-striped-bg: rgba(255,255,255,0.03);
-      --bs-table-hover-bg: rgba(255,255,255,0.04);
-      --bs-table-border-color: rgba(143,153,197,0.25);
-    }
-
-    .text-muted { color: var(--font-base-trans) !important; }
     .muted { color: var(--font-base-trans); }
 
-    .card {
-      background-color: var(--darker);
-      border: 1px solid rgba(143,153,197,0.25);
-      color: var(--font-base);
-      box-shadow: 0 0 10px rgba(143, 153, 197, 0.2);
+    /* fallback drawer mode (if bootstrap isn't available) */
+    #navDrawer.fallback-open {
+      transform: translateX(0) !important;
+      visibility: visible !important;
     }
 
-    .form-control, .form-select {
-      background-color: var(--darker);
-      border-color: rgba(143,153,197,0.25);
-      color: var(--font-base);
-    }
-    .form-control:focus, .form-select:focus {
-      background-color: var(--darker);
-      color: var(--font-base);
-      border-color: #ffffff;
-      box-shadow: 0 0 0 0.25rem rgba(143, 153, 197, 0.25);
-    }
-
-    .btn-primary {
-      background-color: var(--font-base);
-      border-color: var(--font-base);
-      color: var(--darkest);
-    }
-    .btn-primary:hover {
-      background-color: #a0b0d0;
-      border-color: #a0b0d0;
-      color: var(--darkest);
-    }
-
-    h1, h2, h5 { color: #ffffff; }
-
-    /* Pyramid layout */
-    .pyramid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-areas:
-        "top top"
-        "left right";
-      gap: 16px;
-    }
-    .p-top { grid-area: top; justify-self: center; width: min(520px, 100%); }
-    .p-left { grid-area: left; }
-    .p-right { grid-area: right; }
-
-    /* Top Players cards */
-    .leader-card {
-      position: relative;
-      border: 1px solid rgba(143,153,197,0.35);
-      border-radius: 18px;
-      padding: 18px;
-      overflow: hidden;
-      box-shadow: 0 0 22px rgba(0,0,0,0.45);
-    }
-    .leader-card::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(0,0,0,0.75), rgba(0,0,0,0.35));
-      z-index: 0;
-    }
-    .leader-card.has-bg {
-      background-size: cover;
-      background-position: top;
-    }
-    .leader-card > * { position: relative; z-index: 1; }
-
-    .rank-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 999px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid var(--font-base-trans);
-      color: #fff;
-      font-weight: 800;
-    }
-
-    @keyframes erz-pulse {
-      0%, 100% { box-shadow: 0 0 10px rgba(255,0,0,0.55), 0 0 22px rgba(255,0,0,0.35); }
-      50%      { box-shadow: 0 0 14px rgba(255,0,0,0.75), 0 0 32px rgba(255,0,0,0.45); }
-    }
-    .erzfeind-badge {
-      position: absolute;
-      top: 14px;
-      right: 14px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 0.72rem;
-      font-weight: 900;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      animation: erz-pulse 2.2s ease-in-out infinite;
-      color: #fff;
-      background: linear-gradient(135deg, #ff3b3b, #b30000);
-      border: 1px solid rgba(255, 120, 120, 0.55);
-    }
-
-    /* Mobile */
     @media (max-width: 576px) {
       .container { padding-left: 14px; padding-right: 14px; }
-
-      h1 { font-size: 2.05rem; }
-      h2 { font-size: 1.55rem; }
-      h3 { font-size: 1.25rem; }
-      h4 { font-size: 1.15rem; }
-
-      .pyramid {
-        grid-template-columns: 1fr;
-        grid-template-areas:
-          "top"
-          "left"
-          "right";
-        gap: 12px;
-      }
-      .p-top { width: 100%; }
-      .leader-card { padding: 14px; border-radius: 16px; }
-      .erzfeind-badge { top: 12px; right: 12px; }
-
-      table { font-size: 0.92rem; }
-      .table td, .table th { padding: 10px 10px; }
-
-      .table thead th:last-child,
-      .table tbody td:last-child { display: none; }
     }
   </style>
 </head>
@@ -247,10 +94,14 @@
   <div class="container">
     <a class="navbar-brand" href="/">Commandersohn</a>
 
-    <!-- Offcanvas toggler (mobile) -->
-    <button class="navbar-toggler d-lg-none" type="button"
-            data-bs-toggle="offcanvas" data-bs-target="#navDrawer"
-            aria-controls="navDrawer" aria-label="Open menu">
+    <!-- Mobile toggler -->
+    <button id="navToggle"
+            class="navbar-toggler d-lg-none"
+            type="button"
+            data-bs-toggle="offcanvas"
+            data-bs-target="#navDrawer"
+            aria-controls="navDrawer"
+            aria-label="Open menu">
       <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="28" height="28">
     </button>
 
@@ -283,9 +134,13 @@
   </div>
 </nav>
 
-<!-- Offcanvas must be OUTSIDE the navbar to avoid containment/stacking weirdness -->
-<div class="offcanvas offcanvas-end text-bg-dark" tabindex="-1" id="navDrawer" aria-labelledby="navDrawerLabel"
-     data-bs-backdrop="true" data-bs-scroll="false">
+<!-- Offcanvas placed outside navbar -->
+<div class="offcanvas offcanvas-end text-bg-dark"
+     tabindex="-1"
+     id="navDrawer"
+     aria-labelledby="navDrawerLabel"
+     data-bs-backdrop="true"
+     data-bs-scroll="false">
   <div class="offcanvas-header">
     <div class="offcanvas-title" id="navDrawerLabel">Menu</div>
     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -336,6 +191,73 @@
 </div>
 
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+
+<script>
+  // Deterministic: open the menu even if bootstrap JS fails or isn't initializing.
+  (function () {
+    const toggle = document.getElementById('navToggle');
+    const drawer = document.getElementById('navDrawer');
+
+    if (!toggle || !drawer) return;
+
+    function openFallback() {
+      drawer.classList.add('show', 'fallback-open');
+      drawer.style.visibility = 'visible';
+      drawer.style.transform = 'translateX(0)';
+      drawer.setAttribute('aria-modal', 'true');
+      drawer.setAttribute('role', 'dialog');
+
+      // simple backdrop
+      let bd = document.querySelector('.offcanvas-backdrop');
+      if (!bd) {
+        bd = document.createElement('div');
+        bd.className = 'offcanvas-backdrop fade show';
+        document.body.appendChild(bd);
+        bd.addEventListener('click', closeFallback);
+      }
+      document.body.classList.add('offcanvas-backdrop-open');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeFallback() {
+      drawer.classList.remove('show', 'fallback-open');
+      drawer.style.transform = '';
+      drawer.style.visibility = '';
+      document.body.style.overflow = '';
+
+      const bd = document.querySelector('.offcanvas-backdrop');
+      if (bd) bd.remove();
+    }
+
+    // Close drawer when clicking any link inside (mobile UX)
+    drawer.addEventListener('click', function (e) {
+      const a = e.target.closest('a');
+      if (!a) return;
+
+      // Try bootstrap hide first
+      if (window.bootstrap && window.bootstrap.Offcanvas) {
+        const inst = window.bootstrap.Offcanvas.getInstance(drawer);
+        if (inst) inst.hide();
+      } else {
+        closeFallback();
+      }
+    });
+
+    toggle.addEventListener('click', function (e) {
+      // If bootstrap is available, use it
+      if (window.bootstrap && window.bootstrap.Offcanvas) {
+        const inst = window.bootstrap.Offcanvas.getOrCreateInstance(drawer);
+        inst.toggle();
+        return;
+      }
+
+      // Otherwise fallback
+      e.preventDefault();
+      if (drawer.classList.contains('show')) closeFallback();
+      else openFallback();
+    }, { passive: false });
+  })();
+</script>
 
 </body>
 </html>
