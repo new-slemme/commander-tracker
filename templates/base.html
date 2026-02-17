@@ -16,13 +16,15 @@
   <style>
     :root {
       --darkest: #10121a;
-      --darkest-trans: #10121ae0;
       --darker: #171a26;
       --darker-trans: #171a26d9;
 
       --font-base: #8f99c5;
       --font-base-trans: #8f99c57d;
       --font-highlight: #e55c36;
+
+      --border: rgba(143,153,197,0.25);
+      --border-strong: rgba(143,153,197,0.35);
     }
 
     html, body { height: 100%; }
@@ -36,7 +38,12 @@
       padding-right: env(safe-area-inset-right);
     }
 
-    /* Navbar: do NOT fight bootstrap layout */
+    a { color: var(--font-base); text-decoration: none; }
+    a:hover { color: #fff; }
+
+    .muted { color: var(--font-base-trans); }
+
+    /* ---- NAVBAR (keep simple, don’t fight bootstrap) ---- */
     .navbar {
       border-bottom: 1px solid rgba(255,255,255,0.08);
       background: var(--darker-trans);
@@ -45,42 +52,108 @@
     .nav-link { color: var(--font-base); opacity: 0.85; }
     .nav-link:hover { color: var(--font-highlight); opacity: 1; }
 
-    .navbar-toggler {
+    /* Burger button (pure button, no bootstrap collapse/offcanvas) */
+    .menu-btn {
       border: 0;
-      padding: 8px;
-      box-shadow: none !important;
+      background: transparent;
+      padding: 10px;
+      border-radius: 12px;
+      line-height: 0;
+      -webkit-tap-highlight-color: transparent;
       filter: brightness(0) saturate(100%) invert(70%) sepia(47%) saturate(376%) hue-rotate(195deg) brightness(82%) contrast(86%);
     }
-    .navbar-toggler:focus { box-shadow: none !important; }
+    .menu-btn:active { transform: scale(0.98); }
+    .menu-btn:focus { outline: none; box-shadow: none; }
 
-    /* Hardening: Offcanvas must always be above everything */
-    .offcanvas { z-index: 2000 !important; }
-    .offcanvas-backdrop { z-index: 1990 !important; }
+    /* ---- CUSTOM MOBILE DRAWER (NO BOOTSTRAP JS) ---- */
+    .menu-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease;
+      z-index: 9998;
+    }
 
-    .offcanvas.text-bg-dark {
+    .menu-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      height: 100vh;
+      width: min(340px, 88vw);
       background: var(--darker);
-      color: var(--font-base);
-      border-left: 1px solid rgba(143,153,197,0.25);
+      border-left: 1px solid var(--border);
+      transform: translateX(100%);
+      transition: transform 200ms ease;
+      z-index: 9999;
+
+      /* safe areas (iOS notch) */
+      padding-top: calc(env(safe-area-inset-top) + 14px);
+      padding-bottom: calc(env(safe-area-inset-bottom) + 14px);
     }
 
-    .list-group-item {
-      background-color: transparent;
-      border-color: rgba(143,153,197,0.18);
-      color: var(--font-base);
+    .menu-drawer.open { transform: translateX(0); }
+    .menu-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px 12px 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
     }
-    .list-group-item:hover {
+    .drawer-title {
+      font-weight: 800;
+      letter-spacing: 0.04em;
       color: #fff;
-      background-color: rgba(255,255,255,0.04);
     }
 
-    .muted { color: var(--font-base-trans); }
+    .drawer-close {
+      border: 0;
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      padding: 10px 12px;
+      border-radius: 12px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .drawer-close:active { transform: scale(0.98); }
 
-    /* fallback drawer mode (if bootstrap isn't available) */
-    #navDrawer.fallback-open {
-      transform: translateX(0) !important;
-      visibility: visible !important;
+    .drawer-body {
+      padding: 14px 16px;
+      overflow: auto;
+      height: calc(100vh - 58px);
     }
 
+    .drawer-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .drawer-item {
+      display: flex;
+      align-items: center;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(143,153,197,0.18);
+      background: rgba(255,255,255,0.02);
+      color: var(--font-base);
+      text-decoration: none;
+    }
+    .drawer-item:hover { color: #fff; border-color: rgba(143,153,197,0.30); }
+    .drawer-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 14px 0;
+    }
+
+    /* Desktop: hide burger and drawer */
+    @media (min-width: 992px) {
+      .menu-btn, .menu-overlay, .menu-drawer { display: none !important; }
+    }
+
+    /* Mobile spacing */
     @media (max-width: 576px) {
       .container { padding-left: 14px; padding-right: 14px; }
     }
@@ -91,22 +164,16 @@
 {% if request.endpoint != 'life_counter' %}
 
 <nav class="navbar navbar-expand-lg">
-  <div class="container">
-    <a class="navbar-brand" href="/">Commandersohn</a>
+  <div class="container d-flex align-items-center justify-content-between">
+    <a class="navbar-brand" href="/" style="color:#fff; opacity:0.85;">Commandersohn</a>
 
-    <!-- Mobile toggler -->
-    <button id="navToggle"
-            class="navbar-toggler d-lg-none"
-            type="button"
-            data-bs-toggle="offcanvas"
-            data-bs-target="#navDrawer"
-            aria-controls="navDrawer"
-            aria-label="Open menu">
+    <!-- Burger (mobile only via media query) -->
+    <button id="menuBtn" class="menu-btn" type="button" aria-label="Open menu" aria-controls="menuDrawer" aria-expanded="false">
       <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="28" height="28">
     </button>
 
-    <!-- Desktop nav -->
-    <div class="collapse navbar-collapse d-none d-lg-flex">
+    <!-- Desktop links -->
+    <div class="d-none d-lg-flex w-100 align-items-center ms-3">
       <div class="navbar-nav">
         {% if session.get("user_id") %}
           <a class="nav-link" href="/">Home</a>
@@ -134,43 +201,40 @@
   </div>
 </nav>
 
-<!-- Offcanvas placed outside navbar -->
-<div class="offcanvas offcanvas-end text-bg-dark"
-     tabindex="-1"
-     id="navDrawer"
-     aria-labelledby="navDrawerLabel"
-     data-bs-backdrop="true"
-     data-bs-scroll="false">
-  <div class="offcanvas-header">
-    <div class="offcanvas-title" id="navDrawerLabel">Menu</div>
-    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+<!-- Custom mobile drawer -->
+<div id="menuOverlay" class="menu-overlay" aria-hidden="true"></div>
+
+<aside id="menuDrawer" class="menu-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu">
+  <div class="drawer-header">
+    <div class="drawer-title">Menu</div>
+    <button id="menuClose" class="drawer-close" type="button" aria-label="Close menu">✕</button>
   </div>
 
-  <div class="offcanvas-body">
+  <div class="drawer-body">
     {% if session.get("user_id") %}
-      <div class="mb-3 muted">
-        Welcome, <span class="text-white">{{ session.get("display_name") or session.get("username") }}</span>
+      <div class="muted">
+        Welcome, <span style="color:#fff;">{{ session.get("display_name") or session.get("username") }}</span>
       </div>
 
-      <div class="list-group list-group-flush">
-        <a class="list-group-item list-group-item-action" href="/">Home</a>
-        <a class="list-group-item list-group-item-action" href="/players">Players</a>
-        <a class="list-group-item list-group-item-action" href="/decks">Decks</a>
-        <a class="list-group-item list-group-item-action" href="/games">Games</a>
-        <a class="list-group-item list-group-item-action" href="/play_game">Play Game</a>
-        <a class="list-group-item list-group-item-action" href="/manual_game">Manual Game</a>
+      <div class="drawer-list">
+        <a class="drawer-item" href="/">Home</a>
+        <a class="drawer-item" href="/players">Players</a>
+        <a class="drawer-item" href="/decks">Decks</a>
+        <a class="drawer-item" href="/games">Games</a>
+        <a class="drawer-item" href="/play_game">Play Game</a>
+        <a class="drawer-item" href="/manual_game">Manual Game</a>
 
-        <hr class="my-3" style="border-color: rgba(255,255,255,0.12);">
+        <div class="drawer-divider"></div>
 
-        <a class="list-group-item list-group-item-action" href="{{ url_for('profile') }}">Profile</a>
+        <a class="drawer-item" href="{{ url_for('profile') }}">Profile</a>
         {% if session.get("is_admin") %}
-          <a class="list-group-item list-group-item-action" href="{{ url_for('admin_users') }}">Admin</a>
+          <a class="drawer-item" href="{{ url_for('admin_users') }}">Admin</a>
         {% endif %}
-        <a class="list-group-item list-group-item-action" href="{{ url_for('logout') }}">Logout</a>
+        <a class="drawer-item" href="{{ url_for('logout') }}">Logout</a>
       </div>
     {% endif %}
   </div>
-</div>
+</aside>
 
 {% endif %}
 
@@ -190,73 +254,60 @@
   {% block content %}{% endblock %}
 </div>
 
+<!-- You can keep this for other bootstrap components, but menu no longer depends on it -->
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
 
 <script>
-  // Deterministic: open the menu even if bootstrap JS fails or isn't initializing.
-  (function () {
-    const toggle = document.getElementById('navToggle');
-    const drawer = document.getElementById('navDrawer');
+(function () {
+  const btn = document.getElementById('menuBtn');
+  const closeBtn = document.getElementById('menuClose');
+  const drawer = document.getElementById('menuDrawer');
+  const overlay = document.getElementById('menuOverlay');
 
-    if (!toggle || !drawer) return;
+  if (!btn || !drawer || !overlay || !closeBtn) return;
 
-    function openFallback() {
-      drawer.classList.add('show', 'fallback-open');
-      drawer.style.visibility = 'visible';
-      drawer.style.transform = 'translateX(0)';
-      drawer.setAttribute('aria-modal', 'true');
-      drawer.setAttribute('role', 'dialog');
+  function openMenu() {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    btn.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
 
-      // simple backdrop
-      let bd = document.querySelector('.offcanvas-backdrop');
-      if (!bd) {
-        bd = document.createElement('div');
-        bd.className = 'offcanvas-backdrop fade show';
-        document.body.appendChild(bd);
-        bd.addEventListener('click', closeFallback);
-      }
-      document.body.classList.add('offcanvas-backdrop-open');
-      document.body.style.overflow = 'hidden';
-    }
+  function closeMenu() {
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
 
-    function closeFallback() {
-      drawer.classList.remove('show', 'fallback-open');
-      drawer.style.transform = '';
-      drawer.style.visibility = '';
-      document.body.style.overflow = '';
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (drawer.classList.contains('open')) closeMenu();
+    else openMenu();
+  });
 
-      const bd = document.querySelector('.offcanvas-backdrop');
-      if (bd) bd.remove();
-    }
+  closeBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    closeMenu();
+  });
 
-    // Close drawer when clicking any link inside (mobile UX)
-    drawer.addEventListener('click', function (e) {
-      const a = e.target.closest('a');
-      if (!a) return;
+  overlay.addEventListener('click', function () {
+    closeMenu();
+  });
 
-      // Try bootstrap hide first
-      if (window.bootstrap && window.bootstrap.Offcanvas) {
-        const inst = window.bootstrap.Offcanvas.getInstance(drawer);
-        if (inst) inst.hide();
-      } else {
-        closeFallback();
-      }
-    });
+  // Close on ESC (desktop browsers)
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeMenu();
+  });
 
-    toggle.addEventListener('click', function (e) {
-      // If bootstrap is available, use it
-      if (window.bootstrap && window.bootstrap.Offcanvas) {
-        const inst = window.bootstrap.Offcanvas.getOrCreateInstance(drawer);
-        inst.toggle();
-        return;
-      }
-
-      // Otherwise fallback
-      e.preventDefault();
-      if (drawer.classList.contains('show')) closeFallback();
-      else openFallback();
-    }, { passive: false });
-  })();
+  // Close after tapping a link inside drawer
+  drawer.addEventListener('click', function (e) {
+    const a = e.target.closest('a');
+    if (a) closeMenu();
+  });
+})();
 </script>
 
 </body>
