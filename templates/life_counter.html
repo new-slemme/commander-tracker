@@ -96,6 +96,7 @@
         width: 100%;
         height: 100%;
         display: grid;
+        z-index: 0;
       }
 
       /* Life cards */
@@ -103,6 +104,7 @@
         position: relative;
         overflow: hidden;
         background: #000; /* fallback */
+        z-index: 0;
       }
 
       /* Background layer (so we can rotate independently for top players) */
@@ -124,6 +126,11 @@
         z-index: 1;
       }
 
+      .center-menu-btn {
+        z-index: 50;
+        pointer-events: auto;
+      }
+      
       /* Grid layouts */
       .players-2{
         grid-template-columns: 1fr;
@@ -242,7 +249,7 @@
 
       <!-- Central Hamburger -->
       <button
-        class="position-absolute top-50 start-50 translate-middle btn btn-light rounded-circle p-3 shadow-lg"
+        class="center-menu-btn position-absolute top-50 start-50 translate-middle btn btn-light rounded-circle p-3 shadow-lg"
         style="width: 80px; height: 80px;"
         data-bs-toggle="modal"
         data-bs-target="#menuModal"
