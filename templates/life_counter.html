@@ -12,7 +12,6 @@
       --darker:#171a26;
       /* default background transform unless overridden */
       --bg-rotate:none;
-      --active-glow: rgba(255,235,59,0.22);
     }
 
     html,body{
@@ -76,6 +75,8 @@
       position:relative;
       overflow:hidden;
       background:#000;
+      /* needed for the active frame layer */
+      isolation:isolate;
     }
 
     .life-card::before{
@@ -104,44 +105,36 @@
       user-select:none;
     }
 
-    /* Active player: glowing frame + lifted contrast */
-    .life-card{
-      /* needed so the glow frame can sit above the art cleanly */
-      isolation:isolate;
-    }
-    
+    /* ===== ACTIVE PLAYER: GLOW FRAME + BACKGROUND LIFT (NO BADGE) ===== */
     .life-card.active-turn{
-      outline:none; /* we’ll do a nicer frame */
+      outline:none;
     }
-    
-    /* Glow frame layer */
+
     .life-card.active-turn::after{
       content:"";
       position:absolute;
-      inset:10px;                 /* thickness / padding of frame */
-      border-radius:18px;         /* matches your vibe; tweak if you want */
+      inset:10px;
+      border-radius:18px;
       border:2px solid rgba(255,255,255,0.28);
       box-shadow:
         0 0 0 4px rgba(255,255,255,0.08),
         0 0 26px rgba(255,255,255,0.22),
-        0 0 60px var(--active-glow) inset; /* subtle warm “active” lift */
+        0 0 60px rgba(255,235,59,0.18) inset;
       pointer-events:none;
       z-index:25;
     }
-    
-    /* Lift the background (art) on active card only */
+
     .life-card.active-turn::before{
       filter: brightness(1.18) contrast(1.06) saturate(1.08);
     }
-    
-    /* Optional: slightly “pop” the life number as well */
+
     .life-card.active-turn .life-display{
       text-shadow:
         0 0 12px rgba(0,0,0,.95),
         0 0 34px rgba(0,0,0,.75),
         0 0 22px rgba(255,255,255,.22);
     }
-
+    /* ===== END ACTIVE PLAYER ===== */
 
     /* Pass button */
     .pass-btn{
@@ -185,57 +178,8 @@
     .top-card.pass-left  .pass-btn{ right:18px; left:auto; }
     .top-card.pass-right .pass-btn{ left:18px; right:auto; }
 
-    /* ==================== TURN BADGE ==================== */
-    .turn-badge {
-      position: absolute;
-      left: 50%;
-      top: 16px;
-      transform: translateX(-50%);
-      display: none;
-      z-index: 35;
-
-      background: rgba(0,0,0,0.92);
-      color: #ffeb3b;
-      border: 2px solid #ffeb3b;
-      border-radius: 9999px;
-      padding: 10px 26px;
-      font-weight: 900;
-      font-size: 1.05rem;
-      text-transform: uppercase;
-      box-shadow: 0 0 30px rgba(255,235,59,0.75);
-      pointer-events: none;
-      white-space: nowrap;
-      text-align: center;
-      min-width: 110px;
-    }
-
-    /* Top-row cards — move badge to bottom + flip */
-    .top-card .turn-badge {
-      top: auto;
-      bottom: 16px;
-      transform: translateX(-50%) rotate(180deg);
-    }
-
-    @media (max-width: 576px){
-      .turn-badge{
-        padding: 7px 18px;
-        font-size: 0.92rem;
-        letter-spacing: 2px;
-        min-width: 88px;
-        box-shadow: 0 0 18px rgba(255,235,59,0.55);
-      }
-      .pass-btn{
-        padding: 12px 16px;
-        font-size: 0.9rem;
-      }
-    }
-
-    .active-turn .turn-badge {
-      display: block !important;
-    }
-
+    /* ==================== TURN BADGE (DISABLED) ==================== */
     .turn-badge{ display:none !important; }
-
     /* ==================== END TURN BADGE ==================== */
 
     /* Turn damage badge */
@@ -334,38 +278,15 @@
     .players-2 .life-card.left-card  .card-inner{ transform:rotate(90deg);  transform-origin:center; }
     .players-2 .life-card.right-card .card-inner{ transform:rotate(-90deg); transform-origin:center; }
 
-    /*
-      IMPORTANT: background rotation MUST NOT be set inline for non-top cards,
-      otherwise the inline style wins. We set it here per side:
-    */
+    /* Background rotation per side (must be CSS-controlled; inline only for top-cards) */
     .players-2 .life-card.left-card  { --bg-rotate: rotate(90deg); }
     .players-2 .life-card.right-card { --bg-rotate: rotate(-90deg); }
 
-    /*
-      Turn dmg badge was ending up near the CENTER (inner edge) after rotating the UI.
-      Fix: in 2P, pin it to the opposite edge by using BOTTOM instead of TOP,
-      which maps to the OUTER edge after the 90°/-90° rotation.
-    */
+    /* In 2P, pin turn dmg to OUTER edge after rotation */
     .mode-2p .players-2 .turn-dmg{
       top:auto;
       bottom:14px;
     }
-
-    /*
-      ACTIVE badge should stay on the card (unrotated) and not fight the TURN pill.
-      Move it to the OUTER top corners in 2P.
-    */
-    .mode-2p .life-card .turn-badge{
-      top:14px;
-      left:auto;
-      right:auto;
-      transform:none;
-      padding:8px 16px;
-      font-size:0.95rem;
-      min-width:auto;
-    }
-    .mode-2p .life-card.left-card  .turn-badge{ left:14px;  }
-    .mode-2p .life-card.right-card .turn-badge{ right:14px; }
 
   </style>
 </head>
@@ -433,7 +354,7 @@
           </button>
         </div>
 
-        <!-- Active badge stays anchored to the CARD (not rotated UI) -->
+        <!-- kept in DOM, but hidden by CSS -->
         <div class="turn-badge" id="turn-badge-{{ p.player_id }}">Active</div>
       </div>
       {% endfor %}
