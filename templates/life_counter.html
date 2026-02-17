@@ -447,15 +447,19 @@ function positionTurnDamageBadges(){
     const rect = c.getBoundingClientRect();
     const cardCenterX = rect.left + rect.width / 2;
 
+    const isTop = c.classList.contains("top-card");
+    
     dmg.classList.remove("side-left", "side-right");
     // If card is on left side of the screen -> put dmg on left (outer edge)
     // If card is on right side -> put dmg on right (outer edge)
     // For center-ish cards (3 columns), this still chooses a side deterministically.
-    if(cardCenterX < screenCenterX){
-      dmg.classList.add("side-left");
-    }else{
-      dmg.classList.add("side-right");
-    }
+    // Choose outer edge relative to screen...
+    // ...but TOP cards have their inner content rotated 180°, so left/right are visually swapped.
+    const wantsLeft = (cardCenterX < screenCenterX);
+    const finalLeft = isTop ? !wantsLeft : wantsLeft;
+
+    if(finalLeft) dmg.classList.add("side-left");
+    else dmg.classList.add("side-right");
   });
 }
 
