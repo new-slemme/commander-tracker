@@ -110,22 +110,27 @@
     .turn-badge{
       position:absolute;
       top:14px;
-      left:14px;
-      z-index:20;
+      left:50%;
+      transform:translateX(-50%);
       display:none;
-      background:rgba(0,0,0,.55);
+    
+      background:rgba(0,0,0,.65);
       color:#fff;
-      border-radius:10px;
-      padding:6px 10px;
+      border-radius:12px;
+      padding:6px 12px;
       font-weight:900;
       font-size:0.8rem;
-      border:1px solid rgba(255,255,255,0.18);
-      letter-spacing:0.10em;
-      text-transform:uppercase;
-      user-select:none;
-      pointer-events:none;
-      backdrop-filter: blur(6px);
+      border:1px solid rgba(255,255,255,0.22);
+      letter-spacing:0.08em;
+      z-index:7;
     }
+    
+    /* Flip for top cards */
+    .top-card .turn-badge{
+      top:auto;
+      bottom:14px;
+    }
+
 
     /* Turn damage badge: we will dynamically choose left/right (outer edge) */
     .turn-dmg{
