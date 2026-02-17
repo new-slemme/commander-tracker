@@ -35,7 +35,7 @@
       text-align:center;
     }
 
-    /* -------- Wrapper stays unrotated (so pill/menu stay correct) -------- */
+    /* -------- Wrapper stays unrotated (so pills/menu stay correct) -------- */
     .life-wrapper{
       position:fixed;
       inset:0;
@@ -100,13 +100,13 @@
       position:absolute;
       bottom:20px;
       right:20px;
-      z-index:30;              /* make sure it's above everything inside card */
+      z-index:30;
       display:none;
       pointer-events:auto;
       touch-action:manipulation;
     }
 
-    /* Turn badge (top-left) */
+    /* Active TURN badge on the active card */
     .turn-badge{
       position:absolute;
       top:14px;
@@ -127,8 +127,8 @@
       backdrop-filter: blur(6px);
     }
 
-    /* Turn dmg moved away from center: side badges */
-    .turn-dmg-side{
+    /* Turn damage badge: we will dynamically choose left/right (outer edge) */
+    .turn-dmg{
       position:absolute;
       top:14px;
       z-index:20;
@@ -142,35 +142,13 @@
       user-select:none;
       pointer-events:none;
       backdrop-filter: blur(6px);
-      max-width:calc(50% - 30px);
+      max-width:70%;
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
     }
-    .turn-dmg-left{ left:14px; }
-    .turn-dmg-right{ right:14px; }
-
-    /* Bottom TURN badge (flipped, shown only for active bottom players) */
-    .turn-badge-bottom{
-      position:absolute;
-      bottom:16px;
-      left:50%;
-      transform:translateX(-50%) rotate(180deg);
-      z-index:20;
-      display:none;
-      background:rgba(0,0,0,.55);
-      color:#fff;
-      border-radius:999px;
-      padding:8px 12px;
-      font-weight:900;
-      font-size:0.82rem;
-      border:1px solid rgba(255,255,255,0.18);
-      letter-spacing:0.12em;
-      text-transform:uppercase;
-      user-select:none;
-      pointer-events:none;
-      backdrop-filter: blur(6px);
-    }
+    .turn-dmg.side-left { left:14px; right:auto; }
+    .turn-dmg.side-right{ right:14px; left:auto; }
 
     .player-name{
       position:absolute;
@@ -209,6 +187,13 @@
       backdrop-filter: blur(6px);
     }
 
+    /* SECOND TURN pill at bottom, flipped (your wish) */
+    .turn-pill.bottom{
+      top:auto;
+      bottom:14px;
+      transform:translateX(-50%) rotate(180deg);
+    }
+
     /* Center menu button */
     .center-menu-btn{
       position:fixed;
@@ -244,7 +229,8 @@
   {% set n = participants|length %}
 
   <div class="life-wrapper">
-    <div class="turn-pill" id="turnPill">TURN 1</div>
+    <div class="turn-pill" id="turnPillTop">TURN 1</div>
+    <div class="turn-pill bottom" id="turnPillBottom">TURN 1</div>
 
     <div class="life-grid players-{{ n }}" id="lifeGrid">
       {% for p in participants %}
@@ -273,17 +259,9 @@
       >
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
 
-          <!-- Active turn badge (top-left) -->
           <div class="turn-badge" id="turn-badge-{{ p.player_id }}">TURN</div>
 
-          <!-- Turn damage badge (side, away from center) -->
-          <div
-            class="turn-dmg-side {% if loop.index is odd %}turn-dmg-left{% else %}turn-dmg-right{% endif %}"
-            id="turn-dmg-{{ p.player_id }}"
-          >Turn dmg: 0</div>
-
-          <!-- Bottom active badge for bottom players (flipped) -->
-          <div class="turn-badge-bottom" id="turn-badge-bottom-{{ p.player_id }}">TURN</div>
+          <div class="turn-dmg side-left" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</div>
 
           <div class="life-display position-absolute top-50 start-50 translate-middle"
                id="life-{{ p.player_id }}">40</div>
@@ -395,13 +373,11 @@ function hideFsOverlay(){
 document.getElementById("fsBtn")?.addEventListener("click", goFullscreen);
 
 document.getElementById("toggleFsBtn")?.addEventListener("click", async ()=>{
-  // close modal before toggling (keeps it as a “user gesture”)
   try{
     const modalEl = document.getElementById("menuModal");
     const modal = bootstrap.Modal.getInstance(modalEl);
     modal?.hide();
   }catch(e){}
-
   if(isFs()) await exitFullscreen();
   else await goFullscreen();
 });
@@ -420,9 +396,12 @@ let turnDamage = {};
 
 const cards = [...document.querySelectorAll(".life-card")];
 
-function updateTurnPill(){
-  const pill = document.getElementById("turnPill");
-  if(pill) pill.textContent = "TURN " + turn;
+function updateTurnPills(){
+  const t = "TURN " + turn;
+  const top = document.getElementById("turnPillTop");
+  const bot = document.getElementById("turnPillBottom");
+  if(top) top.textContent = t;
+  if(bot) bot.textContent = t;
 }
 
 function resetTurnDamage(){
@@ -443,7 +422,6 @@ function addTurnDamage(playerId, amount){
 
 function setActive(id){
   active = String(id);
-
   cards.forEach(c=>{
     const pid = String(c.dataset.player);
     const isActive = (pid === active);
@@ -452,14 +430,31 @@ function setActive(id){
     const passBtn = document.getElementById("pass-" + pid);
     if(passBtn) passBtn.style.display = isActive ? "block" : "none";
 
-    const turnBadge = document.getElementById("turn-badge-" + pid);
-    if(turnBadge) turnBadge.style.display = isActive ? "block" : "none";
+    const badge = document.getElementById("turn-badge-" + pid);
+    if(badge) badge.style.display = isActive ? "block" : "none";
+  });
+}
 
-    // Bottom TURN badge: show only for bottom players (not .top-card)
-    const bottomBadge = document.getElementById("turn-badge-bottom-" + pid);
-    if(bottomBadge){
-      const isTop = c.classList.contains("top-card");
-      bottomBadge.style.display = (!isTop && isActive) ? "block" : "none";
+/* Put turn dmg on the OUTER edge (away from screen center / burger button). */
+function positionTurnDamageBadges(){
+  const screenCenterX = window.innerWidth / 2;
+
+  cards.forEach(c=>{
+    const pid = String(c.dataset.player);
+    const dmg = document.getElementById("turn-dmg-" + pid);
+    if(!dmg) return;
+
+    const rect = c.getBoundingClientRect();
+    const cardCenterX = rect.left + rect.width / 2;
+
+    dmg.classList.remove("side-left", "side-right");
+    // If card is on left side of the screen -> put dmg on left (outer edge)
+    // If card is on right side -> put dmg on right (outer edge)
+    // For center-ish cards (3 columns), this still chooses a side deterministically.
+    if(cardCenterX < screenCenterX){
+      dmg.classList.add("side-left");
+    }else{
+      dmg.classList.add("side-right");
     }
   });
 }
@@ -470,15 +465,15 @@ function nextPlayer(){
 
   passed.add(active);
 
-  // NEW TURN once everyone passed
   if(passed.size === ids.length){
     turn++;
     passed.clear();
-    updateTurnPill();
+    updateTurnPills();
   }
 
   resetTurnDamage();
   setActive(ids[(idx + 1) % ids.length]);
+  positionTurnDamageBadges();
 }
 
 /* ---------- LIFE TAP ---------- */
@@ -491,7 +486,6 @@ function adjustLife(playerId, delta){
   const after = Math.max(0, before + delta);
   el.textContent = after;
 
-  // damage taken during the current active player's turn
   if(after < before){
     addTurnDamage(playerId, before - after);
   }
@@ -525,7 +519,6 @@ cards.forEach(card=>{
   const isTop = card.classList.contains("top-card");
   const playerId = String(card.dataset.player);
 
-  // Card click adjusts life, but NEVER steal clicks meant for the pass button
   card.addEventListener("click", (e) => {
     if (e.target && e.target.closest && e.target.closest(".pass-btn")) return;
 
@@ -538,7 +531,6 @@ cards.forEach(card=>{
     adjustLife(playerId, delta);
   });
 
-  // Pass button click
   const passBtn = document.getElementById("pass-" + playerId);
   passBtn?.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -549,10 +541,14 @@ cards.forEach(card=>{
 /* ---------- INIT ---------- */
 if(cards.length){
   setActive(cards[0].dataset.player);
-  updateTurnPill();
+  updateTurnPills();
   resetTurnDamage();
 }
+
 showFsOverlayIfNeeded();
+positionTurnDamageBadges();
+window.addEventListener("resize", positionTurnDamageBadges);
+window.addEventListener("orientationchange", () => setTimeout(positionTurnDamageBadges, 250));
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
