@@ -12,6 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Commandersohn</title>
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
+
 <style>
   :root {
     --darkest: #10121a;
@@ -46,10 +47,10 @@
     --font-accent: #6e7cb7;
   }
 
-  body { 
-    background-color: var(--darkest); 
-    color: var(--font-base); 
-    font-family: Arial, sans-serif; 
+  body {
+    background-color: var(--darkest);
+    color: var(--font-base);
+    font-family: Arial, sans-serif;
   }
 
   /* --- Navbar Layout --- */
@@ -71,13 +72,8 @@
     flex-wrap: wrap;
   }
 
-  .nav-link {
-    color: var(--font-base);
-  }
-
-  .nav-link:hover {
-    color: var(--font-highlight);
-  }
+  .nav-link { color: var(--font-base); }
+  .nav-link:hover { color: var(--font-highlight); }
 
   .brand {
     font-weight: 600;
@@ -91,9 +87,7 @@
     transition: opacity 0.2s ease;
   }
 
-  .navbar a:hover {
-    opacity: 1;
-  }
+  .navbar a:hover { opacity: 1; }
 
   .life-card.active-turn {
     outline: 3px solid rgba(255,255,255,0.35);
@@ -193,6 +187,187 @@
     background-position: top;
   }
 
+  .recent-game-tile {
+    border-radius: 14px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: transparent;
+  }
+
+  .recent-game-inner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    min-height: 86px;
+  }
+
+  .recent-game-bg{
+    position:absolute;
+    inset:0;
+    display:flex;
+    gap:0;
+  }
+
+  .recent-game-slice{
+    flex:1 1 0;
+    background-size: cover;
+    background-position: top;
+    background-repeat:no-repeat;
+    filter: saturate(1.05);
+  }
+
+  .recent-game-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.35));
+  }
+
+  .recent-game-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Mana pips */
+  .mana {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    font-weight: bold;
+    margin-right: 6px;
+    font-size: 0.9rem;
+    box-shadow: 0 0 6px rgba(0,0,0,0.6);
+  }
+  .mana-W { background: #F8F6D8; color: #000; }
+  .mana-U { background: #0E68AB; color: #fff; }
+  .mana-B { background: #150B00; color: #fff; }
+  .mana-R { background: #D3202A; color: #fff; }
+  .mana-G { background: #00733E; color: #fff; }
+
+  /* Hover cards */
+  .stat-card { transition: 0.2s ease; }
+  .stat-card:hover { transform: translateY(-4px); box-shadow: 0 0 20px rgba(143,153,197,0.3); }
+
+  .matchup-card { transition: 0.2s ease; }
+  .matchup-card:hover { transform: translateY(-4px); box-shadow: 0 0 20px rgba(143,153,197,0.25); }
+
+  /* Pyramid layout */
+  .pyramid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "top top"
+      "left right";
+    gap: 16px;
+  }
+  .p-top { grid-area: top; justify-self: center; width: min(520px, 100%); }
+  .p-left { grid-area: left; }
+  .p-right { grid-area: right; }
+
+  .rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid var(--font-base-trans);
+    color: #fff;
+    font-weight: 800;
+  }
+
+  /* Top Players cards (separate from generic stat-card) */
+  .leader-card {
+    position: relative;
+    border: 1px solid rgba(143,153,197,0.35);
+    border-radius: 18px;
+    padding: 18px;
+    overflow: hidden;
+    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+  }
+
+  .leader-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(135deg, rgba(0,0,0,0.75), rgba(0,0,0,0.35));
+    z-index: 0;
+  }
+
+  .leader-card.has-bg {
+    background-size: cover;
+    background-position: top; /* art_crop looks best from top */
+  }
+
+  .leader-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Erzfeind badge */
+  @keyframes erz-pulse {
+    0%, 100% { box-shadow: 0 0 10px rgba(255,0,0,0.55), 0 0 22px rgba(255,0,0,0.35); }
+    50%      { box-shadow: 0 0 14px rgba(255,0,0,0.75), 0 0 32px rgba(255,0,0,0.45); }
+  }
+  .erzfeind-badge {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    animation: erz-pulse 2.2s ease-in-out infinite;
+    color: #fff;
+    background: linear-gradient(135deg, #ff3b3b, #b30000);
+    border: 1px solid rgba(255, 120, 120, 0.55);
+    box-shadow:
+      0 0 10px rgba(255, 0, 0, 0.55),
+      0 0 22px rgba(255, 0, 0, 0.35);
+  }
+  .erzfeind-badge::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(255,0,0,0.35), transparent 60%);
+    filter: blur(6px);
+    z-index: -1;
+  }
+
+  /* Deck spotlight */
+  .spotlight {
+    position: relative;
+    border-radius: 20px;
+    overflow: hidden;
+    min-height: 260px;
+    background: var(--darker);
+    box-shadow: 0 0 24px rgba(0,0,0,0.45);
+  }
+  .spotlight .bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: top;
+    filter: saturate(1.05);
+  }
+  .spotlight .overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.8), rgba(0,0,0,0.25));
+  }
+  .spotlight .content {
+    position: relative;
+    padding: 26px;
+  }
+
+  .muted { color: var(--font-base-trans); }
+
   /* Responsiveness */
   @media (max-width: 576px) {
     .container { padding: 0 15px; }
@@ -203,64 +378,68 @@
 </head>
 
 <body>
-  {% if request.endpoint != 'life_counter' %}
-  <nav class="navbar navbar-expand-lg">
-      <div class="container">
-          <a class="navbar-brand" href="/">Commandersohn</a>
-          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                  aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-              <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="24" height="24">
-          </button>
+    {% if request.endpoint != 'life_counter' %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="/">Commandersohn</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="24" height="24">
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <!-- Left side -->
+                <div class="navbar-nav">
+                    {% if session.get("user_id") %}
+                        <a class="nav-link" href="/">Home</a>
+                        <a class="nav-link" href="/players">Players</a>
+                        <a class="nav-link" href="/decks">Decks</a>
+                        <a class="nav-link" href="/games">Games</a>
+                        <a class="nav-link" href="/play_game">Play Game</a>
+                        <a class="nav-link" href="/manual_game">Manual Game</a>
+                    {% endif %}
+                </div>
 
-          <div class="collapse navbar-collapse" id="navbarNav">
-            <div class="navbar-nav">
-              {% if session.get("user_id") %}
-                <a class="nav-link" href="/">Home</a>
-                <a class="nav-link" href="/players">Players</a>
-                <a class="nav-link" href="/decks">Decks</a>
-                <a class="nav-link" href="/games">Games</a>
-                <a class="nav-link" href="/play_game">Play Game</a>
-                <a class="nav-link" href="/manual_game">Manual Game</a>
-              {% endif %}
+                <!-- Right side -->
+                <div class="navbar-nav ms-auto align-items-lg-center">
+                    {% if session.get("user_id") %}
+                        <span class="navbar-text me-3">
+                            Welcome, {{ session.get("display_name") or session.get("username") }}
+                        </span>
+
+                        <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+
+                        {% if session.get("is_admin") %}
+                            <a class="nav-link" href="{{ url_for('admin_users') }}">Admin</a>
+                        {% endif %}
+
+                        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+                    {% else %}
+                    {% endif %}
+                </div>
             </div>
+        </div>
+    </nav>
+    {% endif %}
 
-            <div class="navbar-nav ms-auto align-items-lg-center">
-              {% if session.get("user_id") %}
-                <span class="navbar-text me-3">
-                  Welcome, {{ session.get("display_name") or session.get("username") }}
-                </span>
-
-                <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
-
-                {% if session.get("is_admin") %}
-                  <a class="nav-link" href="{{ url_for('admin_users') }}">Admin</a>
-                {% endif %}
-
-                <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
-              {% endif %}
-            </div>
-          </div>
-      </div>
-  </nav>
-  {% endif %}
-
-  <div class="container mt-4">
-      {% if request.endpoint != 'life_counter' %}
+    <div class="container mt-4">
+        {% if request.endpoint != 'life_counter' %}
         {% with messages = get_flashed_messages() %}
-          {% if messages %}
-            <div class="alert alert-info mb-4">
-              {% for message in messages %}
-                {{ message }}<br>
-              {% endfor %}
-            </div>
-          {% endif %}
+        {% if messages %}
+        <div class="alert alert-info mb-4">
+            {% for message in messages %}
+            {{ message }}<br>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% endwith %}
-      {% endif %}
+        {% endif %}
 
-      {% block content %}{% endblock %}
-  </div>
+        {% block content %}{% endblock %}
+    </div>
 
-  <!-- ONE bootstrap bundle (pick one). Using CDN here -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Keep ONE bootstrap bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    {% if request.endpoint == 'life_counter' %}
+    {% endif %}
 </body>
 </html>
