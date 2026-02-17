@@ -60,6 +60,15 @@
       }
     }
 
+  .life-grid.players-2{
+        width:100%;
+        height:100%;
+        top:0;
+        left:0;
+        transform:none;
+      }
+    }
+    
     .life-card{
       position:relative;
       overflow:hidden;
@@ -271,7 +280,7 @@
     }
 
     /* Grid layouts */
-    .players-2{grid-template-rows:1fr 1fr;}
+    .players-2{grid-template-columns:1fr 1fr; grid-template-rows:1fr;}
     .players-3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-5{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
@@ -297,7 +306,6 @@
     <div class="life-grid players-{{ n }}" id="lifeGrid">
       {% for p in participants %}
       {% set is_top =
-          (n == 2 and loop.index0 == 0) or
           (n == 3 and loop.index0 < 2) or
           (n == 4 and loop.index0 < 2) or
           (n == 5 and loop.index0 < 3) or
