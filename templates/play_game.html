@@ -43,6 +43,17 @@
 
         playerSel.addEventListener('change', function() {
             const pid = this.value;
+            // Prevent duplicate players in UI
+            for (let j = 1; j <= playerCount; j++) {
+              if (j === i) continue;
+              const other = document.getElementById("player" + j);
+              if (other && other.value === pid && pid !== "") {
+                alert("This player is already selected.");
+                this.value = "";
+                refreshStartingPlayerOptions();
+                return;
+              }
+            }
             deckSel.innerHTML = '<option value="">Select deck</option>';
             deckSel.disabled = true;
             refreshStartingPlayerOptions();
@@ -114,6 +125,7 @@
         newCard.querySelector('select:last-of-type').disabled = true;
         container.appendChild(newCard);
         setupPlayerListeners(playerCount);
+        refreshStartingPlayerOptions();
 
         if (playerCount === 6) this.disabled = true;
     });
