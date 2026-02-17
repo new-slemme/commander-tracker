@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>Commander Tracker</title>
+    <link href="/static/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+      :root{
+        --darkest:#10121a;
+        --darker:#171a26;
+        --blue:#1e3a5f;
+        --red:#A63232;
+        --green:#3a6b54;
+        --purple:#5A3A6B;
+        --orange:#FF6B35;
+        --yellow:#F2C94C;
+      }
+
+      html,body{
+        height:100%;
+        margin:0;
+        overflow:hidden;
+        background:var(--darkest);
+        overscroll-behavior:none;
+        touch-action:manipulation;
+        font-family:Arial,sans-serif;
+      }
+
+      /* Keep wrapper unrotated so absolute positioning stays sane */
+      .life-wrapper{
+        position:fixed;
+        inset:0;
+        display:flex;
+      }
+
+      .life-grid{
+        flex:1;
+        position:relative;
+        display:grid;
+      }
+
+      /* Portrait: rotate ONLY the grid (not the positioning context for the whole page) */
+      @media (orientation:portrait){
+        .life-grid{
+          width:100vh;
+          height:100vw;
+          transform:rotate(90deg);
+          transform-origin:center;
+          margin:auto;
+        }
+      }
+
+      .life-card{
+        position:relative;
+        overflow:hidden;
+        background:#000;
+      }
+
+      .life-card::before{
+        content:"";
+        position:absolute;
+        inset:0;
+        background-image:var(--bg-layer);
+        background-size:cover;
+        background-position:center;
+        transform:var(--bg-rotate);
+        transform-origin:center;
+      }
+
+      .card-inner{
+        position:relative;
+        z-index:1;
+      }
+
+      .life-display{
+        font-size:18vh;
+        font-weight:900;
+        color:#fff;
+        text-shadow:0 0 10px rgba(0,0,0,.9),0 0 30px rgba(0,0,0,.8);
+        user-select:none;
+      }
+
+      /* Active turn highlight */
+      .life-card.active-turn{
+        outline:4px solid rgba(255,255,255,0.4);
+        box-shadow:0 0 30px rgba(255,255,255,0.15) inset;
+      }
+
+      /* Pass button */
+      .pass-btn{
+        position:absolute;
+        bottom:20px;
+        right:20px;
+        z-index:5;
+      }
+
+      /* If you want the pass button to read upright on rotated top cards */
+      .top-card .pass-btn{
+        transform:rotate(180deg);
+        transform-origin:center;
+      }
+
+      .center-menu-btn{
+        z-index:50;
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%,-50%);
+      }
+
+      /* Grid layouts */
+      .players-2{
+        grid-template-columns:1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:
+          "p1"
+          "p2";
+      }
+      .players-3{
+        grid-template-columns:1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:
+          "p1 p2"
+          "p3 p3";
+      }
+      .players-4{
+        grid-template-columns:1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:
+          "p1 p2"
+          "p3 p4";
+      }
+      .players-5{
+        grid-template-columns:1fr 1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:
+          "p1 p2 p3"
+          "p4 p4 p5";
+      }
+      .players-6{
+        grid-template-columns:1fr 1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:
+          "p1 p2 p3"
+          "p4 p5 p6";
+      }
+
+      .pos-1{grid-area:p1;}
+      .pos-2{grid-area:p2;}
+      .pos-3{grid-area:p3;}
+      .pos-4{grid-area:p4;}
+      .pos-5{grid-area:p5;}
+      .pos-6{grid-area:p6;}
+
+      /* Top-left badges cluster */
+      .hud{
+        position:absolute;
+        top:0;
+        left:0;
+        padding:12px;
+        display:flex;
+        gap:8px;
+        align-items:center;
+        z-index:6;
+      }
+
+      .hud .badge{
+        border:1px solid rgba(255,255,255,0.25) !important;
+      }
+
+      /* Global turn badge (top center) */
+      .turn-pill{
+        position:absolute;
+        top:14px;
+        left:50%;
+        transform:translateX(-50%);
+        z-index:60;
+        padding:10px 14px;
+        border-radius:999px;
+        background:rgba(0,0,0,0.55);
+        border:1px solid rgba(255,255,255,0.22);
+        color:#fff;
+        font-weight:800;
+        letter-spacing:0.06em;
+        text-transform:uppercase;
+        user-select:none;
+        backdrop-filter: blur(6px);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="life-wrapper">
+      {% set n = participants|length %}
+
+      <!-- Turn number display -->
+      <div class="turn-pill" id="turnNumberPill">Turn 1</div>
+
+      <div class="life-grid players-{{ n }}">
+        {% for p in participants %}
+          {% set is_top =
+            (n == 2 and loop.index0 == 0) or
+            (n == 3 and loop.index0 < 2) or
+            (n == 4 and loop.index0 < 2) or
+            (n == 5 and loop.index0 < 3) or
+            (n == 6 and loop.index0 < 3)
+          %}
+
+          <div
+            class="life-card pos-{{ loop.index }} {% if is_top %}top-card{% endif %}"
+            data-player-index="{{ p.player_id }}"
+            style="
+              {% if p.commander_art %}
+                --bg-layer:
+                  linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
+                  url('{{ p.commander_art }}');
+              {% else %}
+                --bg-layer:
+                  linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
+                  linear-gradient(135deg,var({{ p.color }}),#000);
+              {% endif %}
+
+              {% if is_top %}
+                --bg-rotate:rotate(180deg);
+              {% else %}
+                --bg-rotate:none;
+              {% endif %}
+            "
+          >
+            <!-- Foreground content rotated for top players -->
+            <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
+              <!-- HUD badges -->
+              <div class="hud">
+                <span class="badge bg-dark" id="turn-badge-{{ p.player_id }}" style="display:none;">TURN</span>
+                <span class="badge bg-dark" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</span>
+              </div>
+
+              <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
+                {{ p.player_name }}
+              </small>
+
+              <div
+                class="position-absolute top-50 start-50 translate-middle life-display"
+                id="life-{{ p.player_id }}"
+              >40</div>
+
+              <button
+                type="button"
+                class="btn btn-sm btn-light pass-btn"
+                id="pass-{{ p.player_id }}"
+                style="display:none;"
+              >
+                Pass Turn →
+              </button>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- Center menu -->
+      <button
+        class="center-menu-btn btn btn-light rounded-circle p-3 shadow-lg"
+        style="width:80px;height:80px;"
+        data-bs-toggle="modal"
+        data-bs-target="#menuModal"
+        aria-label="Menu"
+      >
+        <img src="/static/hamburger.svg" width="40" height="40" alt="Menu">
+      </button>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="menuModal">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light">
+          <div class="modal-body text-center p-4">
+            <form method="post" action="/end_game">
+              <select name="winner" class="form-select mb-3" required>
+                <option value="" disabled selected>Select Winner</option>
+                {% for p in participants %}
+                  <option value="{{ p.player_id }}">{{ p.player_name }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-success w-100 mb-3">End Game & Record</button>
+            </form>
+
+            <form method="post" action="/cancel_game"
+                  onsubmit="return confirm('Quit without saving?')">
+              <button type="submit" class="btn btn-outline-danger w-100">
+                Quit without Saving
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ---- Turn state ----
+      let activePlayerId = {{ session.get("active_player_id") or "null" }};
+      let turnNumber = {{ session.get("turn_number") or 1 }};
+      let turnDamage = {};
+      let passedThisRound = new Set();
+
+      function setTurnPill() {
+        const pill = document.getElementById("turnNumberPill");
+        if (pill) pill.textContent = "Turn " + turnNumber;
+      }
+
+      function initTurn(){
+        document.querySelectorAll(".life-card").forEach(card=>{
+          const pid = card.dataset.playerIndex;
+          turnDamage[pid] = 0;
+        });
+
+        if(!activePlayerId){
+          activePlayerId = document.querySelector(".life-card")?.dataset.playerIndex || null;
+        }
+
+        setTurnPill();
+        resetTurnDamage();
+        passedThisRound.clear();
+        setActiveTurn(activePlayerId);
+      }
+
+      function setActiveTurn(pid){
+        activePlayerId = String(pid);
+
+        document.querySelectorAll(".life-card").forEach(card=>{
+          const cid = card.dataset.playerIndex;
+          const isActive = (cid === activePlayerId);
+
+          card.classList.toggle("active-turn", isActive);
+
+          const tb = document.getElementById("turn-badge-" + cid);
+          const pb = document.getElementById("pass-" + cid);
+
+          if (tb) tb.style.display = isActive ? "inline-block" : "none";
+          if (pb) pb.style.display = isActive ? "inline-block" : "none";
+        });
+      }
+
+      function getPlayerOrder() {
+        return Array.from(document.querySelectorAll(".life-card")).map(c => c.dataset.playerIndex);
+      }
+
+      function nextPlayer(){
+        const ids = getPlayerOrder();
+        let idx = ids.indexOf(activePlayerId);
+        const next = ids[(idx + 1) % ids.length];
+
+        // mark current player as having passed this round
+        passedThisRound.add(activePlayerId);
+
+        // if we've completed a full cycle (everyone passed), increment turn number
+        if (passedThisRound.size >= ids.length) {
+          turnNumber += 1;
+          setTurnPill();
+          passedThisRound.clear();
+        }
+
+        resetTurnDamage();
+        setActiveTurn(next);
+      }
+
+      function resetTurnDamage(){
+        for(const pid in turnDamage){
+          turnDamage[pid] = 0;
+          const el = document.getElementById("turn-dmg-" + pid);
+          if (el) el.textContent = "Turn dmg: 0";
+        }
+      }
+
+      // ---- Life & damage ----
+      function adjustLife(player, amount){
+        const el = document.getElementById("life-" + player);
+        if (!el) return;
+
+        const before = parseInt(el.textContent, 10);
+        let after = before + amount;
+        if (after < 0) after = 0;
+        el.textContent = after;
+
+        // damage taken during this turn
+        if (after < before) {
+          turnDamage[player] = (turnDamage[player] || 0) + Math.abs(after - before);
+          const dmgEl = document.getElementById("turn-dmg-" + player);
+          if (dmgEl) dmgEl.textContent = "Turn dmg: " + turnDamage[player];
+        }
+
+        checkWinner();
+      }
+
+      function checkWinner(){
+        const alive = Array.from(document.querySelectorAll(".life-card"))
+          .filter(card=>{
+            const pid = card.dataset.playerIndex;
+            const lifeEl = document.getElementById("life-" + pid);
+            return lifeEl && parseInt(lifeEl.textContent, 10) > 0;
+          });
+
+        if(alive.length === 1){
+          const winner = alive[0].dataset.playerIndex;
+          const form = document.createElement("form");
+          form.method = "POST";
+          form.action = "/end_game";
+
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "winner";
+          input.value = winner;
+
+          form.appendChild(input);
+          document.body.appendChild(form);
+          form.submit();
+        }
+      }
+
+      // Tap logic (ignore clicks on pass button)
+      document.querySelectorAll(".life-card").forEach(card=>{
+        const isTop = card.classList.contains("top-card");
+
+        card.addEventListener("click", e => {
+          if (e.target.closest(".pass-btn")) return;
+
+          const rect = card.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+
+          let amount = (x < rect.width / 2) ? -1 : 1;
+          if (isTop) amount = -amount;
+
+          adjustLife(card.dataset.playerIndex, amount);
+        });
+
+        // (Optional) Touch support
+        card.addEventListener("touchstart", e => {
+          if (e.target.closest(".pass-btn")) return;
+
+          const t = e.touches[0];
+          const rect = card.getBoundingClientRect();
+          const x = t.clientX - rect.left;
+
+          let amount = (x < rect.width / 2) ? -1 : 1;
+          if (isTop) amount = -amount;
+
+          adjustLife(card.dataset.playerIndex, amount);
+          e.preventDefault();
+        }, { passive: false });
+      });
+
+      document.querySelectorAll(".pass-btn").forEach(btn=>{
+        btn.addEventListener("click", e=>{
+          e.stopPropagation();
+          nextPlayer();
+        });
+      });
+
+      initTurn();
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>
