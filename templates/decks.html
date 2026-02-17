@@ -195,49 +195,6 @@
     </div>
   </div>
 
-
-    <div class="deck-controls">
-
-      {% if is_admin %}
-      <form method="get" action="{{ url_for('decks') }}" class="d-flex gap-2">
-        <select class="form-select" name="player_id" onchange="this.form.submit()">
-          <option value="">All owners</option>
-          {% for p in players %}
-            <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
-              {{ p.name }}
-            </option>
-          {% endfor %}
-        </select>
-        {% if selected_player_id %}
-          <a class="btn btn-secondary" href="{{ url_for('decks') }}">Clear</a>
-        {% endif %}
-      </form>
-      {% endif %}
-
-      <form method="get" action="{{ url_for('decks') }}" class="d-flex align-items-center gap-2">
-        {% if is_admin and selected_player_id %}
-          <input type="hidden" name="player_id" value="{{ selected_player_id }}">
-        {% endif %}
-        <div class="form-check form-switch m-0">
-          <input class="form-check-input"
-                 type="checkbox"
-                 name="show_retired"
-                 value="1"
-                 id="showRetiredSwitch"
-                 onchange="this.form.submit()"
-                 {% if show_retired %}checked{% endif %}>
-          <label class="form-check-label" for="showRetiredSwitch">
-            Show Retired
-          </label>
-        </div>
-      </form>
-
-      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeckModal">
-        Add Deck
-      </button>
-    </div>
-  </div>
-
   {% if decks|length == 0 %}
     <div class="card p-3">
       <div class="muted">No decks found.</div>
