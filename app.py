@@ -925,6 +925,14 @@ def start_game():
     session.modified = True
     return redirect(url_for("life_counter"))
 
+@app.route("/cancel_game", methods=["POST"])
+@login_required
+def cancel_game():
+    # Just drop the active game from session
+    session.pop("game_participants", None)
+    flash("Game cancelled.")
+    return redirect(url_for("play_game"))
+
 
 @app.route("/life_counter")
 def life_counter():
