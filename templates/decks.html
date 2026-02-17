@@ -1,11 +1,141 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="container py-4">
-  <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-3">
-    <h1 class="m-0">Decks</h1>
+<style>
+  /* Decks page: grid tiles */
+  .deck-page-head {
+    display:flex; align-items:center; justify-content:space-between;
+    gap: 14px; flex-wrap:wrap;
+    margin-bottom: 14px;
+  }
 
-    <div class="d-flex gap-2 flex-wrap">
+  .deck-controls {
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+
+  .deck-grid {
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 14px;
+  }
+
+  .deck-tile {
+    grid-column: span 6;
+    position:relative;
+    border-radius: 18px;
+    overflow:hidden;
+    border: 1px solid rgba(143,153,197,0.28);
+    background: rgba(0,0,0,0.15);
+    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+    min-height: 140px;
+    text-decoration:none;
+  }
+  .deck-tile.has-bg { background-size:cover; background-position: top; }
+  .deck-tile::before{
+    content:"";
+    position:absolute; inset:0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.30));
+    z-index:0;
+  }
+  .deck-tile > * { position:relative; z-index:1; }
+
+  .deck-tile-inner { padding: 16px; }
+
+  .deck-title {
+    display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  }
+
+  .deck-name {
+    margin:0;
+    color:#fff;
+    font-weight: 900;
+    line-height: 1.1;
+    font-size: 1.15rem;
+  }
+
+  .deck-meta {
+    margin-top: 6px;
+    color: var(--font-base-trans);
+    font-size: 0.92rem;
+  }
+  .deck-meta .strong { color:#fff; }
+
+  .deck-badges { display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+
+  .deck-retired-pill {
+    display:inline-flex;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(242,201,76,0.55);
+    background: rgba(242,201,76,0.18);
+    color:#fff;
+    font-weight: 800;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .deck-win-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 900;
+    border: 1px solid rgba(143,153,197,0.28);
+    background: rgba(255,255,255,0.06);
+    color:#fff;
+    white-space: nowrap;
+  }
+  .deck-win-badge.good { border-color: rgba(58,107,84,0.6); background: rgba(58,107,84,0.25); }
+  .deck-win-badge.mid  { border-color: rgba(30,58,95,0.6); background: rgba(30,58,95,0.25); }
+  .deck-win-badge.bad  { border-color: rgba(143,153,197,0.28); background: rgba(255,255,255,0.06); }
+
+  .deck-stats {
+    display:flex; flex-wrap:wrap;
+    gap: 10px 16px;
+    margin-top: 12px;
+    color: var(--font-base-trans);
+    font-size: 0.95rem;
+  }
+  .deck-stats b { color:#fff; }
+
+  .deck-progress {
+    margin-top: 12px;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+  }
+  .deck-progress > div {
+    height:100%;
+    border-radius:999px;
+  }
+
+  .deck-actions-row {
+    margin-top: 12px;
+    display:flex;
+    gap: 10px;
+    justify-content:flex-end;
+    align-items:center;
+  }
+
+  @media (max-width: 992px) { .deck-tile { grid-column: span 12; } }
+</style>
+
+<div class="container py-4">
+
+  <div class="deck-page-head">
+    <div>
+      <h1 class="m-0">Decks</h1>
+      <div class="muted mt-1">
+        {% if is_admin %}
+          Browse all decks (admin)
+        {% else %}
+          Your decks
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="deck-controls">
+
+      {% if is_admin %}
       <form method="get" action="{{ url_for('decks') }}" class="d-flex gap-2">
         <select class="form-select" name="player_id" onchange="this.form.submit()">
           <option value="">All owners</option>
@@ -19,94 +149,106 @@
           <a class="btn btn-secondary" href="{{ url_for('decks') }}">Clear</a>
         {% endif %}
       </form>
+      {% endif %}
+
+      <form method="get" action="{{ url_for('decks') }}" class="d-flex align-items-center gap-2">
+        {% if is_admin and selected_player_id %}
+          <input type="hidden" name="player_id" value="{{ selected_player_id }}">
+        {% endif %}
+        <div class="form-check form-switch m-0">
+          <input class="form-check-input"
+                 type="checkbox"
+                 name="show_retired"
+                 value="1"
+                 id="showRetiredSwitch"
+                 onchange="this.form.submit()"
+                 {% if show_retired %}checked{% endif %}>
+          <label class="form-check-label" for="showRetiredSwitch">
+            Show Retired
+          </label>
+        </div>
+      </form>
 
       <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addDeckModal">
         Add Deck
       </button>
     </div>
-    <form method="get" action="{{ url_for('decks') }}" class="d-flex align-items-center gap-2">
-  {% if selected_player_id %}
-    <input type="hidden" name="player_id" value="{{ selected_player_id }}">
-  {% endif %}
-
-  <div class="form-check form-switch m-0">
-    <input class="form-check-input"
-           type="checkbox"
-           name="show_retired"
-           value="1"
-           id="showRetiredSwitch"
-           onchange="this.form.submit()"
-           {% if show_retired %}checked{% endif %}>
-    <label class="form-check-label" for="showRetiredSwitch">
-      Show Retired
-    </label>
-  </div>
-</form>
-
   </div>
 
-  <div class="card p-3">
-    <div class="table-responsive">
-      <table class="table align-middle mb-0">
-        <thead>
-          <tr>
-            <th>Deck</th>
-            <th>Commander</th>
-            <th>Owner</th>
-            <th class="text-end">W</th>
-            <th class="text-end">L</th>
-            <th class="text-end">Games</th>
-            <th class="text-end">Win %</th>
-            <th class="text-end">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for d in decks %}
-            {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
-            <tr>
-              <td class="fw-bold">
-                <a href="{{ url_for('deck_detail', deck_id=d.id) }}">
-                  {{ d.name }}
-                </a>
-              
-                {% if d.retired %}
-                  <span class="badge bg-warning text-dark ms-2">Retired</span>
-                {% endif %}
-              </td>
-              <td>
-                <span class="commander-link" data-commander="{{ d.commander|e }}" style="cursor:pointer; text-decoration: underline;">
-                  {{ d.commander }}
-                </span>
-              </td>
-              <td>{{ d.owner.name }}</td>
-              <td class="text-end">{{ s.wins }}</td>
-              <td class="text-end">{{ s.losses }}</td>
-              <td class="text-end">{{ s.uses }}</td>
-              <td class="text-end">{{ s.winrate }}%</td>
-              <td class="text-end">
-                {% if deck_can_delete.get(d.id) %}
-                  <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
-                        onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
-                        style="display:inline;">
-                    <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-                  </form>
-                {% else %}
-                  <button type="button" class="btn btn-sm btn-danger" disabled
-                          title="Can't delete: deck has recorded games">
-                    Delete
-                  </button>
-                {% endif %}
-              </td>
-            </tr>
-          {% endfor %}
-
-          {% if decks|length == 0 %}
-            <tr><td colspan="8" class="text-center py-4">No decks found.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
+  {% if decks|length == 0 %}
+    <div class="card p-3">
+      <div class="muted">No decks found.</div>
     </div>
-  </div>
+  {% else %}
+    <div class="deck-grid">
+      {% for d in decks %}
+        {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
+        {% set art = d.commander_local_art or d.commander_art_crop_url %}
+        {% set wr = s.winrate %}
+        {% set badge_class = 'bad' %}
+        {% if wr >= 60 %}{% set badge_class = 'good' %}
+        {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+        {% endif %}
+
+        <a class="deck-tile {% if art %}has-bg{% endif %}"
+           href="{{ url_for('deck_detail', deck_id=d.id) }}"
+           {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
+
+          <div class="deck-tile-inner">
+
+            <div class="deck-title">
+              <div>
+                <h3 class="deck-name">{{ d.name }}</h3>
+                <div class="deck-meta">
+                  <span class="strong commander-link" data-commander="{{ (d.commander_name or d.commander)|e }}" style="cursor:pointer; text-decoration: underline;">
+                    {{ d.commander_name or d.commander }}
+                  </span>
+                  <span class="muted"> · </span>
+                  <span>Owner: <span class="strong">{{ d.owner.name }}</span></span>
+                </div>
+              </div>
+
+              <div class="deck-badges">
+                {% if d.retired %}
+                  <span class="deck-retired-pill">Retired</span>
+                {% endif %}
+                <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
+              </div>
+            </div>
+
+            <div class="deck-stats">
+              <div><b>{{ s.wins }}</b> W</div>
+              <div><b>{{ s.losses }}</b> L</div>
+              <div><b>{{ s.uses }}</b> games</div>
+            </div>
+
+            <div class="deck-progress" aria-label="Winrate progress">
+              <div class="progress-bar"
+                   role="progressbar"
+                   style="width: {{ wr }}%;"
+                   aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+
+            <div class="deck-actions-row">
+              {% if deck_can_delete.get(d.id) %}
+                <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
+                      onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
+                      style="display:inline;">
+                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                </form>
+              {% else %}
+                <button type="button" class="btn btn-sm btn-danger" disabled
+                        title="Can't delete: deck has recorded games">
+                  Delete
+                </button>
+              {% endif %}
+            </div>
+
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
 </div>
 
 <!-- Add Deck Modal -->
@@ -117,6 +259,8 @@
         <h4 class="mb-3">Add Deck</h4>
 
         <form method="post" action="{{ url_for('add_deck') }}" id="addDeckForm">
+
+          {% if is_admin %}
           <div class="mb-3">
             <label class="form-label">Owner</label>
             <select class="form-select" name="player_id" required>
@@ -128,6 +272,7 @@
               {% endfor %}
             </select>
           </div>
+          {% endif %}
 
           <div class="mb-3">
             <label class="form-label">Deck name</label>
@@ -150,6 +295,7 @@
             <button class="btn btn-success w-100 btn-lg" type="submit">Add</button>
             <button class="btn btn-secondary w-100 btn-lg" type="button" data-bs-dismiss="modal">Cancel</button>
           </div>
+
         </form>
       </div>
     </div>
@@ -158,8 +304,6 @@
 
 <script>
   // --- Commander autocomplete + preview via Scryfall (client-side) ---
-  // Autocomplete endpoint: /cards/autocomplete :contentReference[oaicite:1]{index=1}
-  // Card lookup endpoint: /cards/named :contentReference[oaicite:2]{index=2}
   const commanderInput = document.getElementById('commanderInput');
   const previewWrap = document.getElementById('commanderPreview');
   const previewImg = document.getElementById('commanderImg');
@@ -182,7 +326,6 @@
   }
 
   function attachDropdown(items) {
-    // simple inline dropdown (no extra libs)
     let box = document.getElementById('commanderSuggest');
     if (!box) {
       box = document.createElement('div');
@@ -240,7 +383,6 @@
       }, 200);
     });
 
-    // Hide suggestions if user clicks outside
     document.addEventListener('click', (e) => {
       const menu = document.getElementById('commanderSuggestMenu');
       if (!menu) return;
@@ -249,9 +391,11 @@
     });
   }
 
-  // Bonus: clicking a commander name in the table opens Scryfall preview in new tab
+  // Commander click -> open Scryfall
   document.querySelectorAll('.commander-link').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
       const name = el.dataset.commander;
       const url = `https://scryfall.com/search?q=!${encodeURIComponent(name)}`;
       window.open(url, '_blank');
