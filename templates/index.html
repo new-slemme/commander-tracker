@@ -134,23 +134,26 @@
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
    <h2 class="m-0">Deck Spotlight</h2>
 </div>
-{% if best_deck %}
-{% set art = best_deck.commander_local_art or best_deck.commander_art_crop_url %}
-<div class="spotlight mb-5">
-   <div class="bg" style="{% if art %}background-image:url('{{ art }}'); background-position: top;{% endif %}"></div>
-   <div class="overlay"></div>
-   <div class="content">
-      <div class="muted mb-1">Highest win rate (min 3 games)</div>
-      <h3 class="text-white mb-1">{{ best_deck.name }}</h3>
-      <div class="muted mb-3">{{ best_deck.commander_name or best_deck.commander }}</div>
-      <a class="btn btn-primary" href="{{ url_for('deck_detail', deck_id=best_deck.id) }}">View Deck</a>
-   </div>
-</div>
+
+{% if last_winning_deck %}
+  {% set art = last_winning_deck.commander_local_art or last_winning_deck.commander_art_crop_url %}
+  <div class="spotlight mb-5">
+     <div class="bg" style="{% if art %}background-image:url('{{ art }}'); background-position: top;{% endif %}"></div>
+     <div class="overlay"></div>
+     <div class="content">
+        <div class="muted mb-1">Last winning deck</div>
+        <h3 class="text-white mb-1">{{ last_winning_deck.name }}</h3>
+        <div class="muted mb-1">{{ last_winning_deck.commander_name or last_winning_deck.commander }}</div>
+        <div class="muted mb-3">Owner: <span class="text-white">{{ last_winning_deck.owner.name }}</span></div>
+        <a class="btn btn-primary" href="{{ url_for('deck_detail', deck_id=last_winning_deck.id) }}">View Deck</a>
+     </div>
+  </div>
 {% else %}
-<div class="card p-3 mb-5">
-   <div class="muted">No deck has enough games yet to spotlight.</div>
-</div>
+  <div class="card p-3 mb-5">
+     <div class="muted">No games recorded yet.</div>
+  </div>
 {% endif %}
+
 
 <!-- =========================
    RECENT GAMES
