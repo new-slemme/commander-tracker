@@ -24,12 +24,10 @@
     </div>
     <div class="mb-3">
       <label class="form-label">Starting Player</label>
-      <select name="starting_player" class="form-select" required>
+      <select name="starting_player" id="startingPlayer" class="form-select" required>
         <option value="" disabled selected>Select starting player</option>
-        {% for p in players %}
-          <option value="{{ p.id }}">{{ p.name }}</option>
-        {% endfor %}
       </select>
+      <div class="form-text">Only selected players appear here.</div>
     </div>
     <button type="button" id="addPlayer" class="btn btn-secondary mb-3">Add Player (up to 6)</button>
     <button type="submit" class="btn btn-success btn-lg">Start Game</button>
