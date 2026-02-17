@@ -924,15 +924,21 @@ def start_game():
     if not starting_player:
         return "Must select starting player", 400
 
-    starting_player = int(starting_player)
+    starting_player = request.form.get("starting_player", type=int)
+    if not starting_player:
+        return "Starting player required", 400
+    
     if starting_player not in seen:
-        return "Invalid starting player", 400
-
+        return "Starting player must be a participant", 400
+    
+    session["active_player_id"] = starting_player
     session["game_participants"] = participants
     session["active_player"] = starting_player
     session["turn_number"] = 1
     session.modified = True
 
+    
+    
     return redirect(url_for("life_counter"))
 
 
@@ -941,6 +947,7 @@ def start_game():
 def cancel_game():
     # Just drop the active game from session
     session.pop("game_participants", None)
+    session.pop("active_player_id", None)
     flash("Game cancelled.")
     return redirect(url_for("play_game"))
 
@@ -989,6 +996,7 @@ def end_game():
 
     db.session.commit()
     session.pop("game_participants", None)
+    session.pop("active_player_id", None)
     return redirect(url_for("index"))
 
 
