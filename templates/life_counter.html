@@ -10,6 +10,8 @@
     :root{
       --darkest:#10121a;
       --darker:#171a26;
+      /* default background transform unless overridden */
+      --bg-rotate:none;
     }
 
     html,body{
@@ -48,7 +50,7 @@
       display:grid;
     }
 
-    /* Portrait: rotate only the grid to mimic landscape layout */
+    /* Portrait: rotate only the grid to mimic landscape layout (EXCEPT 2P) */
     @media (orientation:portrait){
       .life-grid{
         width:100vh;
@@ -58,9 +60,9 @@
         transform:translate(-50%,-50%) rotate(90deg);
         transform-origin:center;
       }
-    }
 
-  .life-grid.players-2{
+      /* 2-player mode should stay true left/right in portrait */
+      .life-grid.players-2{
         width:100%;
         height:100%;
         top:0;
@@ -68,7 +70,7 @@
         transform:none;
       }
     }
-    
+
     .life-card{
       position:relative;
       overflow:hidden;
@@ -89,6 +91,8 @@
     .card-inner{
       position:relative;
       z-index:2;
+      height:100%;
+      width:100%;
     }
 
     .life-display{
@@ -114,7 +118,6 @@
       pointer-events:auto;
       touch-action:manipulation;
 
-      /* styling */
       padding: 12px 18px;
       border-radius: 999px;
       font-weight: 900;
@@ -136,9 +139,9 @@
     /* Top-row cards: rotate ONLY the label so button transforms (:active) still work */
     .top-card .pass-label{
       display:inline-block;
-      /* transform: rotate(180deg); */
       transform-origin:center;
     }
+
     /* Place PASS in the OUTER corner based on left/right half of screen */
     .life-card.pass-left  .pass-btn{ left:18px; right:auto; }
     .life-card.pass-right .pass-btn{ right:18px; left:auto; }
@@ -146,8 +149,8 @@
     /* If the card is top-row, outer corner is mirrored */
     .top-card.pass-left  .pass-btn{ right:18px; left:auto; }
     .top-card.pass-right .pass-btn{ left:18px; right:auto; }
-    
-    /* ==================== TURN BADGE (PERFECT FIX) ==================== */
+
+    /* ==================== TURN BADGE ==================== */
     .turn-badge {
       position: absolute;
       left: 50%;
@@ -171,16 +174,14 @@
       min-width: 110px;
     }
 
-    /* Top-row cards — just move to bottom (no rotation needed) */
+    /* Top-row cards — move badge to bottom + flip */
     .top-card .turn-badge {
       top: auto;
       bottom: 16px;
       transform: translateX(-50%) rotate(180deg);
     }
 
-   /* Mobile scaling: make ACTIVE badge and Pass button feel right */
     @media (max-width: 576px){
-      /* ACTIVE badge SMALLER on mobile */
       .turn-badge{
         padding: 7px 18px;
         font-size: 0.92rem;
@@ -193,7 +194,7 @@
         font-size: 0.9rem;
       }
     }
-    /* Show automatically when card is active */
+
     .active-turn .turn-badge {
       display: block !important;
     }
@@ -280,54 +281,58 @@
     }
 
     /* Grid layouts */
-    .players-3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
-    .players-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
-    .players-5{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
-    .players-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
-    /* ==================== 2 PLAYER (LEFT/RIGHT) ROTATION ==================== */
-    /* Grid: left/right */
-    .players-2{
-      grid-template-columns:1fr 1fr;
-      grid-template-rows:1fr;
-    }
-    
-    /* Rotate content so each player reads “upright” from their side */
+    .players-2{ grid-template-columns:1fr 1fr; grid-template-rows:1fr; }
+    .players-3{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-4{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
+
+    /* ==================== 2 PLAYER FIXES (NO :has, NO INLINE VAR FIGHTS) ==================== */
+
+    /* Hide the bottom turn pill in 2-player mode (reduces clutter & overlap) */
+    .mode-2p #turnPillBottom{ display:none; }
+
+    /* Rotate each player's UI to face them */
     .players-2 .life-card.left-card  .card-inner{ transform:rotate(90deg);  transform-origin:center; }
     .players-2 .life-card.right-card .card-inner{ transform:rotate(-90deg); transform-origin:center; }
-    
-    /* Rotate the background art the same way, so it matches the rotated content */
-    .players-2 .life-card.left-card { --bg-rotate: rotate(90deg); }
-    .players-2 .life-card.right-card{ --bg-rotate: rotate(-90deg); }
-    
-    /* ==================== BADGE DE-CONFLICT (ACTIVE vs TURN PILL) ==================== */
-    
-    /* In 2-player mode, keep ONLY the top TURN pill (bottom one causes clutter/overlap) */
-    .players-2 ~ .turn-pill.bottom,
-    .life-wrapper .turn-pill.bottom{
-      /* default stays for other modes; override below */
+
+    /*
+      IMPORTANT: background rotation MUST NOT be set inline for non-top cards,
+      otherwise the inline style wins. We set it here per side:
+    */
+    .players-2 .life-card.left-card  { --bg-rotate: rotate(90deg); }
+    .players-2 .life-card.right-card { --bg-rotate: rotate(-90deg); }
+
+    /*
+      Turn dmg badge was ending up near the CENTER (inner edge) after rotating the UI.
+      Fix: in 2P, pin it to the opposite edge by using BOTTOM instead of TOP,
+      which maps to the OUTER edge after the 90°/-90° rotation.
+    */
+    .mode-2p .players-2 .turn-dmg{
+      top:auto;
+      bottom:14px;
     }
-    .life-wrapper:has(.life-grid.players-2) .turn-pill.bottom{
-      display:none;
-    }
-    
-    /* Move ACTIVE badge away from center-top where TURN pill lives */
-    .life-wrapper:has(.life-grid.players-2) .life-card .turn-badge{
+
+    /*
+      ACTIVE badge should stay on the card (unrotated) and not fight the TURN pill.
+      Move it to the OUTER top corners in 2P.
+    */
+    .mode-2p .life-card .turn-badge{
       top:14px;
       left:auto;
+      right:auto;
       transform:none;
       padding:8px 16px;
       font-size:0.95rem;
       min-width:auto;
     }
-    
-    /* Put ACTIVE near the OUTER top corners */
-    .life-wrapper:has(.life-grid.players-2) .life-card.left-card  .turn-badge{ left:14px;  right:auto; }
-    .life-wrapper:has(.life-grid.players-2) .life-card.right-card .turn-badge{ right:14px; left:auto; }
+    .mode-2p .life-card.left-card  .turn-badge{ left:14px;  }
+    .mode-2p .life-card.right-card .turn-badge{ right:14px; }
 
   </style>
 </head>
 
-<body>
+<body class="{% if participants|length == 2 %}mode-2p{% endif %}">
   <!-- Fullscreen overlay -->
   <div id="fsOverlay" class="fs-overlay">
     <div>
@@ -346,6 +351,8 @@
       {% for p in participants %}
       {% set is_left = (n == 2 and loop.index0 == 0) %}
       {% set is_right = (n == 2 and loop.index0 == 1) %}
+
+      {# NOTE: do NOT mark 2P as top-card anymore #}
       {% set is_top =
           (n == 3 and loop.index0 < 2) or
           (n == 4 and loop.index0 < 2) or
@@ -368,7 +375,9 @@
             --bg-layer:
               linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85));
           {% endif %}
-          {% if is_top %}--bg-rotate:rotate(180deg);{% else %}--bg-rotate:none;{% endif %}
+          {# CRITICAL: only set bg rotation inline for TOP cards.
+             For others, leave it alone so CSS can control (2P needs this). #}
+          {% if is_top %}--bg-rotate:rotate(180deg);{% endif %}
         "
       >
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
@@ -386,7 +395,7 @@
           </button>
         </div>
 
-        <!-- TURN BADGE MOVED OUTSIDE card-inner (fixed!) -->
+        <!-- Active badge stays anchored to the CARD (not rotated UI) -->
         <div class="turn-badge" id="turn-badge-{{ p.player_id }}">Active</div>
       </div>
       {% endfor %}
@@ -508,14 +517,8 @@ let passed = new Set();
 let turnDamage = {};
 
 const cards = [...document.querySelectorAll(".life-card")];
-const N = cards.length;
 
 function getClockwiseOrder(ids){
-  // ids is the DOM order: p1,p2,p3,...
-  // We remap to clockwise perimeter order based on the grid layouts:
-  // 4 players (2x2): TL,TR,BL,BR -> TL,TR,BR,BL => 0,1,3,2
-  // 6 players (3x2): TL,TM,TR,BL,BM,BR -> TL,TM,TR,BR,BM,BL => 0,1,2,5,4,3
-  // 5 players (3x2 with BR empty): TL,TM,TR,BL,BM -> TL,TM,TR,BM,BL => 0,1,2,4,3
   const mapByN = {
     1: [0],
     2: [0,1],
@@ -566,7 +569,6 @@ function setActive(id){
 
     const passBtn = document.getElementById("pass-" + pid);
     if(passBtn) passBtn.style.display = isActive ? "block" : "none";
-    /* Badge is now handled 100% by CSS — no inline style needed */
   });
   positionPassButtons();
 }
@@ -582,7 +584,7 @@ function positionTurnDamageBadges(){
     const rect = c.getBoundingClientRect();
     const cardCenterX = rect.left + rect.width / 2;
     const isTop = c.classList.contains("top-card");
-    
+
     dmg.classList.remove("side-left", "side-right");
     const wantsLeft = (cardCenterX < screenCenterX);
     const finalLeft = isTop ? !wantsLeft : wantsLeft;
@@ -591,6 +593,7 @@ function positionTurnDamageBadges(){
     else dmg.classList.add("side-right");
   });
 }
+
 /* PASS button should always sit in the OUTER corner of the player card */
 function positionPassButtons(){
   const screenCenterX = window.innerWidth / 2;
@@ -603,6 +606,7 @@ function positionPassButtons(){
     else c.classList.add("pass-right");
   });
 }
+
 function nextPlayer(){
   const ids = getIdsClockwise();
   const idx = ids.indexOf(String(active));
@@ -681,21 +685,21 @@ cards.forEach(card=>{
   });
 });
 
-  /* ---------- INIT ---------- */
-  if(cards.length){
-    const ids = getIdsClockwise();
-    setActive(ids[0]);
-    updateTurnPills();
-    resetTurnDamage();
-  }
-  
-  showFsOverlayIfNeeded();
-  positionTurnDamageBadges();
-  positionPassButtons();
-  window.addEventListener("resize", positionTurnDamageBadges);
-  window.addEventListener("resize", positionPassButtons);
-  window.addEventListener("orientationchange", () => setTimeout(positionTurnDamageBadges, 250));
-  window.addEventListener("orientationchange", () => setTimeout(positionPassButtons, 250));
+/* ---------- INIT ---------- */
+if(cards.length){
+  const ids = getIdsClockwise();
+  setActive(ids[0]);
+  updateTurnPills();
+  resetTurnDamage();
+}
+
+showFsOverlayIfNeeded();
+positionTurnDamageBadges();
+positionPassButtons();
+window.addEventListener("resize", positionTurnDamageBadges);
+window.addEventListener("resize", positionPassButtons);
+window.addEventListener("orientationchange", () => setTimeout(positionTurnDamageBadges, 250));
+window.addEventListener("orientationchange", () => setTimeout(positionPassButtons, 250));
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
