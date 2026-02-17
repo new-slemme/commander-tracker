@@ -2,7 +2,10 @@
 <html lang="en" data-bs-theme="dark">
   <head>
     <meta charset="utf-8">
+    <!-- Keep viewport simple; we handle layout ourselves -->
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- PWA-ish flags (helps if added to home screen; does NOT force fullscreen in browser tabs) -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -32,7 +35,24 @@
         font-family:Arial,sans-serif;
       }
 
-      /* Keep wrapper unrotated so absolute positioning stays sane */
+      /* Fullscreen tap overlay (required on mobile: fullscreen must be triggered by a user gesture) */
+      .start-overlay{
+        position:fixed;
+        inset:0;
+        display:grid;
+        place-items:center;
+        background:rgba(0,0,0,0.85);
+        z-index:9999;
+        padding:24px;
+        text-align:center;
+      }
+      .start-overlay .hint{
+        margin-top:10px;
+        opacity:0.75;
+        font-size:0.95rem;
+      }
+
+      /* Wrapper stays unrotated so absolute UI (burger/menu/pill) stays correct */
       .life-wrapper{
         position:fixed;
         inset:0;
@@ -45,7 +65,7 @@
         display:grid;
       }
 
-      /* Portrait: rotate ONLY the grid (not the positioning context for the whole page) */
+      /* Portrait: rotate only the grid to mimic landscape layout */
       @media (orientation:portrait){
         .life-grid{
           width:100vh;
@@ -61,7 +81,6 @@
         overflow:hidden;
         background:#000;
       }
-
       .life-card::before{
         content:"";
         position:absolute;
@@ -97,68 +116,14 @@
         position:absolute;
         bottom:20px;
         right:20px;
-        z-index:5;
+        z-index:6;
       }
-
-      /* If you want the pass button to read upright on rotated top cards */
       .top-card .pass-btn{
         transform:rotate(180deg);
         transform-origin:center;
       }
 
-      .center-menu-btn{
-        z-index:50;
-        position:absolute;
-        top:50%;
-        left:50%;
-        transform:translate(-50%,-50%);
-      }
-
-      /* Grid layouts */
-      .players-2{
-        grid-template-columns:1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:
-          "p1"
-          "p2";
-      }
-      .players-3{
-        grid-template-columns:1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:
-          "p1 p2"
-          "p3 p3";
-      }
-      .players-4{
-        grid-template-columns:1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:
-          "p1 p2"
-          "p3 p4";
-      }
-      .players-5{
-        grid-template-columns:1fr 1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:
-          "p1 p2 p3"
-          "p4 p4 p5";
-      }
-      .players-6{
-        grid-template-columns:1fr 1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:
-          "p1 p2 p3"
-          "p4 p5 p6";
-      }
-
-      .pos-1{grid-area:p1;}
-      .pos-2{grid-area:p2;}
-      .pos-3{grid-area:p3;}
-      .pos-4{grid-area:p4;}
-      .pos-5{grid-area:p5;}
-      .pos-6{grid-area:p6;}
-
-      /* Top-left badges cluster */
+      /* HUD badges cluster */
       .hud{
         position:absolute;
         top:0;
@@ -169,12 +134,11 @@
         align-items:center;
         z-index:6;
       }
-
       .hud .badge{
         border:1px solid rgba(255,255,255,0.25) !important;
       }
 
-      /* Global turn badge (top center) */
+      /* Turn pill (top center) */
       .turn-pill{
         position:absolute;
         top:14px;
@@ -191,15 +155,78 @@
         text-transform:uppercase;
         user-select:none;
         backdrop-filter: blur(6px);
+        pointer-events:none;
+      }
+
+      /* Center menu button (must be above cards) */
+      .center-menu-btn{
+        z-index:80;
+        position:absolute;
+        top:50%;
+        left:50%;
+        transform:translate(-50%,-50%);
+        pointer-events:auto;
+      }
+
+      /* Grid layouts */
+      .players-2{
+        grid-template-columns:1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:"p1" "p2";
+      }
+      .players-3{
+        grid-template-columns:1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:"p1 p2" "p3 p3";
+      }
+      .players-4{
+        grid-template-columns:1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:"p1 p2" "p3 p4";
+      }
+      .players-5{
+        grid-template-columns:1fr 1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:"p1 p2 p3" "p4 p4 p5";
+      }
+      .players-6{
+        grid-template-columns:1fr 1fr 1fr;
+        grid-template-rows:1fr 1fr;
+        grid-template-areas:"p1 p2 p3" "p4 p5 p6";
+      }
+
+      .pos-1{grid-area:p1;}
+      .pos-2{grid-area:p2;}
+      .pos-3{grid-area:p3;}
+      .pos-4{grid-area:p4;}
+      .pos-5{grid-area:p5;}
+      .pos-6{grid-area:p6;}
+
+      /* Make modal buttons feel nicer on mobile */
+      .modal .btn-lg{
+        border-radius:14px;
+        padding:14px 16px;
+        font-weight:700;
       }
     </style>
   </head>
 
   <body>
-    <div class="life-wrapper">
+    <!-- Fullscreen overlay (tap required on mobile) -->
+    <div id="startOverlay" class="start-overlay" style="display:none;">
+      <div>
+        <button class="btn btn-primary btn-lg px-4 py-3" id="startBtn">
+          Tap to start (Fullscreen)
+        </button>
+        <div class="hint">
+          Your browser only allows fullscreen after a tap.
+        </div>
+      </div>
+    </div>
+
+    <div class="life-wrapper" id="lifeWrapper">
       {% set n = participants|length %}
 
-      <!-- Turn number display -->
       <div class="turn-pill" id="turnNumberPill">Turn 1</div>
 
       <div class="life-grid players-{{ n }}">
@@ -233,9 +260,7 @@
               {% endif %}
             "
           >
-            <!-- Foreground content rotated for top players -->
             <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
-              <!-- HUD badges -->
               <div class="hud">
                 <span class="badge bg-dark" id="turn-badge-{{ p.player_id }}" style="display:none;">TURN</span>
                 <span class="badge bg-dark" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</span>
@@ -245,17 +270,14 @@
                 {{ p.player_name }}
               </small>
 
-              <div
-                class="position-absolute top-50 start-50 translate-middle life-display"
-                id="life-{{ p.player_id }}"
-              >40</div>
+              <div class="position-absolute top-50 start-50 translate-middle life-display"
+                   id="life-{{ p.player_id }}">40</div>
 
               <button
                 type="button"
                 class="btn btn-sm btn-light pass-btn"
                 id="pass-{{ p.player_id }}"
-                style="display:none;"
-              >
+                style="display:none;">
                 Pass Turn →
               </button>
             </div>
@@ -275,11 +297,17 @@
       </button>
     </div>
 
-    <!-- Modal -->
-    <div class="modal fade" id="menuModal">
+    <!-- Menu Modal -->
+    <div class="modal fade" id="menuModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark text-light">
           <div class="modal-body text-center p-4">
+
+            <!-- Manual fullscreen toggle RESTORED -->
+            <button type="button" class="btn btn-primary w-100 btn-lg mb-3" id="fsToggleBtn">
+              Toggle Fullscreen
+            </button>
+
             <form method="post" action="/end_game">
               <select name="winner" class="form-select mb-3" required>
                 <option value="" disabled selected>Select Winner</option>
@@ -287,22 +315,84 @@
                   <option value="{{ p.player_id }}">{{ p.player_name }}</option>
                 {% endfor %}
               </select>
-              <button type="submit" class="btn btn-success w-100 mb-3">End Game & Record</button>
+              <button type="submit" class="btn btn-success w-100 btn-lg mb-3">
+                End Game & Record
+              </button>
             </form>
 
             <form method="post" action="/cancel_game"
                   onsubmit="return confirm('Quit without saving?')">
-              <button type="submit" class="btn btn-outline-danger w-100">
+              <button type="submit" class="btn btn-outline-danger w-100 btn-lg">
                 Quit without Saving
               </button>
             </form>
+
           </div>
         </div>
       </div>
     </div>
 
     <script>
-      // ---- Turn state ----
+      // --- Fullscreen helpers ---
+      function isFullscreen() {
+        return !!document.fullscreenElement;
+      }
+
+      async function requestFullscreenAndLock() {
+        // Fullscreen requires user gesture on mobile browsers
+        try {
+          if (!isFullscreen() && document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+        } catch (e) {}
+
+        // Best-effort landscape lock (works on some browsers)
+        try {
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock("landscape");
+          }
+        } catch (e) {}
+      }
+
+      async function toggleFullscreen() {
+        try {
+          if (!isFullscreen()) {
+            await requestFullscreenAndLock();
+          } else if (document.exitFullscreen) {
+            await document.exitFullscreen();
+          }
+        } catch (e) {}
+        syncOverlay();
+      }
+
+      function syncOverlay() {
+        const overlay = document.getElementById("startOverlay");
+        if (!overlay) return;
+
+        // Show overlay if we're on a small device and not fullscreen.
+        const likelyMobile = window.matchMedia && window.matchMedia("(max-width: 900px)").matches;
+        overlay.style.display = (!isFullscreen() && likelyMobile) ? "grid" : "none";
+      }
+
+      document.getElementById("startBtn")?.addEventListener("click", async () => {
+        await requestFullscreenAndLock();
+        syncOverlay();
+      });
+
+      document.getElementById("fsToggleBtn")?.addEventListener("click", async () => {
+        // Close modal then toggle FS, so the browser accepts it as a gesture
+        try {
+          const modalEl = document.getElementById("menuModal");
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          modal?.hide();
+        } catch(e) {}
+        await toggleFullscreen();
+      });
+
+      document.addEventListener("fullscreenchange", syncOverlay);
+      window.addEventListener("resize", syncOverlay);
+
+      // --- Turn state ---
       let activePlayerId = {{ session.get("active_player_id") or "null" }};
       let turnNumber = {{ session.get("turn_number") or 1 }};
       let turnDamage = {};
@@ -310,7 +400,7 @@
 
       function setTurnPill() {
         const pill = document.getElementById("turnNumberPill");
-        if (pill) pill.textContent = "Turn " + turnNumber;
+        if (pill) pill.textContent = "TURN " + turnNumber;
       }
 
       function initTurn(){
@@ -358,7 +448,7 @@
         // mark current player as having passed this round
         passedThisRound.add(activePlayerId);
 
-        // if we've completed a full cycle (everyone passed), increment turn number
+        // if everyone has passed once -> new turn
         if (passedThisRound.size >= ids.length) {
           turnNumber += 1;
           setTurnPill();
@@ -377,7 +467,7 @@
         }
       }
 
-      // ---- Life & damage ----
+      // --- Life & damage ---
       function adjustLife(player, amount){
         const el = document.getElementById("life-" + player);
         if (!el) return;
@@ -426,32 +516,27 @@
       document.querySelectorAll(".life-card").forEach(card=>{
         const isTop = card.classList.contains("top-card");
 
-        card.addEventListener("click", e => {
-          if (e.target.closest(".pass-btn")) return;
+        const tapHandler = (clientX, target) => {
+          if (target && target.closest && target.closest(".pass-btn")) return;
 
           const rect = card.getBoundingClientRect();
-          const x = e.clientX - rect.left;
+          const x = clientX - rect.left;
 
           let amount = (x < rect.width / 2) ? -1 : 1;
           if (isTop) amount = -amount;
 
           adjustLife(card.dataset.playerIndex, amount);
+        };
+
+        card.addEventListener("click", e => {
+          tapHandler(e.clientX, e.target);
         });
 
-        // (Optional) Touch support
         card.addEventListener("touchstart", e => {
-          if (e.target.closest(".pass-btn")) return;
-
           const t = e.touches[0];
-          const rect = card.getBoundingClientRect();
-          const x = t.clientX - rect.left;
-
-          let amount = (x < rect.width / 2) ? -1 : 1;
-          if (isTop) amount = -amount;
-
-          adjustLife(card.dataset.playerIndex, amount);
+          tapHandler(t.clientX, e.target);
           e.preventDefault();
-        }, { passive: false });
+        }, { passive:false });
       });
 
       document.querySelectorAll(".pass-btn").forEach(btn=>{
@@ -461,7 +546,15 @@
         });
       });
 
+      // Init
       initTurn();
+
+      // On load, show overlay if needed (so user can enter fullscreen properly)
+      document.addEventListener("DOMContentLoaded", () => {
+        syncOverlay();
+      });
+      // Also run now (in case DOMContentLoaded already fired)
+      syncOverlay();
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
