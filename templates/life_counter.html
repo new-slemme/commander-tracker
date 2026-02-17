@@ -106,46 +106,44 @@
       touch-action:manipulation;
     }
 
-    /* Active TURN badge on the active card */
+    /* ==================== TURN BADGE (PERFECT FIX) ==================== */
     .turn-badge {
       position: absolute;
-      top: 14px;
       left: 50%;
+      top: 16px;
       transform: translateX(-50%);
       display: none;
-    
-      background: rgba(0,0,0,.75);
-      color: #fff;
+      z-index: 35;
+
+      background: rgba(0,0,0,0.92);
+      color: #ffeb3b;
+      border: 2px solid #ffeb3b;
       border-radius: 9999px;
-      padding: 8px 18px;
+      padding: 8px 26px;
       font-weight: 900;
-      font-size: 0.95rem;
-      letter-spacing: 0.08em;
+      font-size: 1.12rem;
+      letter-spacing: 2px;
       text-transform: uppercase;
-      border: 2px solid rgba(255,215,0,0.6);
-      box-shadow: 0 0 15px rgba(255,215,0,0.3);
-      z-index: 25;
+      box-shadow: 0 0 30px rgba(255,235,59,0.75);
       pointer-events: none;
       white-space: nowrap;
-      min-width: 72px;
       text-align: center;
+      min-width: 92px;
     }
-    
-    /* Top-row cards - vertical position + COUNTER-ROTATE text */
+
+    /* Top-row cards — just move to bottom (no rotation needed) */
     .top-card .turn-badge {
       top: auto;
-      bottom: 14px;
-      transform: translateX(-50%) rotate(180deg);
-    }
-    
-    /* Flip for top cards */
-    .top-card .turn-badge{
-      top:auto;
-      bottom:14px;
+      bottom: 16px;
     }
 
+    /* Show automatically when card is active */
+    .active-turn .turn-badge {
+      display: block !important;
+    }
+    /* ==================== END TURN BADGE ==================== */
 
-    /* Turn damage badge: we will dynamically choose left/right (outer edge) */
+    /* Turn damage badge */
     .turn-dmg{
       position:absolute;
       top:14px;
@@ -185,10 +183,6 @@
       z-index:10;
     }
 
-    .turn-badge.active {
-      display: block;
-    }
-    
     /* Turn pill (top center) */
     .turn-pill{
       position:fixed;
@@ -209,7 +203,6 @@
       backdrop-filter: blur(6px);
     }
 
-    /* SECOND TURN pill at bottom, flipped (your wish) */
     .turn-pill.bottom{
       top:auto;
       bottom:14px;
@@ -280,9 +273,6 @@
         "
       >
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
-
-          <div class="turn-badge" id="turn-badge-{{ p.player_id }}">TURN</div>
-
           <div class="turn-dmg side-left" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</div>
 
           <div class="life-display position-absolute top-50 start-50 translate-middle"
@@ -296,6 +286,9 @@
             Pass →
           </button>
         </div>
+
+        <!-- TURN BADGE MOVED OUTSIDE card-inner (fixed!) -->
+        <div class="turn-badge" id="turn-badge-{{ p.player_id }}">TURN</div>
       </div>
       {% endfor %}
     </div>
@@ -341,7 +334,6 @@
 
 <script>
 /* ---------- FULLSCREEN + ORIENTATION (life_counter only) ---------- */
-
 function isFs(){ return !!document.fullscreenElement; }
 
 async function lockLandscapeBestEffort(){
@@ -447,21 +439,17 @@ function setActive(id){
   cards.forEach(c=>{
     const pid = String(c.dataset.player);
     const isActive = (pid === active);
-
     c.classList.toggle("active-turn", isActive);
 
     const passBtn = document.getElementById("pass-" + pid);
     if(passBtn) passBtn.style.display = isActive ? "block" : "none";
-
-    const badge = document.getElementById("turn-badge-" + pid);
-    if(badge) badge.classList.toggle("active", isActive);   // ← changed
+    /* Badge is now handled 100% by CSS — no inline style needed */
   });
 }
 
-/* Put turn dmg on the OUTER edge (away from screen center / burger button). */
+/* Put turn dmg on the OUTER edge */
 function positionTurnDamageBadges(){
   const screenCenterX = window.innerWidth / 2;
-
   cards.forEach(c=>{
     const pid = String(c.dataset.player);
     const dmg = document.getElementById("turn-dmg-" + pid);
@@ -469,15 +457,9 @@ function positionTurnDamageBadges(){
 
     const rect = c.getBoundingClientRect();
     const cardCenterX = rect.left + rect.width / 2;
-
     const isTop = c.classList.contains("top-card");
     
     dmg.classList.remove("side-left", "side-right");
-    // If card is on left side of the screen -> put dmg on left (outer edge)
-    // If card is on right side -> put dmg on right (outer edge)
-    // For center-ish cards (3 columns), this still chooses a side deterministically.
-    // Choose outer edge relative to screen...
-    // ...but TOP cards have their inner content rotated 180°, so left/right are visually swapped.
     const wantsLeft = (cardCenterX < screenCenterX);
     const finalLeft = isTop ? !wantsLeft : wantsLeft;
 
