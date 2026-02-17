@@ -9,6 +9,7 @@
   <style>
     :root{
       --darkest:#10121a;
+      --darker:#171a26;
     }
 
     html,body{
@@ -18,6 +19,7 @@
       background:var(--darkest);
       font-family:Arial,sans-serif;
       touch-action:manipulation;
+      overscroll-behavior:none;
     }
 
     /* -------- Fullscreen overlay (mobile requirement) -------- */
@@ -25,17 +27,37 @@
       position:fixed;
       inset:0;
       background:rgba(0,0,0,.85);
-      display:flex;
+      display:none;
       align-items:center;
       justify-content:center;
       z-index:9999;
+      padding:24px;
+      text-align:center;
+    }
+
+    /* -------- Wrapper stays unrotated (so pill/menu stay correct) -------- */
+    .life-wrapper{
+      position:fixed;
+      inset:0;
     }
 
     /* -------- Grid -------- */
     .life-grid{
-      position:fixed;
+      position:absolute;
       inset:0;
       display:grid;
+    }
+
+    /* Portrait: rotate only the grid to mimic landscape layout */
+    @media (orientation:portrait){
+      .life-grid{
+        width:100vh;
+        height:100vw;
+        top:50%;
+        left:50%;
+        transform:translate(-50%,-50%) rotate(90deg);
+        transform-origin:center;
+      }
     }
 
     .life-card{
@@ -52,6 +74,7 @@
       background-size:cover;
       background-position:center;
       transform:var(--bg-rotate);
+      transform-origin:center;
     }
 
     .card-inner{
@@ -63,39 +86,105 @@
       font-size:18vh;
       font-weight:900;
       color:#fff;
-      text-shadow:0 0 10px rgba(0,0,0,.9);
+      text-shadow:0 0 10px rgba(0,0,0,.9), 0 0 28px rgba(0,0,0,.7);
       user-select:none;
     }
 
     .life-card.active-turn{
       outline:4px solid rgba(255,255,255,.35);
+      box-shadow:0 0 30px rgba(255,255,255,0.12) inset;
     }
 
     .pass-btn{
       position:absolute;
       bottom:20px;
       right:20px;
+      z-index:6;
+      display:none;
     }
 
+    /* HUD badges */
+    .hud{
+      position:absolute;
+      top:14px;
+      left:14px;
+      z-index:6;
+      display:flex;
+      gap:10px;
+      align-items:center;
+    }
+
+    .turn-badge{
+      display:none;
+      background:rgba(0,0,0,.55);
+      color:#fff;
+      border-radius:10px;
+      padding:6px 10px;
+      font-weight:900;
+      font-size:0.8rem;
+      border:1px solid rgba(255,255,255,0.18);
+      letter-spacing:0.08em;
+    }
+
+    .turn-dmg{
+      background:rgba(0,0,0,.55);
+      color:#fff;
+      border-radius:10px;
+      padding:6px 10px;
+      font-weight:700;
+      font-size:0.9rem;
+      border:1px solid rgba(255,255,255,0.18);
+      user-select:none;
+    }
+
+    .player-name{
+      position:absolute;
+      bottom:0;
+      left:50%;
+      transform:translateX(-50%);
+      padding:14px 14px;
+      color:#fff;
+      font-weight:800;
+      text-shadow:0 0 10px rgba(0,0,0,.8);
+      user-select:none;
+      white-space:nowrap;
+      max-width:92%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* Turn pill (top center) */
     .turn-pill{
       position:fixed;
       top:14px;
       left:50%;
       transform:translateX(-50%);
-      padding:8px 14px;
+      padding:10px 16px;
       background:rgba(0,0,0,.55);
       border-radius:999px;
       color:#fff;
-      font-weight:800;
-      z-index:100;
+      font-weight:900;
+      z-index:120;
+      border:1px solid rgba(255,255,255,0.18);
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      user-select:none;
+      pointer-events:none;
+      backdrop-filter: blur(6px);
     }
 
+    /* Center menu button */
     .center-menu-btn{
       position:fixed;
       top:50%;
       left:50%;
       transform:translate(-50%,-50%);
       z-index:200;
+      width:80px;
+      height:80px;
+      border-radius:999px;
+      display:grid;
+      place-items:center;
     }
 
     /* Grid layouts */
@@ -104,194 +193,320 @@
     .players-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-5{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
     .players-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
-
   </style>
 </head>
 
 <body>
-
-<!-- Fullscreen overlay -->
-<div id="fsOverlay" class="fs-overlay">
-  <button class="btn btn-primary btn-lg" id="fsBtn">
-    Tap for Fullscreen
-  </button>
-</div>
-
-{% set n = participants|length %}
-
-<div class="turn-pill" id="turnPill">Turn 1</div>
-
-<div class="life-grid players-{{ n }}">
-
-  {% for p in participants %}
-  {% set is_top =
-      (n == 2 and loop.index0 == 0) or
-      (n == 3 and loop.index0 < 2) or
-      (n == 4 and loop.index0 < 2) or
-      (n == 5 and loop.index0 < 3) or
-      (n == 6 and loop.index0 < 3)
-  %}
-
-  <div
-    class="life-card {% if is_top %}top-card{% endif %}"
-    data-player="{{ p.player_id }}"
-    style="
-      {% if p.commander_art %}
-        --bg-layer:
-          linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85)),
-          url('{{ p.commander_art }}');
-      {% else %}
-        --bg-layer:
-          linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85));
-      {% endif %}
-      {% if is_top %}--bg-rotate:rotate(180deg);{% endif %}
-    "
-  >
-
-    <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
-
-      <div class="position-absolute top-50 start-50 translate-middle life-display"
-           id="life-{{ p.player_id }}">40</div>
-
-      <button class="btn btn-sm btn-light pass-btn"
-              id="pass-{{ p.player_id }}"
-              style="display:none;">
-        Pass →
-      </button>
-
+  <!-- Fullscreen overlay -->
+  <div id="fsOverlay" class="fs-overlay">
+    <div>
+      <button class="btn btn-primary btn-lg" id="fsBtn">Tap for Fullscreen</button>
+      <div style="opacity:.75;margin-top:10px;">Browsers require a tap to enter fullscreen.</div>
     </div>
   </div>
 
-  {% endfor %}
+  {% set n = participants|length %}
 
-</div>
+  <div class="life-wrapper">
+    <div class="turn-pill" id="turnPill">TURN 1</div>
 
-<button class="center-menu-btn btn btn-light rounded-circle p-3 shadow"
-        data-bs-toggle="modal"
-        data-bs-target="#menuModal">
-  ☰
-</button>
+    <div class="life-grid players-{{ n }}" id="lifeGrid">
+      {% for p in participants %}
+      {% set is_top =
+          (n == 2 and loop.index0 == 0) or
+          (n == 3 and loop.index0 < 2) or
+          (n == 4 and loop.index0 < 2) or
+          (n == 5 and loop.index0 < 3) or
+          (n == 6 and loop.index0 < 3)
+      %}
 
-<!-- Modal -->
-<div class="modal fade" id="menuModal">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content bg-dark text-light">
-      <div class="modal-body text-center">
+      <div
+        class="life-card {% if is_top %}top-card{% endif %}"
+        data-player="{{ p.player_id }}"
+        style="
+          {% if p.commander_art %}
+            --bg-layer:
+              linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85)),
+              url('{{ p.commander_art }}');
+          {% else %}
+            --bg-layer:
+              linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85));
+          {% endif %}
+          {% if is_top %}--bg-rotate:rotate(180deg);{% else %}--bg-rotate:none;{% endif %}
+        "
+      >
+        <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
+          <div class="hud">
+            <div class="turn-badge" id="turn-badge-{{ p.player_id }}">TURN</div>
+            <div class="turn-dmg" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</div>
+          </div>
 
-        <button class="btn btn-primary w-100 mb-3" id="toggleFsBtn">
-          Toggle Fullscreen
-        </button>
+          <div class="life-display position-absolute top-50 start-50 translate-middle"
+               id="life-{{ p.player_id }}">40</div>
 
-        <form method="post" action="/end_game">
-          <select name="winner" class="form-select mb-3" required>
-            <option value="" disabled selected>Select Winner</option>
-            {% for p in participants %}
-            <option value="{{ p.player_id }}">{{ p.player_name }}</option>
-            {% endfor %}
-          </select>
-          <button type="submit" class="btn btn-success w-100 mb-3">
-            End & Record
+          <div class="player-name">{{ p.player_name }}</div>
+
+          <button class="btn btn-sm btn-light pass-btn"
+                  id="pass-{{ p.player_id }}">
+            Pass →
           </button>
-        </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
 
-        <form method="post" action="/cancel_game">
-          <button class="btn btn-outline-danger w-100">
-            Quit without Saving
+    <button class="center-menu-btn btn btn-light shadow"
+            data-bs-toggle="modal"
+            data-bs-target="#menuModal"
+            aria-label="Menu">
+      <img src="/static/hamburger.svg" width="36" height="36" alt="Menu">
+    </button>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal fade" id="menuModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark text-light">
+        <div class="modal-body text-center p-4">
+          <button class="btn btn-primary w-100 mb-3" id="toggleFsBtn">
+            Toggle Fullscreen
           </button>
-        </form>
 
+          <form method="post" action="/end_game">
+            <select name="winner" class="form-select mb-3" required>
+              <option value="" disabled selected>Select Winner</option>
+              {% for p in participants %}
+              <option value="{{ p.player_id }}">{{ p.player_name }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-success w-100 mb-3">
+              End & Record
+            </button>
+          </form>
+
+          <form method="post" action="/cancel_game" onsubmit="return confirm('Quit without saving?')">
+            <button class="btn btn-outline-danger w-100">
+              Quit without Saving
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
 <script>
-/* ---------- FULLSCREEN ---------- */
+/* ---------- FULLSCREEN + ORIENTATION (life_counter only) ---------- */
+
+function isFs(){ return !!document.fullscreenElement; }
+
+async function lockLandscapeBestEffort(){
+  try{
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock("landscape");
+    }
+  }catch(e){}
+}
+
+async function unlockOrientationBestEffort(){
+  try{
+    if (screen.orientation && screen.orientation.unlock) {
+      screen.orientation.unlock();
+    }
+  }catch(e){}
+}
 
 async function goFullscreen(){
   try{
-    if(!document.fullscreenElement){
+    if(!isFs() && document.documentElement.requestFullscreen){
       await document.documentElement.requestFullscreen();
     }
   }catch(e){}
-  document.getElementById("fsOverlay").style.display="none";
+  // Best effort: only on this page
+  await lockLandscapeBestEffort();
+  hideFsOverlay();
 }
 
-document.getElementById("fsBtn").addEventListener("click", goFullscreen);
+async function exitFullscreen(){
+  try{
+    if(isFs() && document.exitFullscreen){
+      await document.exitFullscreen();
+    }
+  }catch(e){}
+  await unlockOrientationBestEffort();
+  showFsOverlayIfNeeded();
+}
 
-document.getElementById("toggleFsBtn").addEventListener("click", async ()=>{
-  if(document.fullscreenElement){
-    await document.exitFullscreen();
-  }else{
-    await goFullscreen();
-  }
+function showFsOverlayIfNeeded(){
+  const overlay = document.getElementById("fsOverlay");
+  if(!overlay) return;
+  const likelyMobile = matchMedia("(pointer: coarse)").matches;
+  overlay.style.display = (!isFs() && likelyMobile) ? "flex" : "none";
+}
+
+function hideFsOverlay(){
+  const overlay = document.getElementById("fsOverlay");
+  if(overlay) overlay.style.display = "none";
+}
+
+document.getElementById("fsBtn")?.addEventListener("click", goFullscreen);
+
+document.getElementById("toggleFsBtn")?.addEventListener("click", async ()=>{
+  // close modal before toggling (keeps it as a “user gesture”)
+  try{
+    const modalEl = document.getElementById("menuModal");
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    modal?.hide();
+  }catch(e){}
+
+  if(isFs()) await exitFullscreen();
+  else await goFullscreen();
 });
 
-/* ---------- TURN SYSTEM ---------- */
+document.addEventListener("fullscreenchange", ()=>{
+  if(isFs()) lockLandscapeBestEffort();
+  showFsOverlayIfNeeded();
+});
+
+/* ---------- TURN SYSTEM + TURN DAMAGE ---------- */
 
 let turn = 1;
 let active = null;
 let passed = new Set();
+let turnDamage = {};
 
 const cards = [...document.querySelectorAll(".life-card")];
 
 function updateTurnPill(){
-  document.getElementById("turnPill").textContent = "Turn " + turn;
+  const pill = document.getElementById("turnPill");
+  if(pill) pill.textContent = "TURN " + turn;
+}
+
+function resetTurnDamage(){
+  turnDamage = {};
+  cards.forEach(c=>{
+    const id = c.dataset.player;
+    turnDamage[id] = 0;
+    const el = document.getElementById("turn-dmg-" + id);
+    if(el) el.textContent = "Turn dmg: 0";
+  });
+}
+
+function addTurnDamage(playerId, amount){
+  turnDamage[playerId] = (turnDamage[playerId] || 0) + amount;
+  const el = document.getElementById("turn-dmg-" + playerId);
+  if(el) el.textContent = "Turn dmg: " + turnDamage[playerId];
 }
 
 function setActive(id){
-  active = id;
+  active = String(id);
   cards.forEach(c=>{
-    c.classList.toggle("active-turn", c.dataset.player === id);
-    const btn = c.querySelector(".pass-btn");
-    if(btn) btn.style.display = (c.dataset.player === id) ? "block" : "none";
+    const isActive = (c.dataset.player === active);
+    c.classList.toggle("active-turn", isActive);
+
+    const passBtn = document.getElementById("pass-" + c.dataset.player);
+    if(passBtn) passBtn.style.display = isActive ? "block" : "none";
+
+    const turnBadge = document.getElementById("turn-badge-" + c.dataset.player);
+    if(turnBadge) turnBadge.style.display = isActive ? "inline-block" : "none";
   });
 }
 
 function nextPlayer(){
-  const ids = cards.map(c=>c.dataset.player);
-  let idx = ids.indexOf(active);
+  const ids = cards.map(c=>String(c.dataset.player));
+  const idx = ids.indexOf(active);
+
   passed.add(active);
 
+  // NEW TURN once everyone passed
   if(passed.size === ids.length){
     turn++;
     passed.clear();
     updateTurnPill();
   }
 
-  setActive(ids[(idx+1)%ids.length]);
+  resetTurnDamage();
+  setActive(ids[(idx + 1) % ids.length]);
 }
 
 /* ---------- LIFE TAP ---------- */
 
-cards.forEach(card=>{
-  const isTop = card.classList.contains("top-card");
+function adjustLife(playerId, delta){
+  const el = document.getElementById("life-" + playerId);
+  if(!el) return;
 
-  card.addEventListener("click", e=>{
-    if(e.target.classList.contains("pass-btn")) return;
+  const before = parseInt(el.textContent, 10);
+  const after = Math.max(0, before + delta);
+  el.textContent = after;
 
-    const rect = card.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    let delta = (x < rect.width/2) ? -1 : 1;
-    if(isTop) delta = -delta;
+  // count damage taken during the current active player's turn
+  if(after < before){
+    addTurnDamage(playerId, before - after);
+  }
 
-    const id = card.dataset.player;
-    const el = document.getElementById("life-"+id);
-    el.textContent = Math.max(0, parseInt(el.textContent)+delta);
+  checkWinner();
+}
+
+function checkWinner(){
+  const alive = cards.filter(c=>{
+    const id = c.dataset.player;
+    const el = document.getElementById("life-" + id);
+    return el && parseInt(el.textContent, 10) > 0;
   });
 
-  card.querySelector(".pass-btn").addEventListener("click", e=>{
+  if(alive.length === 1){
+    const winner = alive[0].dataset.player;
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "/end_game";
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "winner";
+    input.value = winner;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+
+cards.forEach(card=>{
+  const isTop = card.classList.contains("top-card");
+  const playerId = String(card.dataset.player);
+
+  const handleTap = (clientX, target) => {
+    if(target && target.closest && target.closest(".pass-btn")) return;
+
+    const rect = card.getBoundingClientRect();
+    const x = clientX - rect.left;
+
+    let delta = (x < rect.width / 2) ? -1 : 1;
+    if(isTop) delta = -delta;
+
+    adjustLife(playerId, delta);
+  };
+
+  card.addEventListener("click", e=>{
+    handleTap(e.clientX, e.target);
+  });
+
+  card.addEventListener("touchstart", e=>{
+    const t = e.touches[0];
+    handleTap(t.clientX, e.target);
+    e.preventDefault();
+  }, { passive:false });
+
+  document.getElementById("pass-" + playerId)?.addEventListener("click", e=>{
     e.stopPropagation();
     nextPlayer();
   });
 });
 
 /* ---------- INIT ---------- */
-
 if(cards.length){
   setActive(cards[0].dataset.player);
   updateTurnPill();
+  resetTurnDamage();
 }
+showFsOverlayIfNeeded();
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
