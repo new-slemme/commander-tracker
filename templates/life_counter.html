@@ -242,6 +242,25 @@
               <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">
                 40
               </div>
+              <div class="position-absolute top-0 start-0 p-3 d-flex gap-2 align-items-center">
+                <span class="badge bg-dark text-light border border-secondary turn-badge" id="turn-badge-{{ p.player_id }}" style="display:none;">
+                  TURN
+                </span>
+              
+                <span class="badge bg-dark text-light border border-secondary" id="turn-dmg-{{ p.player_id }}">
+                  Turn dmg: 0
+                </span>
+              </div>
+              
+              <button
+                type="button"
+                class="btn btn-sm btn-light pass-btn"
+                id="pass-{{ p.player_id }}"
+                style="display:none;"
+              >
+                Pass Turn →
+              </button>
+
             </div>
           </div>
         {% endfor %}
