@@ -484,15 +484,10 @@ cards.forEach(card=>{
     adjustLife(playerId, delta);
   };
 
-  card.addEventListener("click", e=>{
-    handleTap(e.clientX, e.target);
-  });
-
-  card.addEventListener("touchstart", e=>{
-    const t = e.touches[0];
-    handleTap(t.clientX, e.target);
-    e.preventDefault();
-  }, { passive:false });
+card.addEventListener("click", e => {
+  if (e.target.closest(".pass-btn")) return;
+  handleTap(e.clientX, e.target);
+});
 
   document.getElementById("pass-" + playerId)?.addEventListener("click", e=>{
     e.stopPropagation();
