@@ -112,22 +112,30 @@
       top: 14px;
       left: 50%;
       transform: translateX(-50%);
-      display: none;               /* you show it via JS when active */
+      display: none;
     
-      background: rgba(0,0,0,.65);
+      background: rgba(0,0,0,.75);
       color: #fff;
-      border-radius: 999px;        /* pill shape - looks better than 12px */
-      padding: 6px 14px;           /* slightly wider padding for comfort */
+      border-radius: 9999px;
+      padding: 8px 18px;
       font-weight: 900;
-      font-size: 0.9rem;           /* adjust as needed */
-      border: 1px solid rgba(255,255,255,0.25);
-      letter-spacing: 0.05em;
-      white-space: nowrap;
-      z-index: 10;                 /* above life number if needed */
-      pointer-events: none;        /* don't block taps */
-      text-align: center;
-      min-width: 60px;             /* optional: force minimum width so centering feels consistent */
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
+      border: 2px solid rgba(255,215,0,0.6);
+      box-shadow: 0 0 15px rgba(255,215,0,0.3);
+      z-index: 25;
+      pointer-events: none;
+      white-space: nowrap;
+      min-width: 72px;
+      text-align: center;
+    }
+    
+    /* Top-row cards - vertical position + COUNTER-ROTATE text */
+    .top-card .turn-badge {
+      top: auto;
+      bottom: 14px;
+      transform: translateX(-50%) rotate(180deg);
     }
     
     /* Flip for top cards */
@@ -177,6 +185,10 @@
       z-index:10;
     }
 
+    .turn-badge.active {
+      display: block;
+    }
+    
     /* Turn pill (top center) */
     .turn-pill{
       position:fixed;
@@ -435,13 +447,14 @@ function setActive(id){
   cards.forEach(c=>{
     const pid = String(c.dataset.player);
     const isActive = (pid === active);
+
     c.classList.toggle("active-turn", isActive);
 
     const passBtn = document.getElementById("pass-" + pid);
     if(passBtn) passBtn.style.display = isActive ? "block" : "none";
 
     const badge = document.getElementById("turn-badge-" + pid);
-    if(badge) badge.style.display = isActive ? "block" : "none";
+    if(badge) badge.classList.toggle("active", isActive);   // ← changed
   });
 }
 
