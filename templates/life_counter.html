@@ -12,6 +12,7 @@
       --darker:#171a26;
       /* default background transform unless overridden */
       --bg-rotate:none;
+      --active-glow: rgba(255,235,59,0.22);
     }
 
     html,body{
@@ -103,10 +104,44 @@
       user-select:none;
     }
 
-    .life-card.active-turn{
-      outline:4px solid rgba(255,255,255,.35);
-      box-shadow:0 0 30px rgba(255,255,255,0.12) inset;
+    /* Active player: glowing frame + lifted contrast */
+    .life-card{
+      /* needed so the glow frame can sit above the art cleanly */
+      isolation:isolate;
     }
+    
+    .life-card.active-turn{
+      outline:none; /* we’ll do a nicer frame */
+    }
+    
+    /* Glow frame layer */
+    .life-card.active-turn::after{
+      content:"";
+      position:absolute;
+      inset:10px;                 /* thickness / padding of frame */
+      border-radius:18px;         /* matches your vibe; tweak if you want */
+      border:2px solid rgba(255,255,255,0.28);
+      box-shadow:
+        0 0 0 4px rgba(255,255,255,0.08),
+        0 0 26px rgba(255,255,255,0.22),
+        0 0 60px var(--active-glow) inset; /* subtle warm “active” lift */
+      pointer-events:none;
+      z-index:25;
+    }
+    
+    /* Lift the background (art) on active card only */
+    .life-card.active-turn::before{
+      filter: brightness(1.18) contrast(1.06) saturate(1.08);
+    }
+    
+    /* Optional: slightly “pop” the life number as well */
+    .life-card.active-turn .life-display{
+      text-shadow:
+        0 0 12px rgba(0,0,0,.95),
+        0 0 34px rgba(0,0,0,.75),
+        0 0 22px rgba(255,255,255,.22);
+    }
+
 
     /* Pass button */
     .pass-btn{
@@ -198,6 +233,9 @@
     .active-turn .turn-badge {
       display: block !important;
     }
+
+    .turn-badge{ display:none !important; }
+
     /* ==================== END TURN BADGE ==================== */
 
     /* Turn damage badge */
