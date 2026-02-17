@@ -1,563 +1,309 @@
 <!doctype html>
 <html lang="en" data-bs-theme="dark">
-  <head>
-    <meta charset="utf-8">
-    <!-- Keep viewport simple; we handle layout ourselves -->
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Commander Tracker</title>
+  <link href="/static/bootstrap.min.css" rel="stylesheet">
 
-    <!-- PWA-ish flags (helps if added to home screen; does NOT force fullscreen in browser tabs) -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#10121a">
-    <title>Commander Tracker</title>
-    <link href="/static/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root{
+      --darkest:#10121a;
+    }
 
-    <style>
-      :root{
-        --darkest:#10121a;
-        --darker:#171a26;
-        --blue:#1e3a5f;
-        --red:#A63232;
-        --green:#3a6b54;
-        --purple:#5A3A6B;
-        --orange:#FF6B35;
-        --yellow:#F2C94C;
-      }
+    html,body{
+      height:100%;
+      margin:0;
+      overflow:hidden;
+      background:var(--darkest);
+      font-family:Arial,sans-serif;
+      touch-action:manipulation;
+    }
 
-      html,body{
-        height:100%;
-        margin:0;
-        overflow:hidden;
-        background:var(--darkest);
-        overscroll-behavior:none;
-        touch-action:manipulation;
-        font-family:Arial,sans-serif;
-      }
+    /* -------- Fullscreen overlay (mobile requirement) -------- */
+    .fs-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.85);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+    }
 
-      /* Fullscreen tap overlay (required on mobile: fullscreen must be triggered by a user gesture) */
-      .start-overlay{
-        position:fixed;
-        inset:0;
-        display:grid;
-        place-items:center;
-        background:rgba(0,0,0,0.85);
-        z-index:9999;
-        padding:24px;
-        text-align:center;
-      }
-      .start-overlay .hint{
-        margin-top:10px;
-        opacity:0.75;
-        font-size:0.95rem;
-      }
+    /* -------- Grid -------- */
+    .life-grid{
+      position:fixed;
+      inset:0;
+      display:grid;
+    }
 
-      /* Wrapper stays unrotated so absolute UI (burger/menu/pill) stays correct */
-      .life-wrapper{
-        position:fixed;
-        inset:0;
-        display:flex;
-      }
-
+    @media (orientation:portrait){
       .life-grid{
-        flex:1;
-        position:relative;
-        display:grid;
-      }
-
-      /* Portrait: rotate only the grid to mimic landscape layout */
-      @media (orientation:portrait){
-        .life-grid{
-          width:100vh;
-          height:100vw;
-          transform:rotate(90deg);
-          transform-origin:center;
-          margin:auto;
-        }
-      }
-
-      .life-card{
-        position:relative;
-        overflow:hidden;
-        background:#000;
-      }
-      .life-card::before{
-        content:"";
-        position:absolute;
-        inset:0;
-        background-image:var(--bg-layer);
-        background-size:cover;
-        background-position:center;
-        transform:var(--bg-rotate);
+        width:100vh;
+        height:100vw;
+        transform:rotate(90deg);
         transform-origin:center;
+        margin:auto;
       }
+    }
 
-      .card-inner{
-        position:relative;
-        z-index:1;
-      }
+    .life-card{
+      position:relative;
+      overflow:hidden;
+      background:#000;
+    }
 
-      .life-display{
-        font-size:18vh;
-        font-weight:900;
-        color:#fff;
-        text-shadow:0 0 10px rgba(0,0,0,.9),0 0 30px rgba(0,0,0,.8);
-        user-select:none;
-      }
+    .life-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background-image:var(--bg-layer);
+      background-size:cover;
+      background-position:center;
+      transform:var(--bg-rotate);
+    }
 
-      /* Active turn highlight */
-      .life-card.active-turn{
-        outline:4px solid rgba(255,255,255,0.4);
-        box-shadow:0 0 30px rgba(255,255,255,0.15) inset;
-      }
+    .card-inner{
+      position:relative;
+      z-index:2;
+    }
 
-      /* Pass button */
-      .pass-btn{
-        position:absolute;
-        bottom:20px;
-        right:20px;
-        z-index:6;
-      }
-      .top-card .pass-btn{
-        transform:rotate(180deg);
-        transform-origin:center;
-      }
+    .life-display{
+      font-size:18vh;
+      font-weight:900;
+      color:#fff;
+      text-shadow:0 0 10px rgba(0,0,0,.9);
+      user-select:none;
+    }
 
-      /* HUD badges cluster */
-      .hud{
-        position:absolute;
-        top:0;
-        left:0;
-        padding:12px;
-        display:flex;
-        gap:8px;
-        align-items:center;
-        z-index:6;
-      }
-      .hud .badge{
-        border:1px solid rgba(255,255,255,0.25) !important;
-      }
+    .life-card.active-turn{
+      outline:4px solid rgba(255,255,255,.35);
+    }
 
-      /* Turn pill (top center) */
-      .turn-pill{
-        position:absolute;
-        top:14px;
-        left:50%;
-        transform:translateX(-50%);
-        z-index:60;
-        padding:10px 14px;
-        border-radius:999px;
-        background:rgba(0,0,0,0.55);
-        border:1px solid rgba(255,255,255,0.22);
-        color:#fff;
-        font-weight:800;
-        letter-spacing:0.06em;
-        text-transform:uppercase;
-        user-select:none;
-        backdrop-filter: blur(6px);
-        pointer-events:none;
-      }
+    .pass-btn{
+      position:absolute;
+      bottom:20px;
+      right:20px;
+    }
 
-      /* Center menu button (must be above cards) */
-      .center-menu-btn{
-        z-index:80;
-        position:absolute;
-        top:50%;
-        left:50%;
-        transform:translate(-50%,-50%);
-        pointer-events:auto;
-      }
+    .turn-pill{
+      position:fixed;
+      top:14px;
+      left:50%;
+      transform:translateX(-50%);
+      padding:8px 14px;
+      background:rgba(0,0,0,.55);
+      border-radius:999px;
+      color:#fff;
+      font-weight:800;
+      z-index:100;
+    }
 
-      /* Grid layouts */
-      .players-2{
-        grid-template-columns:1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:"p1" "p2";
-      }
-      .players-3{
-        grid-template-columns:1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:"p1 p2" "p3 p3";
-      }
-      .players-4{
-        grid-template-columns:1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:"p1 p2" "p3 p4";
-      }
-      .players-5{
-        grid-template-columns:1fr 1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:"p1 p2 p3" "p4 p4 p5";
-      }
-      .players-6{
-        grid-template-columns:1fr 1fr 1fr;
-        grid-template-rows:1fr 1fr;
-        grid-template-areas:"p1 p2 p3" "p4 p5 p6";
-      }
+    .center-menu-btn{
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      z-index:200;
+    }
 
-      .pos-1{grid-area:p1;}
-      .pos-2{grid-area:p2;}
-      .pos-3{grid-area:p3;}
-      .pos-4{grid-area:p4;}
-      .pos-5{grid-area:p5;}
-      .pos-6{grid-area:p6;}
+    /* Grid layouts */
+    .players-2{grid-template-rows:1fr 1fr;}
+    .players-3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+    .players-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+    .players-5{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
+    .players-6{grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;}
 
-      /* Make modal buttons feel nicer on mobile */
-      .modal .btn-lg{
-        border-radius:14px;
-        padding:14px 16px;
-        font-weight:700;
-      }
-    </style>
-  </head>
+  </style>
+</head>
 
-  <body>
-    <!-- Fullscreen overlay (tap required on mobile) -->
-    <div id="startOverlay" class="start-overlay" style="display:none;">
-      <div>
-        <button class="btn btn-primary btn-lg px-4 py-3" id="startBtn">
-          Tap to start (Fullscreen)
-        </button>
-        <div class="hint">
-          Your browser only allows fullscreen after a tap.
-        </div>
-      </div>
-    </div>
+<body>
 
-    <div class="life-wrapper" id="lifeWrapper">
-      {% set n = participants|length %}
+<!-- Fullscreen overlay -->
+<div id="fsOverlay" class="fs-overlay">
+  <button class="btn btn-primary btn-lg" id="fsBtn">
+    Tap for Fullscreen
+  </button>
+</div>
 
-      <div class="turn-pill" id="turnNumberPill">Turn 1</div>
+{% set n = participants|length %}
 
-      <div class="life-grid players-{{ n }}">
-        {% for p in participants %}
-          {% set is_top =
-            (n == 2 and loop.index0 == 0) or
-            (n == 3 and loop.index0 < 2) or
-            (n == 4 and loop.index0 < 2) or
-            (n == 5 and loop.index0 < 3) or
-            (n == 6 and loop.index0 < 3)
-          %}
+<div class="turn-pill" id="turnPill">Turn 1</div>
 
-          <div
-            class="life-card pos-{{ loop.index }} {% if is_top %}top-card{% endif %}"
-            data-player-index="{{ p.player_id }}"
-            style="
-              {% if p.commander_art %}
-                --bg-layer:
-                  linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
-                  url('{{ p.commander_art }}');
-              {% else %}
-                --bg-layer:
-                  linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
-                  linear-gradient(135deg,var({{ p.color }}),#000);
-              {% endif %}
+<div class="life-grid players-{{ n }}">
 
-              {% if is_top %}
-                --bg-rotate:rotate(180deg);
-              {% else %}
-                --bg-rotate:none;
-              {% endif %}
-            "
-          >
-            <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
-              <div class="hud">
-                <span class="badge bg-dark" id="turn-badge-{{ p.player_id }}" style="display:none;">TURN</span>
-                <span class="badge bg-dark" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</span>
-              </div>
+  {% for p in participants %}
+  {% set is_top =
+      (n == 2 and loop.index0 == 0) or
+      (n == 3 and loop.index0 < 2) or
+      (n == 4 and loop.index0 < 2) or
+      (n == 5 and loop.index0 < 3) or
+      (n == 6 and loop.index0 < 3)
+  %}
 
-              <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
-                {{ p.player_name }}
-              </small>
+  <div
+    class="life-card {% if is_top %}top-card{% endif %}"
+    data-player="{{ p.player_id }}"
+    style="
+      {% if p.commander_art %}
+        --bg-layer:
+          linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85)),
+          url('{{ p.commander_art }}');
+      {% else %}
+        --bg-layer:
+          linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85));
+      {% endif %}
+      {% if is_top %}--bg-rotate:rotate(180deg);{% endif %}
+    "
+  >
 
-              <div class="position-absolute top-50 start-50 translate-middle life-display"
-                   id="life-{{ p.player_id }}">40</div>
+    <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
 
-              <button
-                type="button"
-                class="btn btn-sm btn-light pass-btn"
-                id="pass-{{ p.player_id }}"
-                style="display:none;">
-                Pass Turn →
-              </button>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
+      <div class="position-absolute top-50 start-50 translate-middle life-display"
+           id="life-{{ p.player_id }}">40</div>
 
-      <!-- Center menu -->
-      <button
-        class="center-menu-btn btn btn-light rounded-circle p-3 shadow-lg"
-        style="width:80px;height:80px;"
-        data-bs-toggle="modal"
-        data-bs-target="#menuModal"
-        aria-label="Menu"
-      >
-        <img src="/static/hamburger.svg" width="40" height="40" alt="Menu">
+      <button class="btn btn-sm btn-light pass-btn"
+              id="pass-{{ p.player_id }}"
+              style="display:none;">
+        Pass →
       </button>
+
     </div>
+  </div>
 
-    <!-- Menu Modal -->
-    <div class="modal fade" id="menuModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content bg-dark text-light">
-          <div class="modal-body text-center p-4">
+  {% endfor %}
 
-            <!-- Manual fullscreen toggle RESTORED -->
-            <button type="button" class="btn btn-primary w-100 btn-lg mb-3" id="fsToggleBtn">
-              Toggle Fullscreen
-            </button>
+</div>
 
-            <form method="post" action="/end_game">
-              <select name="winner" class="form-select mb-3" required>
-                <option value="" disabled selected>Select Winner</option>
-                {% for p in participants %}
-                  <option value="{{ p.player_id }}">{{ p.player_name }}</option>
-                {% endfor %}
-              </select>
-              <button type="submit" class="btn btn-success w-100 btn-lg mb-3">
-                End Game & Record
-              </button>
-            </form>
+<button class="center-menu-btn btn btn-light rounded-circle p-3 shadow"
+        data-bs-toggle="modal"
+        data-bs-target="#menuModal">
+  ☰
+</button>
 
-            <form method="post" action="/cancel_game"
-                  onsubmit="return confirm('Quit without saving?')">
-              <button type="submit" class="btn btn-outline-danger w-100 btn-lg">
-                Quit without Saving
-              </button>
-            </form>
+<!-- Modal -->
+<div class="modal fade" id="menuModal">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-body text-center">
 
-          </div>
-        </div>
+        <button class="btn btn-primary w-100 mb-3" id="toggleFsBtn">
+          Toggle Fullscreen
+        </button>
+
+        <form method="post" action="/end_game">
+          <select name="winner" class="form-select mb-3" required>
+            <option value="" disabled selected>Select Winner</option>
+            {% for p in participants %}
+            <option value="{{ p.player_id }}">{{ p.player_name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-success w-100 mb-3">
+            End & Record
+          </button>
+        </form>
+
+        <form method="post" action="/cancel_game">
+          <button class="btn btn-outline-danger w-100">
+            Quit without Saving
+          </button>
+        </form>
+
       </div>
     </div>
+  </div>
+</div>
 
-    <script>
-      // --- Fullscreen helpers ---
-      function isFullscreen() {
-        return !!document.fullscreenElement;
-      }
+<script>
+/* ---------- FULLSCREEN ---------- */
 
-      async function requestFullscreenAndLock() {
-        // Fullscreen requires user gesture on mobile browsers
-        try {
-          if (!isFullscreen() && document.documentElement.requestFullscreen) {
-            await document.documentElement.requestFullscreen();
-          }
-        } catch (e) {}
+async function goFullscreen(){
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+    }
+  }catch(e){}
+  document.getElementById("fsOverlay").style.display="none";
+}
 
-        // Best-effort landscape lock (works on some browsers)
-        try {
-          if (screen.orientation && screen.orientation.lock) {
-            await screen.orientation.lock("landscape");
-          }
-        } catch (e) {}
-      }
+document.getElementById("fsBtn").addEventListener("click", goFullscreen);
 
-      async function toggleFullscreen() {
-        try {
-          if (!isFullscreen()) {
-            await requestFullscreenAndLock();
-          } else if (document.exitFullscreen) {
-            await document.exitFullscreen();
-          }
-        } catch (e) {}
-        syncOverlay();
-      }
+document.getElementById("toggleFsBtn").addEventListener("click", async ()=>{
+  if(document.fullscreenElement){
+    await document.exitFullscreen();
+  }else{
+    await goFullscreen();
+  }
+});
 
-      function syncOverlay() {
-        const overlay = document.getElementById("startOverlay");
-        if (!overlay) return;
+/* ---------- TURN SYSTEM ---------- */
 
-        // Show overlay if we're on a small device and not fullscreen.
-        const likelyMobile = window.matchMedia && window.matchMedia("(max-width: 900px)").matches;
-        overlay.style.display = (!isFullscreen() && likelyMobile) ? "grid" : "none";
-      }
+let turn = 1;
+let active = null;
+let passed = new Set();
 
-      document.getElementById("startBtn")?.addEventListener("click", async () => {
-        await requestFullscreenAndLock();
-        syncOverlay();
-      });
+const cards = [...document.querySelectorAll(".life-card")];
 
-      document.getElementById("fsToggleBtn")?.addEventListener("click", async () => {
-        // Close modal then toggle FS, so the browser accepts it as a gesture
-        try {
-          const modalEl = document.getElementById("menuModal");
-          const modal = bootstrap.Modal.getInstance(modalEl);
-          modal?.hide();
-        } catch(e) {}
-        await toggleFullscreen();
-      });
+function updateTurnPill(){
+  document.getElementById("turnPill").textContent = "Turn " + turn;
+}
 
-      document.addEventListener("fullscreenchange", syncOverlay);
-      window.addEventListener("resize", syncOverlay);
+function setActive(id){
+  active = id;
+  cards.forEach(c=>{
+    c.classList.toggle("active-turn", c.dataset.player === id);
+    const btn = c.querySelector(".pass-btn");
+    if(btn) btn.style.display = (c.dataset.player === id) ? "block" : "none";
+  });
+}
 
-      // --- Turn state ---
-      let activePlayerId = {{ session.get("active_player_id") or "null" }};
-      let turnNumber = {{ session.get("turn_number") or 1 }};
-      let turnDamage = {};
-      let passedThisRound = new Set();
+function nextPlayer(){
+  const ids = cards.map(c=>c.dataset.player);
+  let idx = ids.indexOf(active);
+  passed.add(active);
 
-      function setTurnPill() {
-        const pill = document.getElementById("turnNumberPill");
-        if (pill) pill.textContent = "TURN " + turnNumber;
-      }
+  if(passed.size === ids.length){
+    turn++;
+    passed.clear();
+    updateTurnPill();
+  }
 
-      function initTurn(){
-        document.querySelectorAll(".life-card").forEach(card=>{
-          const pid = card.dataset.playerIndex;
-          turnDamage[pid] = 0;
-        });
+  setActive(ids[(idx+1)%ids.length]);
+}
 
-        if(!activePlayerId){
-          activePlayerId = document.querySelector(".life-card")?.dataset.playerIndex || null;
-        }
+/* ---------- LIFE TAP ---------- */
 
-        setTurnPill();
-        resetTurnDamage();
-        passedThisRound.clear();
-        setActiveTurn(activePlayerId);
-      }
+cards.forEach(card=>{
+  const isTop = card.classList.contains("top-card");
 
-      function setActiveTurn(pid){
-        activePlayerId = String(pid);
+  card.addEventListener("click", e=>{
+    if(e.target.classList.contains("pass-btn")) return;
 
-        document.querySelectorAll(".life-card").forEach(card=>{
-          const cid = card.dataset.playerIndex;
-          const isActive = (cid === activePlayerId);
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    let delta = (x < rect.width/2) ? -1 : 1;
+    if(isTop) delta = -delta;
 
-          card.classList.toggle("active-turn", isActive);
+    const id = card.dataset.player;
+    const el = document.getElementById("life-"+id);
+    el.textContent = Math.max(0, parseInt(el.textContent)+delta);
+  });
 
-          const tb = document.getElementById("turn-badge-" + cid);
-          const pb = document.getElementById("pass-" + cid);
+  card.querySelector(".pass-btn").addEventListener("click", e=>{
+    e.stopPropagation();
+    nextPlayer();
+  });
+});
 
-          if (tb) tb.style.display = isActive ? "inline-block" : "none";
-          if (pb) pb.style.display = isActive ? "inline-block" : "none";
-        });
-      }
+/* ---------- INIT ---------- */
 
-      function getPlayerOrder() {
-        return Array.from(document.querySelectorAll(".life-card")).map(c => c.dataset.playerIndex);
-      }
+if(cards.length){
+  setActive(cards[0].dataset.player);
+  updateTurnPill();
+}
+</script>
 
-      function nextPlayer(){
-        const ids = getPlayerOrder();
-        let idx = ids.indexOf(activePlayerId);
-        const next = ids[(idx + 1) % ids.length];
-
-        // mark current player as having passed this round
-        passedThisRound.add(activePlayerId);
-
-        // if everyone has passed once -> new turn
-        if (passedThisRound.size >= ids.length) {
-          turnNumber += 1;
-          setTurnPill();
-          passedThisRound.clear();
-        }
-
-        resetTurnDamage();
-        setActiveTurn(next);
-      }
-
-      function resetTurnDamage(){
-        for(const pid in turnDamage){
-          turnDamage[pid] = 0;
-          const el = document.getElementById("turn-dmg-" + pid);
-          if (el) el.textContent = "Turn dmg: 0";
-        }
-      }
-
-      // --- Life & damage ---
-      function adjustLife(player, amount){
-        const el = document.getElementById("life-" + player);
-        if (!el) return;
-
-        const before = parseInt(el.textContent, 10);
-        let after = before + amount;
-        if (after < 0) after = 0;
-        el.textContent = after;
-
-        // damage taken during this turn
-        if (after < before) {
-          turnDamage[player] = (turnDamage[player] || 0) + Math.abs(after - before);
-          const dmgEl = document.getElementById("turn-dmg-" + player);
-          if (dmgEl) dmgEl.textContent = "Turn dmg: " + turnDamage[player];
-        }
-
-        checkWinner();
-      }
-
-      function checkWinner(){
-        const alive = Array.from(document.querySelectorAll(".life-card"))
-          .filter(card=>{
-            const pid = card.dataset.playerIndex;
-            const lifeEl = document.getElementById("life-" + pid);
-            return lifeEl && parseInt(lifeEl.textContent, 10) > 0;
-          });
-
-        if(alive.length === 1){
-          const winner = alive[0].dataset.playerIndex;
-          const form = document.createElement("form");
-          form.method = "POST";
-          form.action = "/end_game";
-
-          const input = document.createElement("input");
-          input.type = "hidden";
-          input.name = "winner";
-          input.value = winner;
-
-          form.appendChild(input);
-          document.body.appendChild(form);
-          form.submit();
-        }
-      }
-
-      // Tap logic (ignore clicks on pass button)
-      document.querySelectorAll(".life-card").forEach(card=>{
-        const isTop = card.classList.contains("top-card");
-
-        const tapHandler = (clientX, target) => {
-          if (target && target.closest && target.closest(".pass-btn")) return;
-
-          const rect = card.getBoundingClientRect();
-          const x = clientX - rect.left;
-
-          let amount = (x < rect.width / 2) ? -1 : 1;
-          if (isTop) amount = -amount;
-
-          adjustLife(card.dataset.playerIndex, amount);
-        };
-
-        card.addEventListener("click", e => {
-          tapHandler(e.clientX, e.target);
-        });
-
-        card.addEventListener("touchstart", e => {
-          const t = e.touches[0];
-          tapHandler(t.clientX, e.target);
-          e.preventDefault();
-        }, { passive:false });
-      });
-
-      document.querySelectorAll(".pass-btn").forEach(btn=>{
-        btn.addEventListener("click", e=>{
-          e.stopPropagation();
-          nextPlayer();
-        });
-      });
-
-      // Init
-      initTurn();
-
-      // On load, show overlay if needed (so user can enter fullscreen properly)
-      document.addEventListener("DOMContentLoaded", () => {
-        syncOverlay();
-      });
-      // Also run now (in case DOMContentLoaded already fired)
-      syncOverlay();
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  </body>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
 </html>
