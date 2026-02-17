@@ -531,6 +531,7 @@ def index():
         deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate})
 
     deck_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
+    top_decks = deck_stats[:6]
 
     # Recent games
     recent_games = Game.query.order_by(Game.date.desc()).limit(10).all()
@@ -555,7 +556,7 @@ def index():
     return render_template(
         "index.html",
         player_stats=player_stats,
-        deck_stats=deck_stats,
+        deck_stats=top_decks,,
         recent_games=recent_games,
         game_parts=game_parts,
         top_players=top_players,
