@@ -537,6 +537,14 @@ def index():
     recent_games = Game.query.order_by(Game.date.desc()).limit(10).all()
     game_parts = {g.id: GameParticipant.query.filter_by(game_id=g.id).all() for g in recent_games}
 
+    # Deck Spotlight: deck that won last (winner's deck in most recent game)
+    last_winning_deck = None
+    if recent_games:
+        last_game = recent_games[0]
+        winner_part = GameParticipant.query.filter_by(game_id=last_game.id, player_id=last_game.winner_id).first()
+        if winner_part:
+            last_winning_deck = winner_part.deck
+    
     # Best deck by winrate (prefer decks with >= min_games)
     min_games = 3
     best_deck = None
@@ -561,6 +569,7 @@ def index():
         game_parts=game_parts,
         top_players=top_players,
         best_deck=best_deck,
+        last_winning_deck=last_winning_deck,
     )
 
 
