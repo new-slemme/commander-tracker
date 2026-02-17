@@ -695,9 +695,15 @@ def add_player():
 
 
 @app.route("/decks")
+@login_required
 def decks():
     u = get_current_user()
-    players_list = Player.query.order_by(Player.name.asc()).all()
+
+    # Owners list: admins can see/filter all, non-admins only themselves
+    if u and u.is_admin:
+        players_list = Player.query.order_by(Player.name.asc()).all()
+    else:
+        players_list = [u.player] if (u and u.player) else []
 
     player_id = request.args.get("player_id", type=int)
     show_retired = request.args.get("show_retired", type=int)
@@ -707,21 +713,21 @@ def decks():
     if not show_retired:
         q = q.filter(Deck.retired == False)  # noqa: E712
 
-    # Non-admins: force filter to their own player (so they don't browse others by accident)
+    # Non-admins: force own decks (ignore player_id from query string)
     if u and not u.is_admin:
         if u.player:
             q = q.filter(Deck.player_id == u.player.id)
             player_id = u.player.id
         else:
-            q = q.filter(text("1=0"))  # show nothing
+            q = q.filter(text("1=0"))
 
-    # Admins: allow filtering by selected player
+    # Admins: allow filter by selected player
     if u and u.is_admin and player_id:
         q = q.filter(Deck.player_id == player_id)
 
     decks_list = q.order_by(Deck.retired.asc(), Deck.name.asc()).all()
 
-    # Deck stats
+    # Stats
     stats = {}
     for d in decks_list:
         wins = (
@@ -747,6 +753,7 @@ def decks():
         deck_stats=stats,
         deck_can_delete=deck_can_delete,
         show_retired=show_retired,
+        is_admin=bool(u and u.is_admin),
     )
 
 
