@@ -564,7 +564,7 @@ def index():
     return render_template(
         "index.html",
         player_stats=player_stats,
-        deck_stats=top_decks,,
+        deck_stats=top_decks,
         recent_games=recent_games,
         game_parts=game_parts,
         top_players=top_players,
