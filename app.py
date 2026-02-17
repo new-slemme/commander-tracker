@@ -893,7 +893,7 @@ def start_game():
     participants = []
     seen = set()
 
-    for i in range(1, 7):  # Up to 6 players
+    for i in range(1, 7):
         p_id = request.form.get(f"player{i}")
         d_id = request.form.get(f"deck{i}")
         if p_id and d_id:
@@ -908,22 +908,33 @@ def start_game():
             if not deck or deck.player_id != p_id or deck.retired:
                 return "Invalid deck for player", 400
 
-            participants.append(
-                {
-                    "player_id": p_id,
-                    "deck_id": d_id,
-                    "player_name": deck.owner.name,
-                    "deck_name": deck.name,
-                    "commander_art": deck.commander_local_art or deck.commander_art_crop_url,
-                }
-            )
+            participants.append({
+                "player_id": p_id,
+                "deck_id": d_id,
+                "player_name": deck.owner.name,
+                "deck_name": deck.name,
+                "commander_art": deck.commander_local_art or deck.commander_art_crop_url,
+            })
 
     if len(participants) < 2:
         return "Need at least 2 players", 400
 
+    # Starting player selection
+    starting_player = request.form.get("starting_player")
+    if not starting_player:
+        return "Must select starting player", 400
+
+    starting_player = int(starting_player)
+    if starting_player not in seen:
+        return "Invalid starting player", 400
+
     session["game_participants"] = participants
+    session["active_player"] = starting_player
+    session["turn_number"] = 1
     session.modified = True
+
     return redirect(url_for("life_counter"))
+
 
 @app.route("/cancel_game", methods=["POST"])
 @login_required
