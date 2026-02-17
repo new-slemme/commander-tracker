@@ -1,0 +1,9 @@
+{
+  "name": "Commandersohn",
+  "short_name": "EDH Son",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#10121a",
+  "theme_color": "#10121a"
+}
