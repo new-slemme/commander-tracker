@@ -1,251 +1,363 @@
 <!doctype html>
 <html lang="en" data-bs-theme="dark">
-   <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <!-- For mobile scaling -->
-      <meta name="apple-mobile-web-app-capable" content="yes">
-      <meta name="mobile-web-app-capable" content="yes">
-      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-      <title>Commander Tracker</title>
-      <link href="/static/bootstrap.min.css" rel="stylesheet">
-      <style>
-         body { background-color: var(--darkest); color: var(--font-base); font-family: 'Arial', sans-serif; }
-         .navbar { background-color: var(--darker) !important; border-bottom: 1px solid var(--font-base); }
-         .navbar-brand, .nav-link { color: var(--font-base) !important; }
-         .navbar-brand:hover, .nav-link:hover { color: #ffffff !important; }
-         .navbar-toggler img { filter: invert(0.7); }  /* Adjust color to match theme (e.g., to #8f99c5) */
-         .navbar-toggler:focus { box-shadow: none; }  /* Optional: remove default focus outline */
-         a { color: var(--font-base); text-decoration: none; }
-         a:hover { color: #ffffff; }
-         .table { --bs-table-bg: var(--darker); color: var(--font-base); border-color: var(--font-base); }
-         .table thead { background-color: var(--darkest); color: #ffffff; }
-         .table td, .table th { border-color: var(--font-base); }
-         .list-group-item { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
-         .card { background-color: var(--darker); border: 1px solid var(--font-base); color: var(--font-base); box-shadow: 0 0 10px rgba(143, 153, 197, 0.2); }
-         .form-control, .form-select {
-         background-color: var(--darker); border-color: var(--font-base); color: var(--font-base);
-         }
-         .form-control:focus, .form-select:focus {
-         background-color: var(--darker); color: var(--font-base); border-color: #ffffff;
-         box-shadow: 0 0 0 0.25rem rgba(143, 153, 197, 0.25);
-         }
-         .form-label { color: var(--font-base); }
-         .btn-primary { background-color: var(--font-base); border-color: var(--font-base); color: var(--darkest); }
-         .btn-primary:hover { background-color: #a0b0d0; border-color: #a0b0d0; color: var(--darkest); }
-         .btn-success { background-color: var(--green); border-color: var(--green); color: #ffffff; }
-         .btn-success:hover { background-color: var(--green-trans); border-color: var(--green); }
-         .alert-danger { background-color: var(--red-trans); border-color: var(--red); color: var(--font-danger); }
-         .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
-         h1, h2, h5 { color: #ffffff; }
-         .card:hover { box-shadow: 0 0 15px rgba(143, 153, 197, 0.3); transition: box-shadow 0.3s; }
-         /* Responsiveness tweaks */
-         @media (max-width: 576px) {
-         .container { padding: 0 15px; }
-         .card { padding: 15px !important; }
-         table { font-size: 0.9rem; }
-         }
-         .life-grid{
-         position: absolute;
-         inset: 0;
-         width: 100vw;
-         height: 100vh;
-         display: grid;
-         }
-         .life-card{ position: relative; overflow: hidden; background-blend-mode: overlay;}
-         /* 2: stacked */
-         .players-2{
-         grid-template-columns: 1fr;
-         grid-template-rows: 1fr 1fr;
-         grid-template-areas:
-         "p1"
-         "p2";
-         }
-         /* 3: 2 top, 1 full bottom */
-         .players-3{
-         grid-template-columns: 1fr 1fr;
-         grid-template-rows: 1fr 1fr;
-         grid-template-areas:
-         "p1 p2"
-         "p3 p3";
-         }
-         /* 4: 2x2 */
-         .players-4{
-         grid-template-columns: 1fr 1fr;
-         grid-template-rows: 1fr 1fr;
-         grid-template-areas:
-         "p1 p2"
-         "p3 p4";
-         }
-         /* 5: 3 top, 2 bottom (p4 spans two cols) */
-         .players-5{
-         grid-template-columns: 1fr 1fr 1fr;
-         grid-template-rows: 1fr 1fr;
-         grid-template-areas:
-         "p1 p2 p3"
-         "p4 p4 p5";
-         }
-         /* 6: 3x2 */
-         .players-6{
-         grid-template-columns: 1fr 1fr 1fr;
-         grid-template-rows: 1fr 1fr;
-         grid-template-areas:
-         "p1 p2 p3"
-         "p4 p5 p6";
-         }
-         /* Map cards to grid areas */
-         .pos-1{ grid-area: p1; }
-         .pos-2{ grid-area: p2; }
-         .pos-3{ grid-area: p3; }
-         .pos-4{ grid-area: p4; }
-         .pos-5{ grid-area: p5; }
-         .pos-6{ grid-area: p6; }
-      </style>
-   </head>
-   <body>
-      <div class="container mt-4">
-         {% set n = participants|length %}
-         <div class="life-grid players-{{ n }}">
-            {% for p in participants %}
-            {% set is_top =
+  <head>
+    <meta charset="utf-8">
+    <!-- Keep viewport simple; we'll handle layout ourselves -->
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- PWA-ish flags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>Commander Tracker</title>
+    <link href="/static/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+      :root {
+        --darkest: #10121a;
+        --darkest-trans: #10121ae0;
+        --darker: #171a26;
+        --darker-trans: #171a26d9;
+        --base: #162d3d;
+        --base-trans: #162d3da8;
+        --light: #465493;
+
+        --green: #3a6b54;
+        --green-trans: #3a6b54a8;
+        --blue: #1e3a5f;
+        --blue-trans: #1e3a5fa8;
+        --red: #A63232;
+        --red-trans: #A63232A8;
+        --purple: #5A3A6B;
+        --purple-trans: #5A3A6Ba8;
+        --orange: #FF6B35;
+        --orange-trans: #FF6B35a8;
+        --yellow: #F2C94C;
+        --yellow-trans: #F2C94Ca8;
+
+        --font-base: #8f99c5;
+        --font-base-trans: #8f99c57d;
+        --font-highlight: #e55c36;
+        --font-highlight-trans: #e55c36a8;
+        --font-danger: #e53636;
+        --font-danger-trans: #e53636a8;
+        --font-warning: #FF9900;
+        --font-warning-trans: #FF9900a8;
+        --font-accent: #6e7cb7;
+      }
+
+      html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background-color: var(--darkest);
+        color: var(--font-base);
+        font-family: Arial, sans-serif;
+        overscroll-behavior: none;
+        touch-action: manipulation;
+      }
+
+      /* Wrapper we can rotate in portrait to "force landscape feel" */
+      .life-wrapper {
+        position: fixed;
+        inset: 0;
+      }
+
+      /* If phone is portrait, rotate the entire UI to appear landscape */
+      @media (orientation: portrait) {
+        .life-wrapper {
+          width: 100vh;
+          height: 100vw;
+          top: 50%;
+          left: 50%;
+          right: auto;
+          bottom: auto;
+          transform: translate(-50%, -50%) rotate(90deg);
+          transform-origin: center;
+        }
+      }
+
+      /* Tap-to-start overlay (mobile fullscreen requires user gesture) */
+      .start-overlay {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(0,0,0,0.85);
+        z-index: 9999;
+        text-align: center;
+        padding: 24px;
+      }
+
+      .life-grid{
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: grid;
+      }
+
+      /* Life cards */
+      .life-card {
+        position: relative;
+        overflow: hidden;
+        background: #000; /* fallback */
+      }
+
+      /* Background layer (so we can rotate independently for top players) */
+      .life-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: var(--bg-layer, none);
+        background-size: cover;
+        background-position: center;
+        transform: var(--bg-rotate, none);
+        transform-origin: center;
+        z-index: 0;
+      }
+
+      /* Foreground content sits above background layer */
+      .life-card > .card-inner {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* Grid layouts */
+      .players-2{
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+        grid-template-areas:
+          "p1"
+          "p2";
+      }
+      .players-3{
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        grid-template-areas:
+          "p1 p2"
+          "p3 p3";
+      }
+      .players-4{
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        grid-template-areas:
+          "p1 p2"
+          "p3 p4";
+      }
+      .players-5{
+        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        grid-template-areas:
+          "p1 p2 p3"
+          "p4 p4 p5";
+      }
+      .players-6{
+        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+        grid-template-areas:
+          "p1 p2 p3"
+          "p4 p5 p6";
+      }
+
+      .pos-1{ grid-area: p1; }
+      .pos-2{ grid-area: p2; }
+      .pos-3{ grid-area: p3; }
+      .pos-4{ grid-area: p4; }
+      .pos-5{ grid-area: p5; }
+      .pos-6{ grid-area: p6; }
+
+      .life-display {
+        font-size: 18vh;
+        font-weight: 900;
+        line-height: 1;
+        text-shadow:
+          0 0 10px rgba(0,0,0,0.9),
+          0 0 30px rgba(0,0,0,0.8);
+        color: white;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Tap to start (needed for mobile fullscreen/orientation lock attempts) -->
+    <div id="startOverlay" class="start-overlay">
+      <div>
+        <button class="btn btn-primary btn-lg px-4 py-3" id="startBtn">
+          Tap to start (Fullscreen)
+        </button>
+        <div class="text-muted mt-2" style="font-size: 0.9rem;">
+          We’ll try to lock landscape if your browser allows it.
+        </div>
+      </div>
+    </div>
+
+    <div class="life-wrapper" id="lifeWrapper">
+      {% set n = participants|length %}
+      <div class="life-grid players-{{ n }}">
+        {% for p in participants %}
+          {% set is_top =
             (n == 2 and loop.index0 == 0) or
             (n == 3 and loop.index0 < 2) or
             (n == 4 and loop.index0 < 2) or
             (n == 5 and loop.index0 < 3) or
             (n == 6 and loop.index0 < 3)
-            %}
-            <div
+          %}
+
+          <div
             class="life-card {% if is_top %}top-card{% endif %} pos-{{ loop.index }}"
             data-player-index="{{ p.player_id }}"
-            {% set bg = p.deck_commander_art if p.deck_commander_art else "" %}
             style="
-            {% if p.commander_art %}
-              background-image:
-                linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
-                url('{{ p.commander_art }}');
-              background-size: cover;
-              background-position: center;
-            {% else %}
-              background: linear-gradient(135deg, var({{ p.color }}), #000000);
-            {% endif %}
+              {% if p.commander_art %}
+                --bg-layer:
+                  linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
+                  url('{{ p.commander_art }}');
+              {% else %}
+                --bg-layer:
+                  linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.85)),
+                  linear-gradient(135deg, var({{ p.color }}), #000000);
+              {% endif %}
+
+              {% if is_top %}
+                --bg-rotate: rotate(180deg);
+              {% else %}
+                --bg-rotate: none;
+              {% endif %}
             "
-            >
-            <div class="h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
-               <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
-               {{ p.player_name }}
-               </small>
-               <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">40</div>
+          >
+            <!-- Rotate foreground content for top players, as before -->
+            <div class="card-inner h-100 w-100" style="{% if is_top %}transform: rotate(180deg);{% endif %}">
+              <small class="position-absolute bottom-0 start-50 translate-middle-x p-3 text-white fw-bold">
+                {{ p.player_name }}
+              </small>
+
+              <div class="position-absolute top-50 start-50 translate-middle life-display" id="life-{{ p.player_id }}">
+                40
+              </div>
             </div>
-         </div>
-         {% endfor %}
+          </div>
+        {% endfor %}
       </div>
+
       <!-- Central Hamburger -->
-      <button class="position-absolute top-50 start-50 translate-middle btn btn-light Rc rounded-circle p-3 shadow-lg" style="width: 80px; height: 80px;" data-bs-toggle="modal" data-bs-target="#menuModal">
-      <img src="/static/hamburger.svg" width="40" height="40">
+      <button
+        class="position-absolute top-50 start-50 translate-middle btn btn-light rounded-circle p-3 shadow-lg"
+        style="width: 80px; height: 80px;"
+        data-bs-toggle="modal"
+        data-bs-target="#menuModal"
+        aria-label="Menu"
+      >
+        <img src="/static/hamburger.svg" width="40" height="40" alt="Menu">
       </button>
+    </div>
+
+    <!-- Menu Modal -->
+    <div class="modal fade" id="menuModal">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content bg-dark text-light">
+          <div class="modal-body text-center p-4">
+            <button onclick="toggleFullscreen()" class="btn btn-primary w-100 mb-3 btn-lg">Toggle Fullscreen</button>
+            <form method="post" action="/end_game">
+              <select name="winner" class="form-select mb-3" required>
+                <option value="" selected disabled>Select Winner</option>
+                {% for p in participants %}
+                  <option value="{{ p.player_id }}">{{ p.player_name }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="btn btn-success w-100 btn-lg">End Game & Record</button>
+            </form>
+          </div>
+        </div>
       </div>
-      <!-- Menu Modal -->
-      <div class="modal fade" id="menuModal">
-         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content bg-dark text-light">
-               <div class="modal-body text-center p-4">
-                  <button onclick="toggleFullscreen()" class="btn btn-primary w-100 mb-3 btn-lg">Toggle Fullscreen</button>
-                  <form method="post" action="/end_game">
-                     <select name="winner" class="form-select mb-3" required>
-                        <option value="" selected disabled>Select Winner</option>
-                        {% for p in participants %}
-                        <option value="{{ p.player_id }}">{{ p.player_name }}</option>
-                        {% endfor %}
-                     </select>
-                     <button type="submit" class="btn btn-success w-100 btn-lg">End Game & Record</button>
-                  </form>
-               </div>
-            </div>
-         </div>
-      </div>
-      <script>
-         // Auto fullscreen on load
-         document.addEventListener('DOMContentLoaded', () => {
-         if (document.documentElement.requestFullscreen) {
-         document.documentElement.requestFullscreen().catch(() => {});
-         }
-         });
-         
-         // Tap left = -1, right = +1 (reverse for top rotated cards)
-         document.querySelectorAll('.life-card').forEach(card => {
-         const isTop = card.classList.contains('top-card');
-         
-         const handleTap = function(e) {
-         const rect = card.getBoundingClientRect();
-         const x = (e.type === 'touchstart' ? e.touches[0].clientX : e.clientX) - rect.left;
-         let amount = (x < rect.width / 2) ? -1 : 1;
-         if (isTop) amount = -amount;  // Reverse for top
-         const player = card.dataset.playerIndex;
-         adjustLife(player, amount);
-         e.preventDefault();
-         };
-         
-         card.addEventListener('click', handleTap);
-         card.addEventListener('touchstart', handleTap, { passive: false });
-         });
-         
-         function adjustLife(player, amount) {
-         const el = document.getElementById('life-' + player);
-         if (!el) return;
-         
-         let life = parseInt(el.textContent, 10) + amount;
-         if (life < 0) life = 0;
-         el.textContent = life;
-         
-         // Auto-end if only one player has >0 life
-         const cards = Array.from(document.querySelectorAll('.life-card'));
-         const aliveCards = cards.filter(card => {
-         const pid = card.dataset.playerIndex;
-         const lifeEl = document.getElementById('life-' + pid);
-         return lifeEl && parseInt(lifeEl.textContent, 10) > 0;
-         });
-         
-         if (aliveCards.length === 1) {
-         const winnerPlayer = aliveCards[0].dataset.playerIndex;
-         
-         const form = document.createElement('form');
-         form.method = 'POST';
-         form.action = '/end_game';
-         
-         const input = document.createElement('input');
-         input.type = 'hidden';
-         input.name = 'winner';
-         input.value = winnerPlayer;
-         
-         form.appendChild(input);
-         document.body.appendChild(form);
-         form.submit();
-         }
-         }
-         
-         
-         function toggleFullscreen() {
-         if (!document.fullscreenElement) {
-         document.documentElement.requestFullscreen();
-         } else {
-         document.exitFullscreen();
-         }
-         }
-      </script>
-      <style>
-         .life-display {
-           font-size: 18vh;
-           font-weight: 900;
-           line-height: 1;
-           text-shadow:
-             0 0 10px rgba(0,0,0,0.9),
-             0 0 30px rgba(0,0,0,0.8);
-           color: white;
-         }
-      </style>
-      </div>
-      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>  <!-- For navbar toggle -->
-      <!-- <script src="/static/bootstrap.bundle.min.js"></script>
-         <script src="/static/bootstrap.bundle.min.js"></script> -->
-   </body>
+    </div>
+
+    <script>
+      async function enterImmersive() {
+        // Fullscreen (mobile requires user gesture)
+        try {
+          if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          }
+        } catch (e) {}
+
+        // Try lock landscape (works on some browsers/devices)
+        try {
+          if (screen.orientation && screen.orientation.lock) {
+            await screen.orientation.lock("landscape");
+          }
+        } catch (e) {}
+
+        // Hide overlay
+        const overlay = document.getElementById("startOverlay");
+        if (overlay) overlay.style.display = "none";
+      }
+
+      document.getElementById("startBtn")?.addEventListener("click", enterImmersive);
+
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          enterImmersive();
+        } else {
+          document.exitFullscreen();
+        }
+      }
+
+      // Tap left = -1, right = +1 (reverse for top rotated cards)
+      document.querySelectorAll(".life-card").forEach(card => {
+        const isTop = card.classList.contains("top-card");
+
+        const handleTap = function(e) {
+          const rect = card.getBoundingClientRect();
+          const x = (e.type === "touchstart" ? e.touches[0].clientX : e.clientX) - rect.left;
+
+          let amount = (x < rect.width / 2) ? -1 : 1;
+          if (isTop) amount = -amount; // Reverse for top
+
+          const player = card.dataset.playerIndex;
+          adjustLife(player, amount);
+          e.preventDefault();
+        };
+
+        card.addEventListener("click", handleTap);
+        card.addEventListener("touchstart", handleTap, { passive: false });
+      });
+
+      function adjustLife(player, amount) {
+        const el = document.getElementById("life-" + player);
+        if (!el) return;
+
+        let life = parseInt(el.textContent, 10) + amount;
+        if (life < 0) life = 0;
+        el.textContent = life;
+
+        // Auto-end if only one player has >0 life
+        const cards = Array.from(document.querySelectorAll(".life-card"));
+        const aliveCards = cards.filter(card => {
+          const pid = card.dataset.playerIndex;
+          const lifeEl = document.getElementById("life-" + pid);
+          return lifeEl && parseInt(lifeEl.textContent, 10) > 0;
+        });
+
+        if (aliveCards.length === 1) {
+          const winnerPlayer = aliveCards[0].dataset.playerIndex;
+
+          const form = document.createElement("form");
+          form.method = "POST";
+          form.action = "/end_game";
+
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "winner";
+          input.value = winnerPlayer;
+
+          form.appendChild(input);
+          document.body.appendChild(form);
+          form.submit();
+        }
+      }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
 </html>
