@@ -264,7 +264,10 @@
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content bg-dark text-light">
           <div class="modal-body text-center p-4">
-            <button onclick="toggleFullscreen()" class="btn btn-primary w-100 mb-3 btn-lg">Toggle Fullscreen</button>
+            <button onclick="toggleFullscreen()" class="btn btn-primary w-100 mb-3 btn-lg">
+              Toggle Fullscreen
+            </button>
+          
             <form method="post" action="/end_game">
               <select name="winner" class="form-select mb-3" required>
                 <option value="" selected disabled>Select Winner</option>
@@ -272,8 +275,21 @@
                   <option value="{{ p.player_id }}">{{ p.player_name }}</option>
                 {% endfor %}
               </select>
-              <button type="submit" class="btn btn-success w-100 btn-lg">End Game & Record</button>
+          
+              <button type="submit" class="btn btn-success w-100 btn-lg mb-3">
+                End Game & Record
+              </button>
             </form>
+          
+            <hr class="border-secondary">
+          
+            <form method="post" action="/cancel_game"
+                  onsubmit="return confirm('Quit without saving? This game will not be recorded.')">
+              <button type="submit" class="btn btn-outline-danger w-100 btn-lg">
+                Quit without Saving
+              </button>
+            </form>
+          
           </div>
         </div>
       </div>
