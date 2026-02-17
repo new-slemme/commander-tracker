@@ -1,11 +1,136 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+  /* =========================
+     Deck Detail: UI helpers
+     ========================= */
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 14px;
+    padding: 10px 14px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(255,255,255,0.04);
+    color: var(--font-base);
+    text-decoration: none;
+    font-weight: 800;
+    box-shadow: 0 0 18px rgba(0,0,0,0.35);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .back-btn:hover { color: #fff; border-color: rgba(143,153,197,0.35); background: rgba(255,255,255,0.06); }
+  .back-btn:active { transform: scale(0.99); }
+
+  .banner-actions .btn {
+    border-radius: 14px;
+    padding: 10px 14px;
+    font-weight: 800;
+  }
+
+  /* Mana icons */
+  .mana-icons {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+  .mana-icon {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(143,153,197,0.25);
+    box-shadow: 0 0 10px rgba(0,0,0,0.45);
+  }
+  .mana-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.6));
+  }
+
+  /* Stat cards: tighten + nicer on mobile */
+  .stat-card h2 { margin: 0; font-weight: 900; color: #fff; }
+  .stat-card small { color: var(--font-base-trans); font-size: 0.95rem; }
+
+  /* Game history tiles: more modern spacing */
+  .history-item {
+    border-radius: 16px;
+    border: 1px solid rgba(143,153,197,0.20);
+    background: rgba(255,255,255,0.02);
+    padding: 14px 14px;
+  }
+
+  /* Mobile improvements */
+  @media (max-width: 576px) {
+    .deck-banner {
+      min-height: 260px !important;
+      border-radius: 18px !important;
+    }
+
+    .banner-inner {
+      padding: 18px !important;
+    }
+
+    .banner-title {
+      font-size: 2.1rem !important; /* was display-3 */
+      line-height: 1.05;
+    }
+
+    .banner-subtitle {
+      font-size: 1.05rem !important;
+      opacity: 0.95;
+    }
+
+    .banner-topbar {
+      padding: 12px !important;
+      gap: 10px !important;
+    }
+
+    .banner-actions {
+      width: 100%;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .banner-actions form { margin: 0; }
+    .banner-actions .btn { width: auto; padding: 10px 12px; }
+
+    /* Stats grid: 2 columns on mobile */
+    .stats-row .col-md-3 {
+      flex: 0 0 auto;
+      width: 50%;
+    }
+    .stat-card { padding: 18px !important; }
+
+    /* History text spacing */
+    .history-item strong { font-size: 1.02rem; }
+  }
+</style>
+
+{# Helper macro to map color letters to your SVG filenames #}
+{% macro mana_svg(letter) -%}
+  {% set m = {
+    'W': 'mtg-white-symbol-color.svg',
+    'U': 'mtg-blue-symbol-color.svg',
+    'B': 'mtg-black-symbol-color.svg',
+    'R': 'mtg-red-symbol-color.svg',
+    'G': 'mtg-green-symbol-color.svg'
+  } %}
+  {{ url_for('static', filename='mtg-svg/' ~ (m.get(letter, 'mtg-black-symbol-color.svg'))) }}
+{%- endmacro %}
+
 <div class="deck-banner position-relative text-white rounded-4 overflow-hidden mb-4"
      style="
      {% if deck.commander_local_art or deck.commander_art_crop_url %}
        background-image:
-         linear-gradient(rgba(0,0,0,.4), rgba(0,0,0,.8)),
+         linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.85)),
          url('{{ deck.commander_local_art or deck.commander_art_crop_url }}');
        background-size: cover;
        background-position: top;
@@ -15,141 +140,149 @@
      {% endif %}
      min-height: 320px;
      ">
-     
-  <div class="position-absolute bottom-0 start-0 p-5">
-    <h1 class="display-3 fw-bold mb-2">
-       {{ deck.name }}
-       {% if deck.retired %}
-         <span class="badge bg-warning text-dark">Retired</span>
-       {% endif %}
-     </h1>
-    <div class="fs-5">{{ deck.commander_name or deck.commander }}</div>
-            {% if deck.color_identity %}
-     <div class="mt-3">
-       {% for c in deck.color_identity %}
-         <span class="mana mana-{{ c }}">{{ c }}</span>
-       {% endfor %}
-     </div>
-     {% endif %}
-    <small class="text-light opacity-75">Owner: {{ deck.owner.name }}</small>
-  </div>
-     <div class="position-absolute bottom-0 end-0 p-3 d-flex gap-2">
-       {% if deck.retired %}
-         <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
-           <button type="submit" class="btn btn-warning btn-sm">
-             Unretire
-           </button>
-         </form>
-       {% else %}
-         <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
-               onsubmit="return confirm('Retire {{ deck.name }}?');">
-           <button type="submit" class="btn btn-warning btn-sm">
-             Retire
-           </button>
-         </form>
-       {% endif %}
-     
-       <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
-             onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
-         <button type="submit" class="btn btn-danger btn-sm">
-           Delete
-         </button>
-       </form>
-     </div>
-</div>
 
+  {# NEW: Top bar with Go Back + actions (keeps your old actions, just relocates for mobile sanity) #}
+  <div class="position-absolute top-0 start-0 end-0 d-flex align-items-center justify-content-between banner-topbar"
+       style="padding: 14px; padding-top: calc(env(safe-area-inset-top) + 14px);">
+    <a class="back-btn"
+       href="{{ url_for('decks') }}"
+       onclick="(function(e){ try{ if(window.history.length>1){ e.preventDefault(); window.history.back(); } }catch(_){ } })(event);">
+      ← Go Back
+    </a>
+
+    <div class="d-flex align-items-center gap-2 banner-actions">
+      {% if deck.retired %}
+        <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
+          <button type="submit" class="btn btn-warning btn-sm">
+            Unretire
+          </button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
+              onsubmit="return confirm('Retire {{ deck.name }}?');">
+          <button type="submit" class="btn btn-warning btn-sm">
+            Retire
+          </button>
+        </form>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
+            onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
+        <button type="submit" class="btn btn-danger btn-sm">
+          Delete
+        </button>
+      </form>
+    </div>
+  </div>
+
+  {# Existing banner content (kept), just wrapped for mobile padding control #}
+  <div class="position-absolute bottom-0 start-0 banner-inner" style="padding: 3rem;">
+    <h1 class="display-3 fw-bold mb-2 banner-title">
+      {{ deck.name }}
+      {% if deck.retired %}
+        <span class="badge bg-warning text-dark ms-2">Retired</span>
+      {% endif %}
+    </h1>
+
+    <div class="fs-5 banner-subtitle">{{ deck.commander_name or deck.commander }}</div>
+
+    {% if deck.color_identity %}
+      <div class="mana-icons" aria-label="Color identity">
+        {% for c in deck.color_identity %}
+          <span class="mana-icon" title="{{ c }}" aria-label="{{ c }}">
+            <img src="{{ mana_svg(c) }}" alt="{{ c }}">
+          </span>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <small class="text-light opacity-75 d-block mt-2">Owner: {{ deck.owner.name }}</small>
+  </div>
+
+</div>
 
 <div class="container py-4">
 
-  <div class="row g-4">
-     <div class="row g-4 mb-4">
-     
-       <div class="col-md-3">
-         <div class="card p-4 text-center stat-card">
-           <h2>{{ wins }}</h2>
-           <small>Wins</small>
-         </div>
-       </div>
-     
-       <div class="col-md-3">
-         <div class="card p-4 text-center stat-card">
-           <h2>{{ losses }}</h2>
-           <small>Losses</small>
-         </div>
-       </div>
-     
-       <div class="col-md-3">
-         <div class="card p-4 text-center stat-card">
-           <h2>{{ games }}</h2>
-           <small>Games Played</small>
-         </div>
-       </div>
-     
-       <div class="col-md-3">
-         <div class="card p-4 text-center stat-card">
-           <h2>{{ winrate }}%</h2>
-           <small>Win Rate</small>
-         </div>
-       </div>
-     
-     </div>
+  {# Keep your stats section, but fix the nested row+row and add a class for mobile layout #}
+  <div class="row g-4 mb-4 stats-row">
+    <div class="col-md-3">
+      <div class="card p-4 text-center stat-card">
+        <h2>{{ wins }}</h2>
+        <small>Wins</small>
+      </div>
+    </div>
 
+    <div class="col-md-3">
+      <div class="card p-4 text-center stat-card">
+        <h2>{{ losses }}</h2>
+        <small>Losses</small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card p-4 text-center stat-card">
+        <h2>{{ games }}</h2>
+        <small>Games Played</small>
+      </div>
+    </div>
+
+    <div class="col-md-3">
+      <div class="card p-4 text-center stat-card">
+        <h2>{{ winrate }}%</h2>
+        <small>Win Rate</small>
+      </div>
+    </div>
+  </div>
 
   <hr class="my-4">
 
-<h4 class="mt-4">Game History</h4>
+  <h4 class="mt-4">Game History</h4>
 
-<div class="list-group mt-3">
-  {% for h in history %}
-    <div class="list-group-item d-flex justify-content-between align-items-center">
-      <div>
-        <strong>Game #{{ h.game_id }}</strong><br>
-        <small class="text-muted">
-          {{ h.date.strftime("%Y-%m-%d") }}
-          • vs {{ h.opponents | join(", ") }}
-        </small>
+  <div class="list-group mt-3">
+    {% for h in history %}
+      <div class="list-group-item d-flex justify-content-between align-items-center history-item">
+        <div>
+          <strong>Game #{{ h.game_id }}</strong><br>
+          <small class="text-muted">
+            {{ h.date.strftime("%Y-%m-%d") }}
+            • vs {{ h.opponents | join(", ") }}
+          </small>
+        </div>
+
+        {% if h.won %}
+          <span class="badge bg-success">Win</span>
+        {% else %}
+          <span class="badge bg-danger">Loss</span>
+        {% endif %}
       </div>
-
-      {% if h.won %}
-        <span class="badge bg-success">Win</span>
-      {% else %}
-        <span class="badge bg-danger">Loss</span>
-      {% endif %}
-    </div>
-  {% endfor %}
-
-</div>
-
-       <hr class="my-5">
-
-<h4>Opponent Breakdown</h4>
-
-{% if matchups %}
-<div class="row g-4 mt-2">
-
-  {% for name, m in matchups.items() %}
-  <div class="col-md-4">
-    <div class="card p-4 text-center matchup-card">
-
-      <h5 class="mb-2">{{ name }}</h5>
-
-      <div class="d-flex justify-content-center gap-3 my-2">
-        <span class="text-success">{{ m.wins }}W</span>
-        <span class="text-danger">{{ m.losses }}L</span>
-      </div>
-
-      <div class="fw-bold">{{ m.winrate }}%</div>
-      <small class="text-muted">{{ m.games }} games</small>
-
-    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
 
-</div>
-{% else %}
-<p class="text-muted mt-3">No matchup data yet.</p>
-{% endif %}
+  <hr class="my-5">
 
+  <h4>Opponent Breakdown</h4>
+
+  {% if matchups %}
+    <div class="row g-4 mt-2">
+      {% for name, m in matchups.items() %}
+        <div class="col-md-4">
+          <div class="card p-4 text-center matchup-card">
+            <h5 class="mb-2">{{ name }}</h5>
+
+            <div class="d-flex justify-content-center gap-3 my-2">
+              <span class="text-success">{{ m.wins }}W</span>
+              <span class="text-danger">{{ m.losses }}L</span>
+            </div>
+
+            <div class="fw-bold">{{ m.winrate }}%</div>
+            <small class="text-muted">{{ m.games }} games</small>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted mt-3">No matchup data yet.</p>
+  {% endif %}
 
 </div>
 
