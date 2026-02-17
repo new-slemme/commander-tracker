@@ -45,7 +45,8 @@
             const pid = this.value;
             deckSel.innerHTML = '<option value="">Select deck</option>';
             deckSel.disabled = true;
-
+            refreshStartingPlayerOptions();
+            
             if (pid && decksData[pid]) {
                 decksData[pid].forEach(d => {
                     const opt = new Option(d.name, d.id);
@@ -56,6 +57,41 @@
         });
     }
 
+    function selectedPlayersMap() {
+      // returns Map(playerId -> playerName) from current selects
+      const map = new Map();
+      for (let i = 1; i <= playerCount; i++) {
+        const sel = document.getElementById("player" + i);
+        if (!sel) continue;
+        const pid = sel.value;
+        if (!pid) continue;
+    
+        const name = sel.options[sel.selectedIndex]?.text || pid;
+        map.set(pid, name);
+      }
+      return map;
+    }
+
+    function refreshStartingPlayerOptions() {
+      const startSel = document.getElementById("startingPlayer");
+      if (!startSel) return;
+    
+      const prev = startSel.value;
+      const players = selectedPlayersMap();
+    
+      // rebuild options
+      startSel.innerHTML = `<option value="" disabled ${prev ? "" : "selected"}>Select starting player</option>`;
+      for (const [pid, name] of players.entries()) {
+        const opt = new Option(name, pid);
+        startSel.add(opt);
+      }
+    
+      // preserve selection if still valid
+      if (prev && players.has(prev)) {
+        startSel.value = prev;
+      }
+    }
+    
     // Setup initial 4
     for (let i = 1; i <= 4; i++) {
         setupPlayerListeners(i);
