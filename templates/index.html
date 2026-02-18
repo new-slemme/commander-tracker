@@ -112,6 +112,466 @@
     .stats-card-head { padding: 12px 12px; }
     .stats-card { border-radius: 18px; }
   }
+
+  {% extends "base.html" %}
+{% block content %}
+
+<style>
+  /* ===== Player Stats (index) ===== */
+  .stats-card {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .stats-card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .stats-chip {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 800;
+    font-size: 0.88rem;
+  }
+  .stats-chip b { color:#fff; }
+
+  .rank-pill {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(143,153,197,0.25);
+    color:#fff;
+    font-weight: 900;
+    font-size: 0.85rem;
+  }
+
+  .player-name {
+    color:#fff;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+  }
+
+  .win-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 900;
+    border: 1px solid rgba(143,153,197,0.28);
+    background: rgba(255,255,255,0.06);
+    color:#fff;
+    white-space: nowrap;
+  }
+  .win-badge.good { border-color: var(--green); background: var(--green-trans); }
+  .win-badge.mid  { border-color: var(--blue);  background: var(--blue-trans); }
+  .win-badge.bad  { border-color: var(--red); background: var(--red-trans); }
+
+  .wr-progress {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+    min-width: 120px;
+  }
+  .wr-progress > div {
+    height:100%;
+    border-radius:999px;
+  }
+
+  .stats-table thead th {
+    font-size: 0.88rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+  }
+
+  .stats-table tbody tr {
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .stat-mini {
+    display:inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--font-base-trans);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .stat-mini b { color:#fff; }
+
+  /* Mobile: simplify columns */
+  @media (max-width: 576px) {
+    .stats-table thead th:nth-child(3),
+    .stats-table tbody td:nth-child(3) { display:none; } /* Wins column */
+    .stats-table thead th:nth-child(6),
+    .stats-table tbody td:nth-child(6) { display:none; } /* Progress column */
+
+    .stats-card-head { padding: 12px 12px; }
+    .stats-card { border-radius: 18px; }
+  }
+</style>
+
+
+<div class="py-3">
+   <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
+      <div>
+         <h1 class="m-0">Der Keller</h1>
+         <div class="muted">Die Salzmine</div>
+      </div>
+   </div>
+   <!-- =========================
+      TOP PLAYERS (PYRAMID)
+      ========================== -->
+   <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+      <h2 class="m-0">Top Players</h2>
+   </div>
+   <div class="pyramid mb-5">
+      {% if top_players|length > 0 %}
+      {% set bg0 = top_players[0].bg_art %}
+      <div class="leader-card p-top {% if bg0 %}has-bg{% endif %}"
+      {% if bg0 %}style="background-image:url('{{ bg0 }}');"{% endif %}>
+      <span class="erzfeind-badge">ERZFEIND</span>
+      <div class="d-flex justify-content-between align-items-start">
+         <span class="rank-badge">#1</span>
+      </div>
+      <h3 class="mt-3 mb-1 text-white">{{ top_players[0].player.name }}</h3>
+      {% if top_players[0].most_played_deck %}
+      <div class="muted mb-2">
+         Most played: <span class="text-white">{{ top_players[0].most_played_deck.name }}</span>
+      </div>
+      {% endif %}
+      <div class="d-flex gap-3 flex-wrap muted">
+         <div><span class="text-white fw-bold">{{ top_players[0].wins }}</span> wins</div>
+         <div><span class="text-white fw-bold">{{ top_players[0].played }}</span> games</div>
+         <div><span class="text-white fw-bold">{{ top_players[0].winrate }}%</span> winrate</div>
+      </div>
+   </div>
+   {% endif %}
+   {% if top_players|length > 1 %}
+   {% set bg1 = top_players[1].bg_art %}
+   <div class="leader-card p-left {% if bg1 %}has-bg{% endif %}"
+   {% if bg1 %}style="background-image:url('{{ bg1 }}');"{% endif %}>
+   <div class="d-flex justify-content-between align-items-start">
+      <span class="rank-badge">#2</span>
+   </div>
+   <h4 class="mt-3 mb-1 text-white">{{ top_players[1].player.name }}</h4>
+   {% if top_players[1].most_played_deck %}
+   <div class="muted mb-2">
+      Most played: <span class="text-white">{{ top_players[1].most_played_deck.name }}</span>
+   </div>
+   {% endif %}
+   <div class="d-flex gap-3 flex-wrap muted">
+      <div><span class="text-white fw-bold">{{ top_players[1].wins }}</span> wins</div>
+      <div><span class="text-white fw-bold">{{ top_players[1].winrate }}%</span> winrate</div>
+   </div>
+</div>
+{% endif %}
+{% if top_players|length > 2 %}
+{% set bg2 = top_players[2].bg_art %}
+<div class="leader-card p-right {% if bg2 %}has-bg{% endif %}"
+{% if bg2 %}style="background-image:url('{{ bg2 }}');"{% endif %}>
+<div class="d-flex justify-content-between align-items-start">
+   <span class="rank-badge">#3</span>
+</div>
+<h4 class="mt-3 mb-1 text-white">{{ top_players[2].player.name }}</h4>
+{% if top_players[2].most_played_deck %}
+<div class="muted mb-2">
+   Most played: <span class="text-white">{{ top_players[2].most_played_deck.name }}</span>
+</div>
+{% endif %}
+<div class="d-flex gap-3 flex-wrap muted">
+   <div><span class="text-white fw-bold">{{ top_players[2].wins }}</span> wins</div>
+   <div><span class="text-white fw-bold">{{ top_players[2].winrate }}%</span> winrate</div>
+</div>
+</div>
+{% endif %}
+</div>
+<!-- =========================
+   PLAYER STATS
+   ========================== -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+  <h2 class="m-0">Player Stats</h2>
+</div>
+
+<div class="stats-card mb-5">
+  <div class="stats-card-head">
+    <div class="muted">
+      Ranked by <span class="text-white fw-bold">wins</span> (and games played)
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <div class="stats-chip">Players: <b>{{ player_stats|length }}</b></div>
+      {# optional summary chips (only if you want them) #}
+      {# <div class="stats-chip">Total games: <b>{{ total_games }}</b></div> #}
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 stats-table">
+      <thead>
+        <tr>
+          <th style="width:70px;">#</th>
+          <th>Player</th>
+          <th class="text-end">Wins</th>
+          <th class="text-end">Games</th>
+          <th class="text-end">Win %</th>
+          <th style="width:220px;">&nbsp;</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for s in player_stats %}
+          {% set wr = s.winrate %}
+          {% set badge_class = 'bad' %}
+          {% if wr >= 60 %}{% set badge_class = 'good' %}
+          {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+          {% endif %}
+
+          <tr>
+            <td>
+              <span class="rank-pill">{{ loop.index }}</span>
+            </td>
+
+            <td>
+              <div class="player-name">{{ s.player.name }}</div>
+              <div class="stat-mini mt-1 d-sm-none">
+                <div><b>{{ s.wins }}</b> W</div>
+                <div><b>{{ s.played }}</b> games</div>
+              </div>
+            </td>
+
+            <td class="text-end d-none d-sm-table-cell">{{ s.wins }}</td>
+            <td class="text-end">{{ s.played }}</td>
+
+            <td class="text-end">
+              <span class="win-badge {{ badge_class }}">{{ wr }}%</span>
+            </td>
+
+            <td>
+              <div class="wr-progress" aria-label="Winrate progress">
+                <div class="progress-bar"
+                     role="progressbar"
+                     style="width: {{ wr }}%;"
+                     aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+
+        {% if player_stats|length == 0 %}
+          <tr>
+            <td colspan="6" class="text-center py-4 muted">No players yet.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- =========================
+   DECK SPOTLIGHT
+   ========================== -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+   <h2 class="m-0">Deck Spotlight</h2>
+</div>
+
+{% if last_winning_deck %}
+  {% set art = last_winning_deck.commander_local_art or last_winning_deck.commander_art_crop_url %}
+  <div class="spotlight mb-5">
+     <div class="bg" style="{% if art %}background-image:url('{{ art }}'); background-position: top;{% endif %}"></div>
+     <div class="overlay"></div>
+     <div class="content">
+        <div class="muted mb-1">Last winning deck</div>
+        <h3 class="text-white mb-1">{{ last_winning_deck.name }}</h3>
+        <div class="muted mb-1">{{ last_winning_deck.commander_name or last_winning_deck.commander }}</div>
+        <div class="muted mb-3">Owner: <span class="text-white">{{ last_winning_deck.owner.name }}</span></div>
+        <a class="btn btn-primary" href="{{ url_for('deck_detail', deck_id=last_winning_deck.id) }}">View Deck</a>
+     </div>
+  </div>
+{% else %}
+  <div class="card p-3 mb-5">
+     <div class="muted">No games recorded yet.</div>
+  </div>
+{% endif %}
+
+
+<!-- =========================
+   RECENT GAMES
+   ========================== -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+  <h2 class="m-0">Recent Games</h2>
+</div>
+
+<div class="recent-card mb-5">
+  <div class="recent-card-head">
+    <div class="muted">Latest results</div>
+    <div class="muted" style="font-size:0.9rem;">
+      Showing <span class="text-white fw-bold">{{ recent_games|length }}</span>
+    </div>
+  </div>
+
+  <div class="p-3">
+    {% if recent_games|length == 0 %}
+      <div class="muted">No games recorded yet.</div>
+    {% else %}
+      <div class="list-group" style="gap: 12px;">
+
+        {% for g in recent_games %}
+
+          {# Collect commander art URLs for this game (up to 6) #}
+          {% set ns = namespace(arts=[]) %}
+          {% for gp in game_parts[g.id] %}
+            {% set art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
+            {% if art and (ns.arts|length) < 6 %}
+              {% set ns.arts = ns.arts + [art] %}
+            {% endif %}
+          {% endfor %}
+
+          {% set n = ns.arts|length %}
+          {% if n == 0 %}{% set n = 1 %}{% endif %}
+          {% set slice = (100 / n) %}
+
+          <div class="list-group-item p-0 recent-game-tile">
+            <div class="recent-game-inner">
+
+              <div class="recent-game-bg">
+                {% if ns.arts|length == 0 %}
+                  <div class="recent-game-slice" style="background: rgba(255,255,255,0.04);"></div>
+                {% else %}
+                  {% for art in ns.arts %}
+                    <div class="recent-game-slice" style="background-image:url('{{ art }}');"></div>
+                  {% endfor %}
+                {% endif %}
+              </div>
+
+              <div class="recent-game-overlay"></div>
+
+              <div class="recent-game-content">
+                <div class="recent-topline">
+                  <div class="recent-date">
+                    {{ g.date.strftime('%Y-%m-%d %H:%M') }}
+                  </div>
+
+                  <div class="winner-pill">
+                    <span class="dot"></span>
+                    Winner: {{ g.winner.name }}
+                  </div>
+                </div>
+
+                <div class="recent-players">
+                  {% for gp in game_parts[g.id] %}
+                    <span class="player-pill {% if gp.player_id == g.winner_id %}win{% endif %}">
+                      <span style="display:flex; align-items:center; gap:8px; min-width:0;">
+                        {% if gp.player_id == g.winner_id %}
+                          <span class="wmark">W</span>
+                        {% endif %}
+                        <span class="name">{{ gp.player.name }}</span>
+                      </span>
+
+                      <span class="deck">{{ gp.deck.name }}</span>
+                    </span>
+                  {% endfor %}
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- =========================
+   DECK STATS (PRETTY TILES)
+   ========================== -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+  <h2 class="m-0">Top Decks</h2>
+</div>
+
+{% if deck_stats|length == 0 %}
+  <div class="card p-3 mb-5">
+    <div class="muted">No decks yet.</div>
+  </div>
+{% else %}
+  <div class="deck-grid mb-5">
+
+    {% for s in deck_stats %}
+      {% set d = s.deck %}
+      {% set art = d.commander_local_art or d.commander_art_crop_url %}
+      {% set wr = s.winrate %}
+      {% set badge_class = 'bad' %}
+      {% if wr >= 60 %}{% set badge_class = 'good' %}
+      {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+      {% endif %}
+
+      <a class="deck-tile {% if art %}has-bg{% endif %}"
+         href="{{ url_for('deck_detail', deck_id=d.id) }}"
+         {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
+
+        <div class="deck-tile-inner">
+
+          <div class="deck-title">
+            <div>
+              <h3 class="deck-name">
+                {{ d.name }}
+              </h3>
+
+              <div class="deck-meta">
+                <span class="strong">{{ d.commander_name or d.commander }}</span>
+                <span class="muted"> · </span>
+                <span>Owner: <span class="strong">{{ d.owner.name }}</span></span>
+              </div>
+            </div>
+
+            <div class="deck-actions">
+              {% if d.retired %}
+                <span class="deck-retired-pill">Retired</span>
+              {% endif %}
+              <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
+            </div>
+          </div>
+
+          <div class="stat-chips">
+            <div><b>{{ s.wins }}</b> wins</div>
+            <div><b>{{ s.uses }}</b> games</div>
+            <div><b>{{ (s.uses - s.wins) if s.uses >= s.wins else 0 }}</b> losses</div>
+          </div>
+
+          <div class="deck-progress" aria-label="Winrate progress">
+            <div class="progress-bar"
+                 role="progressbar"
+                 style="width: {{ wr }}%;"
+                 aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+          </div>
+
+        </div>
+      </a>
+
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% endblock %}
+  
 </style>
 
 
