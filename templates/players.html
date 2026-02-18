@@ -1,30 +1,251 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Players</h1>
-<form method="post" action="/add_player" class="mb-3">
-    <div class="input-group w-50">
-        <input type="text" name="name" class="form-control" placeholder="New player name" required>
-        <button class="btn btn-primary">Add Player</button>
-    </div>
-</form>
-<ul class="list-group">
-    {% for p in players %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          <span>{{ p.name }}</span>
-        
-          {% if player_can_delete.get(p.id) %}
-            <form method="post" action="{{ url_for('delete_player', player_id=p.id) }}"
-                  onsubmit="return confirm('Delete player {{ p.name }}? This cannot be undone.');"
-                  style="display:inline;">
-              <button type="submit" class="btn btn-sm btn-danger">Delete</button>
-            </form>
+
+<style>
+  /* Players page polish */
+  .players-hero {
+    background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.92));
+    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: 22px;
+    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+  }
+
+  .players-head {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+
+  .players-sub {
+    color: var(--font-base-trans);
+    font-size: 0.95rem;
+  }
+
+  .players-actions {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+
+  .add-guest-wrap {
+    display:flex;
+    gap:10px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .add-guest-wrap .form-control {
+    min-width: 220px;
+    border-radius: 14px;
+  }
+
+  .btn-hero {
+    border-radius: 14px;
+    padding: 10px 18px;
+    font-weight: 800;
+    box-shadow: 0 0 14px rgba(143,153,197,0.22);
+  }
+
+  .player-card {
+    border-radius: 18px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.02);
+    box-shadow: 0 0 18px rgba(0,0,0,0.35);
+    overflow:hidden;
+  }
+
+  .player-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding: 14px 16px;
+    border-top: 1px solid rgba(143,153,197,0.18);
+  }
+  .player-row:first-child { border-top: 0; }
+
+  .player-left {
+    min-width: 0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+
+  .player-name {
+    color:#fff;
+    font-weight: 800;
+    font-size: 1.05rem;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 78vw;
+  }
+
+  .player-meta {
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    color: var(--font-base-trans);
+    font-size: 0.92rem;
+  }
+
+  .pill {
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.80rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+
+  .pill.guest {
+    border-color: rgba(30,58,95,0.55);
+    background: rgba(30,58,95,0.20);
+  }
+
+  .pill.user {
+    border-color: rgba(58,107,84,0.55);
+    background: rgba(58,107,84,0.20);
+  }
+
+  .player-actions {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-shrink: 0;
+  }
+
+  .btn-danger-soft {
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-weight: 800;
+  }
+
+  @media (max-width: 576px) {
+    .add-guest-wrap .form-control { min-width: 160px; flex: 1 1 auto; }
+    .btn-hero { width: auto; }
+    .player-name { max-width: 64vw; }
+  }
+</style>
+
+<div class="container py-4">
+
+  <!-- Header / controls -->
+  <div class="card p-4 mb-4 players-hero">
+    <div class="players-head">
+      <div>
+        <h1 class="mb-1 fw-bold" style="letter-spacing:0.02em;">Players</h1>
+        <div class="players-sub">
+          {% if is_admin %}
+            Manage all players <span style="opacity:0.6;">(admin view)</span>
           {% else %}
-            <button type="button" class="btn btn-sm btn-danger" disabled
-                    title="Can't delete: player appears in recorded games or has decks used in games">
-              Delete
-            </button>
+            Guests you can manage
           {% endif %}
-        </li>
-    {% endfor %}
-</ul>
+        </div>
+      </div>
+
+      <div class="players-actions">
+        <!-- Add Guest -->
+        <form method="post" action="{{ url_for('add_player') }}" class="add-guest-wrap m-0">
+          <input class="form-control"
+                 name="name"
+                 placeholder="New guest name"
+                 required
+                 autocomplete="off">
+          <button class="btn btn-primary btn-hero" type="submit">
+            + Add Guest
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Player list -->
+  <div class="player-card">
+    {% if players and players|length > 0 %}
+      {% for p in players %}
+
+        {# Determine "guest vs user" as robustly as possible with whatever you pass #}
+        {% set is_guest = false %}
+        {% if p.is_guest is defined %}
+          {% set is_guest = p.is_guest %}
+        {% elif p.user_id is defined and p.user_id %}
+          {% set is_guest = false %}
+        {% elif p.username is defined and p.username %}
+          {% set is_guest = false %}
+        {% else %}
+          {% set is_guest = true %}
+        {% endif %}
+
+        {# Non-admins: only guests can be deleted #}
+        {% set can_show_delete = is_admin or is_guest %}
+
+        {# Optional: if you pass player_can_delete dict, respect it. Otherwise default true. #}
+        {% set can_delete = true %}
+        {% if player_can_delete is defined %}
+          {% set can_delete = player_can_delete.get(p.id) %}
+        {% endif %}
+
+        <div class="player-row">
+          <div class="player-left">
+            <div class="player-name">{{ p.name }}</div>
+
+            <div class="player-meta">
+              {% if is_guest %}
+                <span class="pill guest">Guest</span>
+              {% else %}
+                <span class="pill user">User</span>
+              {% endif %}
+
+              {# If you expose username/display info, show it subtly (won't break if absent) #}
+              {% if p.username is defined and p.username %}
+                <span class="muted">@{{ p.username }}</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="player-actions">
+            {% if can_show_delete %}
+              {% if can_delete %}
+                <form method="post"
+                      action="{{ url_for('delete_player', player_id=p.id) }}"
+                      onsubmit="return confirm('Delete {{ p.name }}? This cannot be undone.');"
+                      class="m-0">
+                  <button type="submit" class="btn btn-danger btn-danger-soft">
+                    Delete
+                  </button>
+                </form>
+              {% else %}
+                <button type="button"
+                        class="btn btn-danger btn-danger-soft"
+                        disabled
+                        title="Can't delete: player has related data">
+                  Delete
+                </button>
+              {% endif %}
+            {% else %}
+              {# Non-admin + user-backed player: no delete button shown #}
+            {% endif %}
+          </div>
+        </div>
+
+      {% endfor %}
+    {% else %}
+      <div class="p-4 muted">No players found.</div>
+    {% endif %}
+  </div>
+
+</div>
+
 {% endblock %}
