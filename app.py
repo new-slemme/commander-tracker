@@ -416,6 +416,66 @@ def admin_approve_user(user_id):
     flash(f"Approved {u.display_name}")
     return redirect(url_for("admin_users"))
 
+@app.route("/saltmine")
+@login_required
+def saltmine():
+    # Top salty games
+    salty_games = (
+        Game.query
+        .filter(Game.salt_rating.isnot(None))
+        .order_by(Game.salt_rating.desc(), Game.date.desc())
+        .limit(10)
+        .all()
+    )
+
+    # Avg salt by player (by participation)
+    salty_players = (
+        db.session.query(Player, func.avg(Game.salt_rating).label("avg_salt"), func.count(Game.id).label("games"))
+        .join(GameParticipant, GameParticipant.player_id == Player.id)
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.salt_rating.isnot(None))
+        .group_by(Player.id)
+        .having(func.count(Game.id) >= 3)
+        .order_by(text("avg_salt DESC"), text("games DESC"))
+        .limit(10)
+        .all()
+    )
+
+    # Avg salt by deck (by participation)
+    salty_decks = (
+        db.session.query(Deck, func.avg(Game.salt_rating).label("avg_salt"), func.count(Game.id).label("games"))
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.salt_rating.isnot(None))
+        .group_by(Deck.id)
+        .having(func.count(Game.id) >= 3)
+        .order_by(text("avg_salt DESC"), text("games DESC"))
+        .limit(10)
+        .all()
+    )
+
+    # Starting player advantage
+    sp = (
+        db.session.query(
+            func.count(Game.id).label("games"),
+            func.sum(func.case((Game.winner_id == Game.starting_player_id, 1), else_=0)).label("wins")
+        )
+        .filter(Game.starting_player_id.isnot(None))
+        .first()
+    )
+    start_games = int(sp.games or 0)
+    start_wins = int(sp.wins or 0)
+    start_winrate = round((start_wins / start_games) * 100, 1) if start_games else None
+
+    return render_template(
+        "saltmine.html",
+        salty_games=salty_games,
+        salty_players=salty_players,
+        salty_decks=salty_decks,
+        start_games=start_games,
+        start_wins=start_wins,
+        start_winrate=start_winrate,
+    )
 
 
 @app.route("/admin/users/<int:user_id>/deactivate", methods=["POST"])
