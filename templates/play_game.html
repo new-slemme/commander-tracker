@@ -62,23 +62,53 @@
   .player-card { grid-column: span 6; }
   @media (max-width: 992px) { .player-card { grid-column: span 12; } }
 
-  .player-tile {
-    border-radius: 20px;
-    border: 1px solid rgba(143,153,197,0.22);
-    background: rgba(0,0,0,0.14);
-    box-shadow: 0 0 22px rgba(0,0,0,0.40);
-    overflow: hidden;
-  }
+.player-tile {
+  position: relative;
+  border-radius: 20px;
+  border: 1px solid rgba(143,153,197,0.22);
+  background: rgba(0,0,0,0.14);
+  box-shadow: 0 0 22px rgba(0,0,0,0.40);
+  overflow: hidden;
+}
 
-  .player-tile-header {
-    display:flex;
-    align-items:center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.02);
-  }
+/* background image layer */
+.player-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  z-index: 0;
+}
+
+/* dark readability overlay */
+.player-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(10,12,20,0.75),
+    rgba(10,12,20,0.85)
+  );
+  z-index: 1;
+}
+
+/* bring content above overlays */
+.player-tile-header,
+.player-tile-body {
+  position: relative;
+  z-index: 2;
+}
+
+/* active state when deck selected */
+.player-tile.has-bg::before {
+  opacity: 1;
+}
+
 
   .player-label {
     font-weight: 900;
