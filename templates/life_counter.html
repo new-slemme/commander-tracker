@@ -131,6 +131,20 @@
     .life-pending.visible{ opacity:1; }
     .life-pending.loss{ color:#ff8686; }
     .life-pending.gain{ color:#8dffad; }
+    .life-pending.anim-gain{ animation: pending-bump-up .22s ease-out; }
+    .life-pending.anim-loss{ animation: pending-bump-down .22s ease-out; }
+
+    @keyframes pending-bump-up{
+      0%{ transform:translate(-50%,-195%) scale(.92); }
+      55%{ transform:translate(-50%,-212%) scale(1.07); }
+      100%{ transform:translate(-50%,-205%) scale(1); }
+    }
+
+    @keyframes pending-bump-down{
+      0%{ transform:translate(-50%,-215%) scale(.92); }
+      55%{ transform:translate(-50%,-198%) scale(1.07); }
+      100%{ transform:translate(-50%,-205%) scale(1); }
+    }
 
     /* ===== ACTIVE PLAYER: GLOW FRAME + BACKGROUND LIFT (NO BADGE) ===== */
     .life-card.active-turn{
@@ -632,12 +646,14 @@ function applyPendingLife(playerId){
     return;
   }
 
-  const el = document.getElementById("life-" + playerId);
-  if(!el) return;
+  if(!amount){
+    hidePendingIndicator(playerId);
+    return;
+  }
 
-  const before = parseInt(el.textContent, 10);
+  const before = getCommittedLife(playerId);
   const after = Math.max(0, before + amount);
-  el.textContent = after;
+  committedLife[playerId] = after;
 
   if(amount < 0){
     addTurnDamage(playerId, Math.abs(amount));
@@ -669,6 +685,7 @@ function queueLifeChange(playerId, delta){
       pendingEl.classList.toggle("loss", value < 0);
     }
   }
+  renderDisplayedLife(playerId);
 
   clearTimeout(pendingHideTimers[playerId]);
   clearTimeout(pendingTimers[playerId]);
@@ -711,8 +728,10 @@ function checkWinner(){
 } // ✅ FIX: this closing brace was missing before
 
 cards.forEach(card=>{
-  const isTop = card.classList.contains("top-card");
   const playerId = String(card.dataset.player);
+  committedLife[playerId] = parseInt(document.getElementById("life-" + playerId)?.textContent || "40", 10);
+
+  const isTop = card.classList.contains("top-card");
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
@@ -720,9 +739,16 @@ cards.forEach(card=>{
 
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
-    let delta = (x < rect.width / 2) ? -1 : 1;
-    if(isTop) delta = -delta;
+    let delta;
+    if(card.classList.contains("p3-slot-3")){
+      // Right panel is rotated 90° left; rotate tap zones to match.
+      delta = (y < rect.height / 2) ? -1 : 1;
+    }else{
+      delta = (x < rect.width / 2) ? -1 : 1;
+      if(isTop) delta = -delta;
+    }
 
     queueLifeChange(playerId, delta);
   });
