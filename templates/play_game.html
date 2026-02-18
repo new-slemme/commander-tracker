@@ -2,6 +2,32 @@
 {% block content %}
 
 <style>
+  
+    .player-tile.has-bg {
+    background-size: cover;
+    background-position: center top;
+    position: relative;
+    }
+  
+    /* Darken + make text readable over art */
+    .player-tile.has-bg::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        135deg,
+        rgba(10,12,18,0.88),
+        rgba(10,12,18,0.55),
+        rgba(10,12,18,0.92)
+      );
+      pointer-events: none;
+    }
+  
+    /* Ensure card contents render above overlay */
+    .player-tile > * {
+      position: relative;
+      z-index: 1;
+    }
   /* --- Play Game page polish --- */
   .pg-wrap { padding-top: 10px; padding-bottom: 26px; }
 
@@ -245,6 +271,35 @@
 <script>
   const decksData = {{ decks_json | safe }};
   let playerCount = 4;  // Start with 4
+  <script>
+  const decksData = {{ decks_json | safe }};
+  let playerCount = 4;  // Start with 4
+
+  function getDeckArt(pid, did) {
+    if (!pid || !did) return null;
+    const list = decksData[String(pid)] || [];
+    const match = list.find(x => String(x.id) === String(did));
+    return match?.art || null;
+  }
+
+  function setPlayerCardBackground(i) {
+    const playerSel = document.getElementById("player" + i);
+    const deckSel = document.getElementById("deck" + i);
+    if (!playerSel || !deckSel) return;
+
+    const tile = deckSel.closest(".player-card")?.querySelector(".player-tile");
+    if (!tile) return;
+
+    const art = getDeckArt(playerSel.value, deckSel.value);
+
+    if (art) {
+      tile.classList.add("has-bg");
+      tile.style.backgroundImage = `url('${art}')`;
+    } else {
+      tile.classList.remove("has-bg");
+      tile.style.backgroundImage = "";
+    }
+  }
 
   function getSelectedPlayerIds() {
     const ids = new Set();
@@ -325,6 +380,9 @@
       deckSel.innerHTML = '<option>Select player first</option>';
       deckSel.disabled = true;
     }
+
+    setPlayerCardBackground(i);
+  
   }
 
   function setupPlayerListeners(i) {
@@ -339,9 +397,20 @@
     });
   }
 
+  function setupDeckListeners(i) {
+    const deckSel = document.getElementById("deck" + i);
+    if (!deckSel) return;
+
+    deckSel.addEventListener("change", function() {
+      setPlayerCardBackground(i);
+    });
+  }
+
+  
   // Setup initial 4
   for (let i = 1; i <= 4; i++) {
     setupPlayerListeners(i);
+    setupDeckListeners(i);
     refreshDeckSelect(i);
   }
   refreshStartingPlayerOptions();
@@ -377,6 +446,7 @@
     container.appendChild(newCard);
 
     setupPlayerListeners(playerCount);
+    setupDeckListeners(playerCount);
     refreshStartingPlayerOptions();
     updatePlayerOptionDisabling();
 
