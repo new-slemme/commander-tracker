@@ -117,7 +117,7 @@
       position:absolute;
       left:50%;
       top:50%;
-      transform:translate(-50%,-105%);
+      transform:translate(-50%,-170%);
       font-size:clamp(1rem, 2.8vw, 2rem);
       font-weight:900;
       color:#fff;
@@ -518,10 +518,12 @@ let passed = new Set();
 let turnDamage = {};
 const pendingLife = {};
 const pendingTimers = {};
+const pendingHideTimers = {};
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
 const LIFE_COMMIT_MS = 650;
+const PENDING_FADE_DELAY_MS = 1500;
 
 const cards = [...document.querySelectorAll(".life-card")];
 
@@ -615,9 +617,20 @@ function nextPlayer(){
 
 /* ---------- LIFE TAP ---------- */
 
+function hidePendingIndicator(playerId){
+  const pendingEl = document.getElementById("pending-" + playerId);
+  if(!pendingEl) return;
+  pendingEl.classList.remove("visible", "loss", "gain");
+  pendingEl.textContent = "+0";
+}
+
 function applyPendingLife(playerId){
   const amount = pendingLife[playerId] || 0;
-  if(!amount) return;
+
+  if(!amount){
+    hidePendingIndicator(playerId);
+    return;
+  }
 
   const el = document.getElementById("life-" + playerId);
   if(!el) return;
@@ -631,11 +644,12 @@ function applyPendingLife(playerId){
   }
 
   pendingLife[playerId] = 0;
-  const pendingEl = document.getElementById("pending-" + playerId);
-  if(pendingEl){
-    pendingEl.classList.remove("visible", "loss", "gain");
-    pendingEl.textContent = "+0";
-  }
+
+  clearTimeout(pendingHideTimers[playerId]);
+  pendingHideTimers[playerId] = setTimeout(
+    ()=>hidePendingIndicator(playerId),
+    PENDING_FADE_DELAY_MS
+  );
 
   checkWinner();
 }
@@ -646,12 +660,17 @@ function queueLifeChange(playerId, delta){
   const pendingEl = document.getElementById("pending-" + playerId);
   const value = pendingLife[playerId];
   if(pendingEl){
-    pendingEl.textContent = `${value > 0 ? "+" : ""}${value}`;
-    pendingEl.classList.add("visible");
-    pendingEl.classList.toggle("gain", value > 0);
-    pendingEl.classList.toggle("loss", value < 0);
+    if(value === 0){
+      hidePendingIndicator(playerId);
+    }else{
+      pendingEl.textContent = `${value > 0 ? "+" : ""}${value}`;
+      pendingEl.classList.add("visible");
+      pendingEl.classList.toggle("gain", value > 0);
+      pendingEl.classList.toggle("loss", value < 0);
+    }
   }
 
+  clearTimeout(pendingHideTimers[playerId]);
   clearTimeout(pendingTimers[playerId]);
   pendingTimers[playerId] = setTimeout(()=>applyPendingLife(playerId), LIFE_COMMIT_MS);
 }
