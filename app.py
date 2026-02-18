@@ -772,6 +772,19 @@ def games():
         per_page=per_page,
     )
 
+@app.route("/games/<int:game_id>")
+def game_detail(game_id):
+    g = db.session.get(Game, game_id)
+    if not g:
+        abort(404)
+
+    parts = GameParticipant.query.filter_by(game_id=game_id).all()
+
+    # Nice for display: show winner first (optional)
+    parts_sorted = sorted(parts, key=lambda p: (0 if p.player_id == g.winner_id else 1, p.player.name.lower()))
+
+    return render_template("game_detail.html", game=g, parts=parts_sorted)
+
 
 @app.route("/players")
 def players():
