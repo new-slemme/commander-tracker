@@ -1224,7 +1224,11 @@ def life_counter():
         deck = db.session.get(Deck, p["deck_id"])
         p["commander_art"] = (deck.commander_local_art or deck.commander_art_crop_url) if deck else None
 
-    return render_template("life_counter.html", participants=participants)
+    return render_template(
+        "life_counter.html",
+        participants=participants,
+        starting_player_id=session.get("active_player_id"),
+    )
 
 
 @app.route("/end_game", methods=["POST"])
