@@ -12,7 +12,16 @@
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
 
 <style>
-  :root {
+
+@font-face {
+  font-family: 'Beleren';
+  src: url('{{ url_for("static", filename="fonts/beleren.ttf") }}') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+    
+:root {
     --darkest: #10121a;
     --darkest-trans: #10121ae0;
     --darker: #171a26;
@@ -45,11 +54,16 @@
     --font-accent: #6e7cb7;
   }
 
-  body {
-    background-color: var(--darkest);
-    color: var(--font-base);
-    font-family: Arial, sans-serif;
-  }
+    body {
+        background-color: var(--darkest);
+        color: var(--font-base);
+        font-family: Arial, sans-serif;
+    }
+
+    .title-font {
+      font-family: 'Beleren', Arial, sans-serif;
+      letter-spacing: 0.04em;
+    }
 
   /* --- Navbar Layout (your original styles, but no blur/filter) --- */
   .navbar {
@@ -174,7 +188,22 @@
   .alert-danger { background-color: var(--red-trans); border-color: var(--red); color: var(--font-danger); }
   .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
 
-  h1, h2, h5 { color: #ffffff; }
+  h1, h2, h3, h4, h5, .display-1, .display-2, .display-3, .display-4 {
+      font-family: 'Beleren', Arial, sans-serif;
+      letter-spacing: 0.04em;
+      color: var(--font-base);
+    }
+
+    @media (max-width: 576px) {
+      h1, .display-3 {
+        letter-spacing: 0.02em;
+      }
+    }
+
+    h1, .display-3 {
+      text-transform: uppercase;
+    }
+
 
   .deck-banner {
     box-shadow: 0 0 30px rgba(0,0,0,0.4);
