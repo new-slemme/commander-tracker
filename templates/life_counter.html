@@ -267,14 +267,29 @@
 
     /* Grid layouts */
     .players-2{ grid-template-columns:1fr 1fr; grid-template-rows:1fr; }
-    .players-3{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; grid-template-areas:"p1 p3" "p2 p3"; }
+    .players-3{
+      grid-template-columns:49% 51%;
+      grid-template-rows:1fr 1fr;
+      grid-template-areas:
+        "p1 p3"
+        "p2 p3";
+    }
     .players-3 .life-card.p3-slot-1{ grid-area:p1; }
     .players-3 .life-card.p3-slot-2{ grid-area:p2; }
     .players-3 .life-card.p3-slot-3{ grid-area:p3; }
+    .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
+    .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
+    .players-3 .life-card.p3-slot-3 .turn-dmg{
+      top:auto;
+      bottom:34px;
+      left:50%;
+      right:auto;
+      transform:translateX(-50%);
+      max-width:88%;
+    }
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
     .players-3 .life-card.p3-slot-1{ border-bottom:1px solid rgba(255,255,255,0.18); }
-    .players-3{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr; }
     .players-4{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
