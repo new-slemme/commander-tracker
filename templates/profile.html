@@ -1,21 +1,235 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Profile</h2>
 
-  <div class="card">
-    <p><strong>Username:</strong> {{ user.username }}</p>
-    <p><strong>Display name:</strong> {{ user.display_name }}</p>
-    <p><strong>Status:</strong>
-      {% if user.is_active %}Active{% else %}Pending approval{% endif %}
-    </p>
-    <p><strong>Role:</strong>
-      {% if user.is_admin %}Admin{% else %}User{% endif %}
-    </p>
+<style>
+  /* ===== Profile ===== */
+  .profile-wrap { padding: 18px 0; }
+
+  .profile-hero {
+    background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.90));
+    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: 22px;
+    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+    overflow: hidden;
+  }
+
+  .profile-hero-inner {
+    padding: 18px 18px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .profile-title {
+    margin: 0;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+  }
+
+  .profile-sub {
+    margin-top: 6px;
+    color: var(--font-base-trans);
+    font-weight: 700;
+  }
+
+  .pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .profile-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 800;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  .profile-pill b { color: #fff; }
+
+  .status-pill {
+    border-color: rgba(58,107,84,0.6);
+    background: rgba(58,107,84,0.22);
+    color: #fff;
+  }
+  .status-pill.pending {
+    border-color: rgba(242,201,76,0.55);
+    background: rgba(242,201,76,0.14);
+  }
+
+  .role-pill.admin {
+    border-color: rgba(30,58,95,0.6);
+    background: rgba(30,58,95,0.22);
+    color: #fff;
+  }
+
+  .profile-card {
+    margin-top: 14px;
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .profile-card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .profile-card-title {
+    margin: 0;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.02em;
+    font-size: 1.05rem;
+  }
+
+  .profile-card-body { padding: 16px; }
+
+  .kv {
+    display:grid;
+    grid-template-columns: 150px 1fr;
+    gap: 10px 14px;
+    align-items:center;
+  }
+  .k { color: var(--font-base-trans); font-weight: 800; }
+  .v { color: #fff; font-weight: 800; overflow-wrap:anywhere; }
+
+  .divider {
+    height: 1px;
+    background: rgba(255,255,255,0.08);
+    margin: 14px 0;
+  }
+
+  .help-text {
+    color: var(--font-base-trans);
+    font-size: 0.92rem;
+    font-weight: 700;
+  }
+
+  .profile-form-grid {
+    display:grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items:end;
+  }
+
+  @media (max-width: 576px) {
+    .profile-hero-inner { padding: 14px 14px; }
+    .kv { grid-template-columns: 1fr; }
+    .profile-form-grid { grid-template-columns: 1fr; }
+    .pill-row { justify-content: flex-start; }
+  }
+</style>
+
+<div class="container profile-wrap">
+
+  <!-- Header / Hero -->
+  <div class="profile-hero mb-3">
+    <div class="profile-hero-inner">
+      <div>
+        <h1 class="profile-title">Profile</h1>
+        <div class="profile-sub">
+          Manage your display name and view account details.
+        </div>
+      </div>
+
+      <div class="pill-row">
+        <span class="profile-pill">
+          Username: <b>{{ user.username }}</b>
+        </span>
+
+        <span class="profile-pill status-pill {% if not user.is_active %}pending{% endif %}">
+          {% if user.is_active %}
+            Active
+          {% else %}
+            Pending approval
+          {% endif %}
+        </span>
+
+        <span class="profile-pill role-pill {% if user.is_admin %}admin{% endif %}">
+          {% if user.is_admin %}Admin{% else %}User{% endif %}
+        </span>
+      </div>
+    </div>
   </div>
 
-  <h3>Change display name</h3>
-  <form method="POST">
-    <input name="display_name" value="{{ user.display_name }}" maxlength="100" required>
-    <button type="submit">Save</button>
-  </form>
+  <!-- Account details -->
+  <div class="profile-card">
+    <div class="profile-card-head">
+      <h2 class="profile-card-title">Account</h2>
+      <div class="help-text">Keep your display name unique.</div>
+    </div>
+
+    <div class="profile-card-body">
+      <div class="kv">
+        <div class="k">Username</div>
+        <div class="v">{{ user.username }}</div>
+
+        <div class="k">Display name</div>
+        <div class="v">{{ user.display_name }}</div>
+
+        <div class="k">Status</div>
+        <div class="v">
+          {% if user.is_active %}
+            Active
+          {% else %}
+            Pending approval
+          {% endif %}
+        </div>
+
+        <div class="k">Role</div>
+        <div class="v">
+          {% if user.is_admin %}Admin{% else %}User{% endif %}
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Change display name -->
+      <h3 class="profile-card-title mb-2">Change display name</h3>
+      <div class="help-text mb-3">
+        This name is used for stats and game tracking.
+      </div>
+
+      <form method="POST">
+        <div class="profile-form-grid">
+          <div>
+            <label class="form-label mb-1">New display name</label>
+            <input class="form-control"
+                   name="display_name"
+                   value="{{ user.display_name }}"
+                   maxlength="100"
+                   required>
+          </div>
+
+          <button class="btn btn-primary btn-lg"
+                  type="submit"
+                  style="border-radius:14px; font-weight:800;">
+            Save
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+
 {% endblock %}
