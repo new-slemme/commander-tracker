@@ -409,6 +409,13 @@
                   <span class="muted">·</span>
                   Game #{{ g.id }}
                 </div>
+                {% if g.win_type or g.salt_rating %}
+                  <div class="game-meta">
+                    {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
+                    {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
+                    {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}
+                  </div>
+                {% endif %}
               </div>
 
               <div class="winner-pill">
