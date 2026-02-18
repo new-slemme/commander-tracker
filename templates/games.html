@@ -241,7 +241,20 @@
     </div>
   </div>
 
-  <!-- Filters -->
+<!-- Filters -->
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+  <button class="btn btn-sm btn-outline-light"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#gamesFiltersCollapse"
+          aria-expanded="false"
+          aria-controls="gamesFiltersCollapse"
+          id="filtersToggleBtn">
+    Filters
+  </button>
+</div>
+
+<div class="collapse" id="gamesFiltersCollapse">
   <div class="filter-card">
     <div class="filter-card-head">
       <div class="muted">Auto-applies on change</div>
@@ -330,6 +343,7 @@
       </div>
     </form>
   </div>
+</div>
 
   <!-- Games -->
   {% if games|length == 0 %}
