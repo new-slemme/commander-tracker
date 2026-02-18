@@ -378,12 +378,34 @@
           </button>
 
           <form method="post" action="/end_game">
+            
             <select name="winner" class="form-select mb-3" required>
               <option value="" disabled selected>Select Winner</option>
               {% for p in participants %}
               <option value="{{ p.player_id }}">{{ p.player_name }}</option>
               {% endfor %}
             </select>
+            
+            <select name="win_type" class="form-select mb-3">
+              <option value="" selected>Win Type (optional)</option>
+              <option value="combat">Combat</option>
+              <option value="combo">Combo</option>
+              <option value="infinite_turns">Infinite Turns</option>
+              <option value="mill">Mill</option>
+              <option value="alt_win">Alternate Win</option>
+              <option value="concede">Concede</option>
+              <option value="scoop">Salt-Induced Scoop</option>
+            </select>
+  
+            <select name="salt_rating" class="form-select mb-3">
+              <option value="" selected>Salt (optional)</option>
+              <option value="1">1 🧂</option>
+              <option value="2">2 🧂🧂</option>
+              <option value="3">3 🧂🧂🧂</option>
+              <option value="4">4 🧂🧂🧂🧂</option>
+              <option value="5">5 🧂🧂🧂🧂🧂</option>
+            </select>
+            
             <button type="submit" class="btn btn-success w-100 mb-3">
               End & Record
             </button>
@@ -606,20 +628,33 @@ function checkWinner(){
     return el && parseInt(el.textContent, 10) > 0;
   });
 
-  if(alive.length === 1){
+  if (alive.length === 1) {
     const winner = String(alive[0].dataset.player);
-    const form = document.createElement("form");
-    form.method = "POST";
-    form.action = "/end_game";
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = "winner";
-    input.value = winner;
-    form.appendChild(input);
-    document.body.appendChild(form);
-    form.submit();
+  
+    // preselect winner in modal
+    const sel = document.querySelector('form[action="/end_game"] select[name="winner"]');
+    if (sel) sel.value = winner;
+  
+    // open modal
+    try {
+      const modalEl = document.getElementById("menuModal");
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
+    } catch (e) {
+      // fallback: if modal fails, just submit minimal
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = "/end_game";
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = "winner";
+      input.value = winner;
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+    }
   }
-}
+
 
 cards.forEach(card=>{
   const isTop = card.classList.contains("top-card");
