@@ -533,6 +533,7 @@ let turnDamage = {};
 const pendingLife = {};
 const pendingTimers = {};
 const pendingHideTimers = {};
+const committedLife = {};
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
@@ -631,20 +632,40 @@ function nextPlayer(){
 
 /* ---------- LIFE TAP ---------- */
 
+function getCommittedLife(playerId){
+  const current = committedLife[playerId];
+  if(Number.isFinite(current)) return current;
+
+  const el = document.getElementById("life-" + playerId);
+  return parseInt(el?.textContent || "40", 10);
+}
+
+function renderDisplayedLife(playerId){
+  const el = document.getElementById("life-" + playerId);
+  if(!el) return;
+
+  const displayed = Math.max(0, getCommittedLife(playerId) + (pendingLife[playerId] || 0));
+  el.textContent = displayed;
+}
+
+function animatePendingIndicator(pendingEl, isGain){
+  if(!pendingEl) return;
+
+  pendingEl.classList.remove("anim-gain", "anim-loss");
+  // Force reflow so repeated taps re-trigger animation.
+  void pendingEl.offsetWidth;
+  pendingEl.classList.add(isGain ? "anim-gain" : "anim-loss");
+}
+
 function hidePendingIndicator(playerId){
   const pendingEl = document.getElementById("pending-" + playerId);
   if(!pendingEl) return;
-  pendingEl.classList.remove("visible", "loss", "gain");
+  pendingEl.classList.remove("visible", "loss", "gain", "anim-gain", "anim-loss");
   pendingEl.textContent = "+0";
 }
 
 function applyPendingLife(playerId){
   const amount = pendingLife[playerId] || 0;
-
-  if(!amount){
-    hidePendingIndicator(playerId);
-    return;
-  }
 
   if(!amount){
     hidePendingIndicator(playerId);
@@ -658,6 +679,8 @@ function applyPendingLife(playerId){
   if(amount < 0){
     addTurnDamage(playerId, Math.abs(amount));
   }
+
+  renderDisplayedLife(playerId);
 
   pendingLife[playerId] = 0;
 
@@ -683,6 +706,7 @@ function queueLifeChange(playerId, delta){
       pendingEl.classList.add("visible");
       pendingEl.classList.toggle("gain", value > 0);
       pendingEl.classList.toggle("loss", value < 0);
+      animatePendingIndicator(pendingEl, value > 0);
     }
   }
   renderDisplayedLife(playerId);
