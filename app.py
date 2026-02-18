@@ -20,7 +20,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, text
+from sqlalchemy import func, text, case
 from sqlalchemy.orm import aliased
 from functools import wraps
 
