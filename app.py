@@ -90,7 +90,7 @@ class Game(db.Model):
     date = db.Column(db.DateTime, default=datetime.utcnow)
     winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     winner = db.relationship("Player", backref="won_games", lazy=True)
-
+    note = db.Column(db.Text, nullable=True)
 
 class GameParticipant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -784,6 +784,21 @@ def game_detail(game_id):
     parts_sorted = sorted(parts, key=lambda p: (0 if p.player_id == g.winner_id else 1, p.player.name.lower()))
 
     return render_template("game_detail.html", game=g, parts=parts_sorted)
+
+@app.route("/games/<int:game_id>/delete", methods=["POST"])
+@admin_required
+def delete_game(game_id):
+    g = db.session.get(Game, game_id)
+    if not g:
+        abort(404)
+
+    # delete participants first (FKs)
+    GameParticipant.query.filter_by(game_id=game_id).delete()
+    db.session.delete(g)
+    db.session.commit()
+
+    flash(f"Deleted Game #{game_id}.")
+    return redirect(url_for("games"))
 
 
 @app.route("/players")
