@@ -654,9 +654,122 @@ def delete_player(player_id):
 
 @app.route("/games")
 def games():
-    all_games = Game.query.order_by(Game.date.desc()).all()
-    game_parts = {g.id: GameParticipant.query.filter_by(game_id=g.id).all() for g in all_games}
-    return render_template("games.html", games=all_games, game_parts=game_parts)
+    # --------
+    # Filters (GET)
+    # --------
+    player_id = request.args.get("player_id", type=int)
+    deck_id = request.args.get("deck_id", type=int)
+    winner_id = request.args.get("winner_id", type=int)
+
+    date_from_raw = request.args.get("date_from", "").strip()
+    date_to_raw = request.args.get("date_to", "").strip()
+
+    min_players = request.args.get("min_players", type=int)
+    max_players = request.args.get("max_players", type=int)
+
+    # Pagination
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 25, type=int)
+    per_page = max(10, min(per_page, 100))  # clamp
+
+    date_from = None
+    date_to = None
+    try:
+        if date_from_raw:
+            date_from = datetime.strptime(date_from_raw, "%Y-%m-%d")
+    except ValueError:
+        date_from = None
+
+    try:
+        if date_to_raw:
+            # inclusive end-of-day
+            date_to = datetime.strptime(date_to_raw, "%Y-%m-%d")
+            date_to = date_to.replace(hour=23, minute=59, second=59)
+    except ValueError:
+        date_to = None
+
+    # --------
+    # Base query
+    # --------
+    q = Game.query
+
+    if winner_id:
+        q = q.filter(Game.winner_id == winner_id)
+
+    if date_from:
+        q = q.filter(Game.date >= date_from)
+
+    if date_to:
+        q = q.filter(Game.date <= date_to)
+
+    # Filter by participant player/deck using EXISTS-style joins
+    # (join once per filter; distinct later)
+    if player_id:
+        gp_player = aliased(GameParticipant)
+        q = q.join(gp_player, gp_player.game_id == Game.id).filter(gp_player.player_id == player_id)
+
+    if deck_id:
+        gp_deck = aliased(GameParticipant)
+        q = q.join(gp_deck, gp_deck.game_id == Game.id).filter(gp_deck.deck_id == deck_id)
+
+    # Player count filters (HAVING)
+    if min_players or max_players:
+        gp_count = aliased(GameParticipant)
+        q = q.join(gp_count, gp_count.game_id == Game.id).group_by(Game.id)
+
+        if min_players:
+            q = q.having(func.count(gp_count.id) >= min_players)
+        if max_players:
+            q = q.having(func.count(gp_count.id) <= max_players)
+
+    # Ensure no duplicates when joining for filters
+    q = q.distinct().order_by(Game.date.desc())
+
+    pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+    games_page = pagination.items
+
+    # Pull participants for only the games on this page (fast)
+    game_ids = [g.id for g in games_page]
+    parts = (
+        GameParticipant.query
+        .filter(GameParticipant.game_id.in_(game_ids if game_ids else [-1]))
+        .all()
+    )
+
+    game_parts = {}
+    for gp in parts:
+        game_parts.setdefault(gp.game_id, []).append(gp)
+
+    # Dropdown data
+    players = Player.query.order_by(Player.name.asc()).all()
+    decks = Deck.query.order_by(Deck.name.asc()).all()
+
+    # Optional: show counts in UI (per game id)
+    counts = (
+        db.session.query(GameParticipant.game_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.game_id.in_(game_ids if game_ids else [-1]))
+        .group_by(GameParticipant.game_id)
+        .all()
+    )
+    player_counts = {gid: c for gid, c in counts}
+
+    return render_template(
+        "games.html",
+        games=games_page,
+        game_parts=game_parts,
+        player_counts=player_counts,
+        players=players,
+        decks=decks,
+        pagination=pagination,
+        selected_player_id=player_id,
+        selected_deck_id=deck_id,
+        selected_winner_id=winner_id,
+        date_from=date_from_raw,
+        date_to=date_to_raw,
+        min_players=min_players,
+        max_players=max_players,
+        per_page=per_page,
+    )
 
 
 @app.route("/players")
