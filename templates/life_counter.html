@@ -287,7 +287,6 @@
       top:auto;
       bottom:14px;
     }
-
   </style>
 </head>
 
@@ -378,14 +377,13 @@
           </button>
 
           <form method="post" action="/end_game">
-            
             <select name="winner" class="form-select mb-3" required>
               <option value="" disabled selected>Select Winner</option>
               {% for p in participants %}
               <option value="{{ p.player_id }}">{{ p.player_name }}</option>
               {% endfor %}
             </select>
-            
+
             <select name="win_type" class="form-select mb-3">
               <option value="" selected>Win Type (optional)</option>
               <option value="combat">Combat</option>
@@ -396,7 +394,7 @@
               <option value="concede">Concede</option>
               <option value="scoop">Salt-Induced Scoop</option>
             </select>
-  
+
             <select name="salt_rating" class="form-select mb-3">
               <option value="" selected>Salt (optional)</option>
               <option value="1">1 🧂</option>
@@ -405,7 +403,7 @@
               <option value="4">4 🧂🧂🧂🧂</option>
               <option value="5">5 🧂🧂🧂🧂🧂</option>
             </select>
-            
+
             <button type="submit" class="btn btn-success w-100 mb-3">
               End & Record
             </button>
@@ -630,11 +628,11 @@ function checkWinner(){
 
   if (alive.length === 1) {
     const winner = String(alive[0].dataset.player);
-  
+
     // preselect winner in modal
     const sel = document.querySelector('form[action="/end_game"] select[name="winner"]');
     if (sel) sel.value = winner;
-  
+
     // open modal
     try {
       const modalEl = document.getElementById("menuModal");
@@ -654,14 +652,19 @@ function checkWinner(){
       form.submit();
     }
   }
-
+} // ✅ FIX: this closing brace was missing before
 
 cards.forEach(card=>{
   const isTop = card.classList.contains("top-card");
   const playerId = String(card.dataset.player);
 
-  card.addEventListener("click", (e) => {
+  // Use pointerdown for reliable mobile taps + faster response than click
+  card.addEventListener("pointerdown", (e) => {
+    // ignore taps on the PASS button
     if (e.target && e.target.closest && e.target.closest(".pass-btn")) return;
+
+    // prevent double-triggering from synthesized clicks on some mobile browsers
+    e.preventDefault();
 
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
