@@ -117,8 +117,8 @@
       position:absolute;
       left:50%;
       top:50%;
-      transform:translate(-50%,-105%);
-      font-size:clamp(1rem, 2.8vw, 2rem);
+      transform:translate(-50%,-205%);
+      font-size:clamp(1.15rem, 3.3vw, 2.35rem);
       font-weight:900;
       color:#fff;
       text-shadow:0 0 8px rgba(0,0,0,.95);
@@ -131,6 +131,20 @@
     .life-pending.visible{ opacity:1; }
     .life-pending.loss{ color:#ff8686; }
     .life-pending.gain{ color:#8dffad; }
+    .life-pending.anim-gain{ animation: pending-bump-up .22s ease-out; }
+    .life-pending.anim-loss{ animation: pending-bump-down .22s ease-out; }
+
+    @keyframes pending-bump-up{
+      0%{ transform:translate(-50%,-195%) scale(.92); }
+      55%{ transform:translate(-50%,-212%) scale(1.07); }
+      100%{ transform:translate(-50%,-205%) scale(1); }
+    }
+
+    @keyframes pending-bump-down{
+      0%{ transform:translate(-50%,-215%) scale(.92); }
+      55%{ transform:translate(-50%,-198%) scale(1.07); }
+      100%{ transform:translate(-50%,-205%) scale(1); }
+    }
 
     /* ===== ACTIVE PLAYER: GLOW FRAME + BACKGROUND LIFT (NO BADGE) ===== */
     .life-card.active-turn{
@@ -267,14 +281,29 @@
 
     /* Grid layouts */
     .players-2{ grid-template-columns:1fr 1fr; grid-template-rows:1fr; }
-    .players-3{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; grid-template-areas:"p1 p3" "p2 p3"; }
+    .players-3{
+      grid-template-columns:49% 51%;
+      grid-template-rows:1fr 1fr;
+      grid-template-areas:
+        "p1 p3"
+        "p2 p3";
+    }
     .players-3 .life-card.p3-slot-1{ grid-area:p1; }
     .players-3 .life-card.p3-slot-2{ grid-area:p2; }
     .players-3 .life-card.p3-slot-3{ grid-area:p3; }
+    .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
+    .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
+    .players-3 .life-card.p3-slot-3 .turn-dmg{
+      top:auto;
+      bottom:34px;
+      left:50%;
+      right:auto;
+      transform:translateX(-50%);
+      max-width:88%;
+    }
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
     .players-3 .life-card.p3-slot-1{ border-bottom:1px solid rgba(255,255,255,0.18); }
-    .players-3{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr; }
     .players-4{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
@@ -503,10 +532,13 @@ let passed = new Set();
 let turnDamage = {};
 const pendingLife = {};
 const pendingTimers = {};
+const pendingHideTimers = {};
+const committedLife = {};
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
 const LIFE_COMMIT_MS = 650;
+const PENDING_FADE_DELAY_MS = 1500;
 
 const cards = [...document.querySelectorAll(".life-card")];
 
@@ -600,27 +632,60 @@ function nextPlayer(){
 
 /* ---------- LIFE TAP ---------- */
 
+function hidePendingIndicator(playerId){
+  const pendingEl = document.getElementById("pending-" + playerId);
+  if(!pendingEl) return;
+  pendingEl.classList.remove("visible", "loss", "gain", "anim-gain", "anim-loss");
+  pendingEl.textContent = "+0";
+}
+
+function getCommittedLife(playerId){
+  if(committedLife[playerId] === undefined){
+    const lifeEl = document.getElementById("life-" + playerId);
+    committedLife[playerId] = lifeEl ? (parseInt(lifeEl.textContent, 10) || 0) : 0;
+  }
+  return committedLife[playerId];
+}
+
+function renderDisplayedLife(playerId){
+  const lifeEl = document.getElementById("life-" + playerId);
+  if(!lifeEl) return;
+
+  const base = getCommittedLife(playerId);
+  const pending = pendingLife[playerId] || 0;
+  lifeEl.textContent = Math.max(0, base + pending);
+}
+
+function animatePendingIndicator(pendingEl, value){
+  pendingEl.classList.remove("anim-gain", "anim-loss");
+  void pendingEl.offsetWidth;
+  pendingEl.classList.add(value > 0 ? "anim-gain" : "anim-loss");
+}
+
 function applyPendingLife(playerId){
   const amount = pendingLife[playerId] || 0;
-  if(!amount) return;
 
-  const el = document.getElementById("life-" + playerId);
-  if(!el) return;
+  if(!amount){
+    hidePendingIndicator(playerId);
+    return;
+  }
 
-  const before = parseInt(el.textContent, 10);
+  const before = getCommittedLife(playerId);
   const after = Math.max(0, before + amount);
-  el.textContent = after;
+  committedLife[playerId] = after;
 
   if(amount < 0){
     addTurnDamage(playerId, Math.abs(amount));
   }
 
   pendingLife[playerId] = 0;
-  const pendingEl = document.getElementById("pending-" + playerId);
-  if(pendingEl){
-    pendingEl.classList.remove("visible", "loss", "gain");
-    pendingEl.textContent = "+0";
-  }
+  renderDisplayedLife(playerId);
+
+  clearTimeout(pendingHideTimers[playerId]);
+  pendingHideTimers[playerId] = setTimeout(
+    ()=>hidePendingIndicator(playerId),
+    PENDING_FADE_DELAY_MS
+  );
 
   checkWinner();
 }
@@ -631,12 +696,19 @@ function queueLifeChange(playerId, delta){
   const pendingEl = document.getElementById("pending-" + playerId);
   const value = pendingLife[playerId];
   if(pendingEl){
-    pendingEl.textContent = `${value > 0 ? "+" : ""}${value}`;
-    pendingEl.classList.add("visible");
-    pendingEl.classList.toggle("gain", value > 0);
-    pendingEl.classList.toggle("loss", value < 0);
+    if(value === 0){
+      hidePendingIndicator(playerId);
+    }else{
+      pendingEl.textContent = `${value > 0 ? "+" : ""}${value}`;
+      pendingEl.classList.add("visible");
+      pendingEl.classList.toggle("gain", value > 0);
+      pendingEl.classList.toggle("loss", value < 0);
+      animatePendingIndicator(pendingEl, value);
+    }
   }
+  renderDisplayedLife(playerId);
 
+  clearTimeout(pendingHideTimers[playerId]);
   clearTimeout(pendingTimers[playerId]);
   pendingTimers[playerId] = setTimeout(()=>applyPendingLife(playerId), LIFE_COMMIT_MS);
 }
@@ -677,8 +749,10 @@ function checkWinner(){
 } // ✅ FIX: this closing brace was missing before
 
 cards.forEach(card=>{
-  const isTop = card.classList.contains("top-card");
   const playerId = String(card.dataset.player);
+  committedLife[playerId] = parseInt(document.getElementById("life-" + playerId)?.textContent || "40", 10);
+
+  const isTop = card.classList.contains("top-card");
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
@@ -686,9 +760,16 @@ cards.forEach(card=>{
 
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
-    let delta = (x < rect.width / 2) ? -1 : 1;
-    if(isTop) delta = -delta;
+    let delta;
+    if(card.classList.contains("p3-slot-3")){
+      // Right panel is rotated 90° left; rotate tap zones to match.
+      delta = (y < rect.height / 2) ? -1 : 1;
+    }else{
+      delta = (x < rect.width / 2) ? -1 : 1;
+      if(isTop) delta = -delta;
+    }
 
     queueLifeChange(playerId, delta);
   });
