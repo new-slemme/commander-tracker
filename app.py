@@ -1029,7 +1029,14 @@ def add_game():
         active_decks = (
             Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
         )
-        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
+        decks_by_player[str(p.id)] = [
+            {
+                "id": d.id,
+                "name": d.name,
+                "art": d.commander_local_art or d.commander_art_crop_url
+            }
+            for d in active_decks
+        ]
     decks_json = json.dumps(decks_by_player)
     return render_template("add_game.html", players=players, decks_json=decks_json)
 
@@ -1040,9 +1047,19 @@ def play_game():
     decks_by_player = {}
     for p in players:
         active_decks = (
-            Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+            Deck.query.filter_by(player_id=p.id, retired=False)
+            .order_by(Deck.name.asc())
+            .all()
         )
-        decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
+        decks_by_player[str(p.id)] = [
+            {
+                "id": d.id,
+                "name": d.name,
+                "art": d.commander_local_art or d.commander_art_crop_url,
+            }
+            for d in active_decks
+        ]
+
     decks_json = json.dumps(decks_by_player)
     return render_template("play_game.html", players=players, decks_json=decks_json)
 
