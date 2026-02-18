@@ -90,7 +90,13 @@ class Game(db.Model):
     date = db.Column(db.DateTime, default=datetime.utcnow)
     winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     winner = db.relationship("Player", backref="won_games", lazy=True)
+    # Phase 1:
+    starting_player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)
+    starting_player = db.relationship("Player", foreign_keys=[starting_player_id], lazy=True)
+    salt_rating = db.Column(db.Integer, nullable=True)  # 1..5
+    win_type = db.Column(db.String(32), nullable=True)  # e.g. 'combat', 'combo', ...
     note = db.Column(db.Text, nullable=True)
+
 
 class GameParticipant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1144,7 +1150,7 @@ def life_counter():
 
 @app.route("/end_game", methods=["POST"])
 def end_game():
-    winner_id = request.form.get("winner")
+    winner_id = request.form.get("winner", type=int)
     if not winner_id:
         return "Must select a winner", 400
 
@@ -1153,22 +1159,46 @@ def end_game():
         return "No game in session", 400
 
     seen = {p["player_id"] for p in participants}
-    if int(winner_id) not in seen:
+    if winner_id not in seen:
         return "Winner must be a participant", 400
 
-    game = Game(winner_id=int(winner_id))
+    starting_player_id = session.get("active_player_id")
+    if starting_player_id is not None:
+        try:
+            starting_player_id = int(starting_player_id)
+        except Exception:
+            starting_player_id = None
+
+    # Phase 1 inputs
+    salt_rating = request.form.get("salt_rating", type=int)
+    if salt_rating is not None:
+        if salt_rating < 1 or salt_rating > 5:
+            return "Invalid salt rating", 400
+
+    win_type = (request.form.get("win_type") or "").strip() or None
+    allowed_win_types = {
+        "combat", "combo", "infinite_turns", "mill", "alt_win", "concede", "scoop"
+    }
+    if win_type is not None and win_type not in allowed_win_types:
+        return "Invalid win type", 400
+
+    game = Game(
+        winner_id=winner_id,
+        starting_player_id=starting_player_id,
+        salt_rating=salt_rating,
+        win_type=win_type,
+    )
     db.session.add(game)
     db.session.flush()
 
     for p in participants:
-        db.session.add(
-            GameParticipant(game_id=game.id, player_id=p["player_id"], deck_id=p["deck_id"])
-        )
+        db.session.add(GameParticipant(game_id=game.id, player_id=p["player_id"], deck_id=p["deck_id"]))
 
     db.session.commit()
     session.pop("game_participants", None)
     session.pop("active_player_id", None)
     return redirect(url_for("index"))
+
 
 
 @app.route("/manual_game")
