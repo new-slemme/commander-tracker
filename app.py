@@ -92,15 +92,15 @@ class Game(db.Model):
     winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     winner = db.relationship(
         "Player",
-        foreign_keys=[winner_id],
+        foreign_keys="Game.winner_id",
         backref="won_games",
         lazy=True,
     )
 
+    starting_player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)
     starting_player = db.relationship(
         "Player",
-        foreign_keys=[starting_player_id],
-        backref="started_games",
+        foreign_keys="Game.starting_player_id",
         lazy=True,
     )
 
@@ -108,6 +108,7 @@ class Game(db.Model):
     win_type = db.Column(db.String(32), nullable=True)
 
     note = db.Column(db.Text, nullable=True)
+
 
 
 
