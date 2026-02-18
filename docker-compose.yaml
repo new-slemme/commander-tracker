@@ -10,6 +10,7 @@ services:
     environment:
 #      - APP_PASSWORD=  # <<< CHANGE THIS!
       - FLASK_SECRET_KEY=YxbJdOs4KSc8e1avKUK2kIQl  # Optional but recommended
+#      - BOOTSTRAP_ADMIN_USERNAME=slemme
     networks:
       - npm_default
 
