@@ -1,5 +1,120 @@
 {% extends "base.html" %}
 {% block content %}
+
+<style>
+  /* ===== Player Stats (index) ===== */
+  .stats-card {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .stats-card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .stats-chip {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 800;
+    font-size: 0.88rem;
+  }
+  .stats-chip b { color:#fff; }
+
+  .rank-pill {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(143,153,197,0.25);
+    color:#fff;
+    font-weight: 900;
+    font-size: 0.85rem;
+  }
+
+  .player-name {
+    color:#fff;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+  }
+
+  .win-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 900;
+    border: 1px solid rgba(143,153,197,0.28);
+    background: rgba(255,255,255,0.06);
+    color:#fff;
+    white-space: nowrap;
+  }
+  .win-badge.good { border-color: rgba(58,107,84,0.6); background: rgba(58,107,84,0.22); }
+  .win-badge.mid  { border-color: rgba(30,58,95,0.6);  background: rgba(30,58,95,0.22); }
+  .win-badge.bad  { border-color: rgba(143,153,197,0.28); background: rgba(255,255,255,0.06); }
+
+  .wr-progress {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+    min-width: 120px;
+  }
+  .wr-progress > div {
+    height:100%;
+    border-radius:999px;
+  }
+
+  .stats-table thead th {
+    font-size: 0.88rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+  }
+
+  .stats-table tbody tr {
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .stat-mini {
+    display:inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--font-base-trans);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .stat-mini b { color:#fff; }
+
+  /* Mobile: simplify columns */
+  @media (max-width: 576px) {
+    .stats-table thead th:nth-child(3),
+    .stats-table tbody td:nth-child(3) { display:none; } /* Wins column */
+    .stats-table thead th:nth-child(6),
+    .stats-table tbody td:nth-child(6) { display:none; } /* Progress column */
+
+    .stats-card-head { padding: 12px 12px; }
+    .stats-card { border-radius: 18px; }
+  }
+</style>
+
+
 <div class="py-3">
    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-4">
       <div>
@@ -75,59 +190,86 @@
 {% endif %}
 </div>
 <!-- =========================
-   PLAYER STATS TABLE
+   PLAYER STATS
    ========================== -->
 <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
-   <h2 class="m-0">Player Stats</h2>
+  <h2 class="m-0">Player Stats</h2>
 </div>
-<div class="card p-3 mb-5">
-   <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-         <thead>
-            <tr>
-               <th style="width:70px;">#</th>
-               <th>Player</th>
-               <th class="text-end">Wins</th>
-               <th class="text-end">Games</th>
-               <th class="text-end">Win %</th>
-               <th style="width:220px;">&nbsp;</th>
-            </tr>
-         </thead>
-         <tbody>
-            {% for s in player_stats %}
-            <tr>
-               <td>
-                  <span class="badge bg-secondary">{{ loop.index }}</span>
-               </td>
-               <td class="fw-bold text-white">
-                  {{ s.player.name }}
-               </td>
-               <td class="text-end">{{ s.wins }}</td>
-               <td class="text-end">{{ s.played }}</td>
-               <td class="text-end">
-                  <span class="badge {% if s.winrate >= 60 %}bg-success{% elif s.winrate >= 45 %}bg-primary{% else %}bg-secondary{% endif %}">
-                  {{ s.winrate }}%
-                  </span>
-               </td>
-               <td>
-                  <div class="progress" style="height:10px; background: rgba(255,255,255,0.08);">
-                     <div class="progress-bar"
-                        role="progressbar"
-                        style="width: {{ s.winrate }}%;"
-                        aria-valuenow="{{ s.winrate }}" aria-valuemin="0" aria-valuemax="100"></div>
-                  </div>
-               </td>
-            </tr>
-            {% endfor %}
-            {% if player_stats|length == 0 %}
-            <tr>
-               <td colspan="6" class="text-center py-4 muted">No players yet.</td>
-            </tr>
-            {% endif %}
-         </tbody>
-      </table>
-   </div>
+
+<div class="stats-card mb-5">
+  <div class="stats-card-head">
+    <div class="muted">
+      Ranked by <span class="text-white fw-bold">wins</span> (and games played)
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <div class="stats-chip">Players: <b>{{ player_stats|length }}</b></div>
+      {# optional summary chips (only if you want them) #}
+      {# <div class="stats-chip">Total games: <b>{{ total_games }}</b></div> #}
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0 stats-table">
+      <thead>
+        <tr>
+          <th style="width:70px;">#</th>
+          <th>Player</th>
+          <th class="text-end">Wins</th>
+          <th class="text-end">Games</th>
+          <th class="text-end">Win %</th>
+          <th style="width:220px;">&nbsp;</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {% for s in player_stats %}
+          {% set wr = s.winrate %}
+          {% set badge_class = 'bad' %}
+          {% if wr >= 60 %}{% set badge_class = 'good' %}
+          {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+          {% endif %}
+
+          <tr>
+            <td>
+              <span class="rank-pill">{{ loop.index }}</span>
+            </td>
+
+            <td>
+              <div class="player-name">{{ s.player.name }}</div>
+              <div class="stat-mini mt-1 d-sm-none">
+                <div><b>{{ s.wins }}</b> W</div>
+                <div><b>{{ s.played }}</b> games</div>
+              </div>
+            </td>
+
+            <td class="text-end d-none d-sm-table-cell">{{ s.wins }}</td>
+            <td class="text-end">{{ s.played }}</td>
+
+            <td class="text-end">
+              <span class="win-badge {{ badge_class }}">{{ wr }}%</span>
+            </td>
+
+            <td>
+              <div class="wr-progress" aria-label="Winrate progress">
+                <div class="progress-bar"
+                     role="progressbar"
+                     style="width: {{ wr }}%;"
+                     aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+
+        {% if player_stats|length == 0 %}
+          <tr>
+            <td colspan="6" class="text-center py-4 muted">No players yet.</td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 </div>
+
 <!-- =========================
    DECK SPOTLIGHT
    ========================== -->
