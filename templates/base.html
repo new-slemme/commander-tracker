@@ -187,7 +187,16 @@
   .btn-success:hover { background-color: var(--green-trans); border-color: var(--green); }
 
   .alert-danger { background-color: var(--red-trans); border-color: var(--red); color: var(--font-danger); }
-  .alert-info { background-color: var(--darker); border-color: var(--font-base); color: var(--font-base); }
+  .alert-info {
+      background-color: var(--darker);
+      border-color: var(--font-base);
+      color: var(--font-base);
+      background: linear-gradient(135deg, var(--orange), var(--orange-trans));
+      border: 1px solid rgba(143,153,197,0.25);
+      border-radius: 22px;
+      box-shadow: 0 0 28px rgba(0,0,0,0.55);
+      overflow: hidden;
+  }
 
   h1, h2, h3, h4, h5, .display-1, .display-2, .display-3, .display-4 {
       font-family: 'Beleren', Arial, sans-serif;
