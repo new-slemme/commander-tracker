@@ -472,7 +472,12 @@ def saltmine():
     sp = (
         db.session.query(
             func.count(Game.id).label("games"),
-            func.sum(func.case((Game.winner_id == Game.starting_player_id, 1), else_=0)).label("wins")
+            func.sum(
+                case(
+                    (Game.winner_id == Game.starting_player_id, 1),
+                    else_=0
+                )
+            ).label("wins")
         )
         .filter(Game.starting_player_id.isnot(None))
         .first()
