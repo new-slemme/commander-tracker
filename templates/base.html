@@ -88,6 +88,20 @@
     font-size: 30px;
     margin-right: 20px;
     font-family: 'Beleren';
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    box-shadow: 0 0 14px rgba(143,153,197,0.18);
+  }
+
+  @media (max-width: 576px) {
+    .brand-icon { width: 34px; height: 34px; border-radius: 10px; }
   }
 
   .navbar a {
@@ -645,7 +659,11 @@
 {% if request.endpoint != 'life_counter' %}
 <nav class="navbar navbar-expand-lg">
   <div class="container d-flex align-items-center justify-content-between">
-    <a class="navbar-brand" href="/">Commandersohn</a>
+    <a class="navbar-brand" href="/" aria-label="Home">
+      <img class="brand-icon"
+           src="{{ url_for('static', filename='icons/mtg-512.png') }}"
+           alt="Commandersohn">
+    </a>
 
     <!-- Mobile burger -->
     <button id="menuBtn" class="menu-btn d-lg-none" type="button" aria-label="Open menu" aria-controls="menuDrawer" aria-expanded="false">
