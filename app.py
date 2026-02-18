@@ -88,14 +88,27 @@ class Deck(db.Model):
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.DateTime, default=datetime.utcnow)
+
     winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
-    winner = db.relationship("Player", backref="won_games", lazy=True)
-    # Phase 1:
-    starting_player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)
-    starting_player = db.relationship("Player", foreign_keys=[starting_player_id], lazy=True)
+    winner = db.relationship(
+        "Player",
+        foreign_keys=[winner_id],
+        backref="won_games",
+        lazy=True,
+    )
+
+    starting_player = db.relationship(
+        "Player",
+        foreign_keys=[starting_player_id],
+        backref="started_games",
+        lazy=True,
+    )
+
     salt_rating = db.Column(db.Integer, nullable=True)  # 1..5
-    win_type = db.Column(db.String(32), nullable=True)  # e.g. 'combat', 'combo', ...
+    win_type = db.Column(db.String(32), nullable=True)
+
     note = db.Column(db.Text, nullable=True)
+
 
 
 class GameParticipant(db.Model):
