@@ -86,7 +86,17 @@
 
       <div class="d-flex gap-2 flex-wrap align-items-center">
         <span class="pill">Winner: <b class="text-white">{{ game.winner.name }}</b></span>
-
+        {% if game.starting_player %}
+          <span class="pill">Starting: <b class="text-white">{{ game.starting_player.name }}</b></span>
+        {% endif %}
+        
+        {% if game.win_type %}
+          <span class="pill">Win: <b class="text-white">{{ game.win_type.replace('_',' ') }}</b></span>
+        {% endif %}
+        
+        {% if game.salt_rating %}
+          <span class="pill">Salt: <b class="text-white">{{ game.salt_rating }}</b> 🧂</span>
+        {% endif %}
         <button class="btn btn-sm btn-outline-light" type="button" onclick="history.back()">
           ← Go Back
         </button>
