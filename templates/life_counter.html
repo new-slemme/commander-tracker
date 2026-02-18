@@ -117,8 +117,8 @@
       position:absolute;
       left:50%;
       top:50%;
-      transform:translate(-50%,-205%);
-      font-size:clamp(1.15rem, 3.3vw, 2.35rem);
+      transform:translate(-50%,-170%);
+      font-size:clamp(1rem, 2.8vw, 2rem);
       font-weight:900;
       color:#fff;
       text-shadow:0 0 8px rgba(0,0,0,.95);
@@ -533,7 +533,6 @@ let turnDamage = {};
 const pendingLife = {};
 const pendingTimers = {};
 const pendingHideTimers = {};
-const committedLife = {};
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
@@ -635,35 +634,17 @@ function nextPlayer(){
 function hidePendingIndicator(playerId){
   const pendingEl = document.getElementById("pending-" + playerId);
   if(!pendingEl) return;
-  pendingEl.classList.remove("visible", "loss", "gain", "anim-gain", "anim-loss");
+  pendingEl.classList.remove("visible", "loss", "gain");
   pendingEl.textContent = "+0";
-}
-
-function getCommittedLife(playerId){
-  if(committedLife[playerId] === undefined){
-    const lifeEl = document.getElementById("life-" + playerId);
-    committedLife[playerId] = lifeEl ? (parseInt(lifeEl.textContent, 10) || 0) : 0;
-  }
-  return committedLife[playerId];
-}
-
-function renderDisplayedLife(playerId){
-  const lifeEl = document.getElementById("life-" + playerId);
-  if(!lifeEl) return;
-
-  const base = getCommittedLife(playerId);
-  const pending = pendingLife[playerId] || 0;
-  lifeEl.textContent = Math.max(0, base + pending);
-}
-
-function animatePendingIndicator(pendingEl, value){
-  pendingEl.classList.remove("anim-gain", "anim-loss");
-  void pendingEl.offsetWidth;
-  pendingEl.classList.add(value > 0 ? "anim-gain" : "anim-loss");
 }
 
 function applyPendingLife(playerId){
   const amount = pendingLife[playerId] || 0;
+
+  if(!amount){
+    hidePendingIndicator(playerId);
+    return;
+  }
 
   if(!amount){
     hidePendingIndicator(playerId);
@@ -679,7 +660,6 @@ function applyPendingLife(playerId){
   }
 
   pendingLife[playerId] = 0;
-  renderDisplayedLife(playerId);
 
   clearTimeout(pendingHideTimers[playerId]);
   pendingHideTimers[playerId] = setTimeout(
@@ -703,7 +683,6 @@ function queueLifeChange(playerId, delta){
       pendingEl.classList.add("visible");
       pendingEl.classList.toggle("gain", value > 0);
       pendingEl.classList.toggle("loss", value < 0);
-      animatePendingIndicator(pendingEl, value);
     }
   }
   renderDisplayedLife(playerId);
