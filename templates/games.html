@@ -383,6 +383,7 @@
           {% endif %}
         {% endfor %}
 
+        <a href="{{ url_for('game_detail', game_id=g.id) }}" class="list-group-item">
         <div class="game-tile">
           <div class="game-bg">
             {% if ns.arts|length == 0 %}
@@ -429,7 +430,8 @@
                 </span>
               {% endfor %}
             </div>
-
+          </a>
+            
           </div>
         </div>
 
