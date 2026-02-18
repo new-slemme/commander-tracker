@@ -306,7 +306,7 @@
 
       {# NOTE: do NOT mark 2P as top-card anymore #}
       {% set is_top =
-          (n == 3 and loop.index0 < 2) or
+          (n == 3 and loop.index0 == 0) or
           (n == 4 and loop.index0 < 2) or
           (n == 5 and loop.index0 < 3) or
           (n == 6 and loop.index0 < 3)
@@ -316,7 +316,8 @@
         class="life-card
                {% if is_top %}top-card{% endif %}
                {% if is_left %}left-card{% endif %}
-               {% if is_right %}right-card{% endif %}"
+               {% if is_right %}right-card{% endif %}
+               {% if n == 3 %}p3-slot-{{ loop.index }}{% endif %}"
         data-player="{{ p.player_id }}"
         style="
           {% if p.commander_art %}
