@@ -1,16 +1,246 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>All Games</h1>
-<ul class="list-group">
-{% for g in games %}
-    <li class="list-group-item">
-        <strong>{{ g.date.strftime('%Y-%m-%d %H:%M') }}</strong> - 
-        Winner: <strong>{{ g.winner.name }}</strong><br>
-        Players: 
-        {% for gp in game_parts[g.id] %}
-            {{ gp.player.name }} ({{ gp.deck.name }}) {% if gp.player_id == g.winner_id %}(Winner){% endif %}{{ ', ' if not loop.last }}
+
+<style>
+  /* ===== Games page ===== */
+  .games-hero {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.9));
+    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+    overflow: hidden;
+  }
+
+  .games-hero-inner{
+    padding: 18px 18px;
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .games-title {
+    margin: 0;
+    color: #fff;
+    letter-spacing: 0.02em;
+    font-weight: 900;
+  }
+
+  .games-sub {
+    margin-top: 6px;
+    color: var(--font-base-trans);
+    font-weight: 700;
+  }
+
+  .games-chip {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 900;
+    font-size: 0.88rem;
+    white-space: nowrap;
+  }
+  .games-chip b { color:#fff; }
+
+  .games-list-card {
+    margin-top: 16px;
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .games-list-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .game-row {
+    position: relative;
+    padding: 14px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.01);
+  }
+  .game-row:last-child { border-bottom: 0; }
+
+  .game-row:hover {
+    background: rgba(255,255,255,0.02);
+  }
+
+  .game-topline {
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .game-date {
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .winner-pill {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(58,107,84,0.22);
+    border: 1px solid rgba(58,107,84,0.55);
+    color: #fff;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .winner-pill .dot {
+    width: 10px; height: 10px; border-radius: 999px;
+    background: rgba(58,107,84,0.95);
+    box-shadow: 0 0 10px rgba(58,107,84,0.55);
+  }
+
+  .players-wrap {
+    margin-top: 10px;
+    display:flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .player-pill {
+    display:inline-flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.20);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 800;
+    max-width: 100%;
+  }
+  .player-pill .name { color:#fff; font-weight: 900; }
+  .player-pill .deck { color: var(--font-base-trans); font-weight: 800; }
+
+  .player-pill.win {
+    border-color: rgba(58,107,84,0.55);
+    background: rgba(58,107,84,0.18);
+  }
+  .player-pill.win .wmark{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 22px; height: 22px;
+    border-radius: 999px;
+    background: rgba(58,107,84,0.95);
+    box-shadow: 0 0 10px rgba(58,107,84,0.55);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 1000;
+    flex: 0 0 auto;
+  }
+
+  .game-meta {
+    margin-top: 10px;
+    color: var(--font-base-trans);
+    font-weight: 700;
+    font-size: 0.92rem;
+  }
+
+  /* Mobile */
+  @media (max-width: 576px) {
+    .games-hero, .games-list-card { border-radius: 18px; }
+    .games-hero-inner { padding: 14px 14px; }
+    .games-list-head { padding: 12px 12px; }
+    .game-row { padding: 12px 12px; }
+    .player-pill { width: 100%; }
+    .player-pill .deck { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+</style>
+
+<div class="container py-4">
+
+  <div class="games-hero">
+    <div class="games-hero-inner">
+      <div>
+        <h1 class="games-title">All Games</h1>
+        <div class="games-sub">Full match history</div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap align-items-center">
+        <div class="games-chip">Games: <b>{{ games|length }}</b></div>
+        {# Future: filters/search could live here #}
+      </div>
+    </div>
+  </div>
+
+  <div class="games-list-card">
+    <div class="games-list-head">
+      <div class="muted">Latest first</div>
+      <div class="muted" style="font-size:0.9rem;">
+        Showing <span class="text-white fw-bold">{{ games|length }}</span>
+      </div>
+    </div>
+
+    {% if games|length == 0 %}
+      <div class="p-3">
+        <div class="muted">No games recorded yet.</div>
+      </div>
+    {% else %}
+
+      <div>
+        {% for g in games %}
+          <div class="game-row">
+            <div class="game-topline">
+              <div class="game-date">
+                {{ g.date.strftime('%Y-%m-%d %H:%M') }}
+              </div>
+
+              <div class="winner-pill">
+                <span class="dot"></span>
+                Winner: {{ g.winner.name }}
+              </div>
+            </div>
+
+            <div class="players-wrap">
+              {% for gp in game_parts[g.id] %}
+                <span class="player-pill {% if gp.player_id == g.winner_id %}win{% endif %}">
+                  <span style="display:flex; align-items:center; gap:8px; min-width:0;">
+                    {% if gp.player_id == g.winner_id %}
+                      <span class="wmark">W</span>
+                    {% endif %}
+                    <span class="name">{{ gp.player.name }}</span>
+                  </span>
+
+                  <span class="deck">{{ gp.deck.name }}</span>
+                </span>
+              {% endfor %}
+            </div>
+
+            <div class="game-meta">
+              Game #{{ g.id }}
+            </div>
+          </div>
         {% endfor %}
-    </li>
-{% endfor %}
-</ul>
+      </div>
+
+    {% endif %}
+  </div>
+
+</div>
+
 {% endblock %}
