@@ -104,6 +104,24 @@
       text-shadow:0 0 10px rgba(0,0,0,.9), 0 0 28px rgba(0,0,0,.7);
       user-select:none;
     }
+    .life-pending{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-105%);
+      font-size:clamp(1rem, 2.8vw, 2rem);
+      font-weight:900;
+      color:#fff;
+      text-shadow:0 0 8px rgba(0,0,0,.95);
+      opacity:0;
+      transition:opacity .15s ease;
+      pointer-events:none;
+      z-index:24;
+    }
+
+    .life-pending.visible{ opacity:1; }
+    .life-pending.loss{ color:#ff8686; }
+    .life-pending.gain{ color:#8dffad; }
 
     /* ===== ACTIVE PLAYER: GLOW FRAME + BACKGROUND LIFT (NO BADGE) ===== */
     .life-card.active-turn{
@@ -136,47 +154,36 @@
     }
     /* ===== END ACTIVE PLAYER ===== */
 
-    /* Pass button */
-    .pass-btn{
-      position:absolute;
-      bottom:18px;
-      right:18px;
-      z-index:30;
-      display:none;
+    /* Combined pass/menu button in center */
+    .center-pass-btn{
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      z-index:240;
+      width:94px;
+      height:94px;
+      border-radius:999px;
+      display:grid;
+      place-items:center;
       pointer-events:auto;
       touch-action:manipulation;
-
-      padding: 12px 18px;
-      border-radius: 999px;
-      font-weight: 900;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(255,255,255,0.92);
-      color: #000;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-      backdrop-filter: blur(6px);
-      transform-origin: center;
+      border:1px solid rgba(255,255,255,0.35);
+      background:rgba(255,255,255,0.94);
+      color:#000;
+      box-shadow:0 10px 26px rgba(0,0,0,0.45);
+      user-select:none;
     }
 
-    .pass-btn:active{
-      transform: translateY(1px) scale(0.99);
-      box-shadow: 0 5px 18px rgba(0,0,0,0.40);
+    .center-pass-btn:active{
+      transform:translate(-50%,-50%) scale(0.97);
     }
 
-    /* Top-row cards: rotate ONLY the label so button transforms (:active) still work */
-    .top-card .pass-label{
-      display:inline-block;
-      transform-origin:center;
+    .center-pass-icon{
+      font-size:1.55rem;
+      line-height:1;
+      font-weight:900;
     }
-
-    /* Place PASS in the OUTER corner based on left/right half of screen */
-    .life-card.pass-left  .pass-btn{ left:18px; right:auto; }
-    .life-card.pass-right .pass-btn{ right:18px; left:auto; }
-
-    /* If the card is top-row, outer corner is mirrored */
-    .top-card.pass-left  .pass-btn{ right:18px; left:auto; }
-    .top-card.pass-right .pass-btn{ left:18px; right:auto; }
 
     /* ==================== TURN BADGE (DISABLED) ==================== */
     .turn-badge{ display:none !important; }
@@ -248,23 +255,10 @@
       transform:translateX(-50%) rotate(180deg);
     }
 
-    /* Center menu button */
-    .center-menu-btn{
-      position:fixed;
-      top:50%;
-      left:50%;
-      transform:translate(-50%,-50%);
-      z-index:200;
-      width:80px;
-      height:80px;
-      border-radius:999px;
-      display:grid;
-      place-items:center;
-    }
 
     /* Grid layouts */
     .players-2{ grid-template-columns:1fr 1fr; grid-template-rows:1fr; }
-    .players-3{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-3{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr; }
     .players-4{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
@@ -346,11 +340,7 @@
 
           <div class="player-name">{{ p.player_name }}</div>
 
-          <button class="btn btn-sm btn-light pass-btn"
-                  id="pass-{{ p.player_id }}"
-                  type="button">
-            <span class="pass-label">PASS →</span>
-          </button>
+          <div class="life-pending" id="pending-{{ p.player_id }}">+0</div>
         </div>
 
         <!-- kept in DOM, but hidden by CSS -->
@@ -359,32 +349,32 @@
       {% endfor %}
     </div>
 
-    <button class="center-menu-btn btn btn-light shadow"
-            data-bs-toggle="modal"
-            data-bs-target="#menuModal"
-            aria-label="Menu">
-      <img src="/static/hamburger.svg" width="24" height="24" alt="Menu">
+    <button class="center-pass-btn"
+            id="centerPassBtn"
+            type="button"
+            aria-label="Pass turn (tap) or open menu (long press)">
+      <span class="center-pass-icon">↻</span>
     </button>
   </div>
 
   <!-- Modal -->
   <div class="modal fade" id="menuModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
       <div class="modal-content bg-dark text-light">
-        <div class="modal-body text-center p-4">
-          <button class="btn btn-primary w-50 mb-3" id="toggleFsBtn" type="button">
+        <div class="modal-body text-center p-4 d-flex flex-column gap-3">
+          <button class="btn btn-primary btn-lg w-100" id="toggleFsBtn" type="button">
             Toggle Fullscreen
           </button>
 
           <form method="post" action="/end_game">
-            <select name="winner" class="form-select mb-3" required>
+            <select name="winner" class="form-select form-select-lg" required>
               <option value="" disabled selected>Select Winner</option>
               {% for p in participants %}
               <option value="{{ p.player_id }}">{{ p.player_name }}</option>
               {% endfor %}
             </select>
 
-            <select name="win_type" class="form-select mb-3">
+            <select name="win_type" class="form-select form-select-lg">
               <option value="" selected>Win Type (optional)</option>
               <option value="combat">Combat</option>
               <option value="combo">Combo</option>
@@ -395,7 +385,7 @@
               <option value="scoop">Salt-Induced Scoop</option>
             </select>
 
-            <select name="salt_rating" class="form-select mb-3">
+            <select name="salt_rating" class="form-select form-select-lg">
               <option value="" selected>Salt (optional)</option>
               <option value="1">1 🧂</option>
               <option value="2">2 🧂🧂</option>
@@ -404,13 +394,13 @@
               <option value="5">5 🧂🧂🧂🧂🧂</option>
             </select>
 
-            <button type="submit" class="btn btn-success w-100 mb-3">
+            <button type="submit" class="btn btn-success btn-lg w-100">
               End & Record
             </button>
           </form>
 
           <form method="post" action="/cancel_game" onsubmit="return confirm('Quit without saving?')">
-            <button class="btn btn-outline-danger w-100">
+            <button class="btn btn-outline-danger btn-lg w-100">
               Quit without Saving
             </button>
           </form>
@@ -494,6 +484,12 @@ let turn = 1;
 let active = null;
 let passed = new Set();
 let turnDamage = {};
+const pendingLife = {};
+const pendingTimers = {};
+let longPressTimer = null;
+let longPressTriggered = false;
+const LONG_PRESS_MS = 450;
+const LIFE_COMMIT_MS = 650;
 
 const cards = [...document.querySelectorAll(".life-card")];
 
@@ -545,11 +541,7 @@ function setActive(id){
     const pid = String(c.dataset.player);
     const isActive = (pid === active);
     c.classList.toggle("active-turn", isActive);
-
-    const passBtn = document.getElementById("pass-" + pid);
-    if(passBtn) passBtn.style.display = isActive ? "block" : "none";
   });
-  positionPassButtons();
 }
 
 /* Put turn dmg on the OUTER edge */
@@ -573,19 +565,6 @@ function positionTurnDamageBadges(){
   });
 }
 
-/* PASS button should always sit in the OUTER corner of the player card */
-function positionPassButtons(){
-  const screenCenterX = window.innerWidth / 2;
-  cards.forEach(c=>{
-    const rect = c.getBoundingClientRect();
-    const cardCenterX = rect.left + rect.width / 2;
-
-    c.classList.remove("pass-left","pass-right");
-    if(cardCenterX < screenCenterX) c.classList.add("pass-left");
-    else c.classList.add("pass-right");
-  });
-}
-
 function nextPlayer(){
   const ids = getIdsClockwise();
   const idx = ids.indexOf(String(active));
@@ -598,25 +577,51 @@ function nextPlayer(){
   }
 
   setActive(ids[(idx+1) % ids.length]);
+  resetTurnDamage();
   positionTurnDamageBadges();
-  positionPassButtons();
 }
 
 /* ---------- LIFE TAP ---------- */
 
-function adjustLife(playerId, delta){
+function applyPendingLife(playerId){
+  const amount = pendingLife[playerId] || 0;
+  if(!amount) return;
+
   const el = document.getElementById("life-" + playerId);
   if(!el) return;
 
   const before = parseInt(el.textContent, 10);
-  const after = Math.max(0, before + delta);
+  const after = Math.max(0, before + amount);
   el.textContent = after;
 
-  if(after < before){
-    addTurnDamage(playerId, before - after);
+  if(amount < 0){
+    addTurnDamage(playerId, Math.abs(amount));
+  }
+
+  pendingLife[playerId] = 0;
+  const pendingEl = document.getElementById("pending-" + playerId);
+  if(pendingEl){
+    pendingEl.classList.remove("visible", "loss", "gain");
+    pendingEl.textContent = "+0";
   }
 
   checkWinner();
+}
+
+function queueLifeChange(playerId, delta){
+  pendingLife[playerId] = (pendingLife[playerId] || 0) + delta;
+
+  const pendingEl = document.getElementById("pending-" + playerId);
+  const value = pendingLife[playerId];
+  if(pendingEl){
+    pendingEl.textContent = `${value > 0 ? "+" : ""}${value}`;
+    pendingEl.classList.add("visible");
+    pendingEl.classList.toggle("gain", value > 0);
+    pendingEl.classList.toggle("loss", value < 0);
+  }
+
+  clearTimeout(pendingTimers[playerId]);
+  pendingTimers[playerId] = setTimeout(()=>applyPendingLife(playerId), LIFE_COMMIT_MS);
 }
 
 function checkWinner(){
@@ -660,10 +665,6 @@ cards.forEach(card=>{
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
-    // ignore taps on the PASS button
-    if (e.target && e.target.closest && e.target.closest(".pass-btn")) return;
-
-    // prevent double-triggering from synthesized clicks on some mobile browsers
     e.preventDefault();
 
     const rect = card.getBoundingClientRect();
@@ -672,31 +673,60 @@ cards.forEach(card=>{
     let delta = (x < rect.width / 2) ? -1 : 1;
     if(isTop) delta = -delta;
 
-    adjustLife(playerId, delta);
-  });
-
-  const passBtn = document.getElementById("pass-" + playerId);
-  passBtn?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    nextPlayer();
+    queueLifeChange(playerId, delta);
   });
 });
+
+function openMenu(){
+  const modalEl = document.getElementById("menuModal");
+  if(!modalEl) return;
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+}
+
+const centerPassBtn = document.getElementById("centerPassBtn");
+if(centerPassBtn){
+  centerPassBtn.addEventListener("pointerdown", (e)=>{
+    e.preventDefault();
+    longPressTriggered = false;
+    clearTimeout(longPressTimer);
+    longPressTimer = setTimeout(()=>{
+      longPressTriggered = true;
+      openMenu();
+    }, LONG_PRESS_MS);
+  });
+
+  const finishPress = (e)=>{
+    e?.preventDefault?.();
+    clearTimeout(longPressTimer);
+    if(!longPressTriggered){
+      nextPlayer();
+    }
+    longPressTriggered = false;
+  };
+
+  centerPassBtn.addEventListener("pointerup", finishPress);
+  centerPassBtn.addEventListener("pointercancel", ()=>{
+    clearTimeout(longPressTimer);
+    longPressTriggered = false;
+  });
+  centerPassBtn.addEventListener("contextmenu", (e)=>e.preventDefault());
+}
 
 /* ---------- INIT ---------- */
 if(cards.length){
   const ids = getIdsClockwise();
-  setActive(ids[0]);
+  const starting = "{{ starting_player_id|default('', true) }}";
+  const initialActive = ids.includes(String(starting)) ? String(starting) : ids[0];
+  setActive(initialActive);
   updateTurnPills();
   resetTurnDamage();
 }
 
 showFsOverlayIfNeeded();
 positionTurnDamageBadges();
-positionPassButtons();
 window.addEventListener("resize", positionTurnDamageBadges);
-window.addEventListener("resize", positionPassButtons);
 window.addEventListener("orientationchange", () => setTimeout(positionTurnDamageBadges, 250));
-window.addEventListener("orientationchange", () => setTimeout(positionPassButtons, 250));
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
