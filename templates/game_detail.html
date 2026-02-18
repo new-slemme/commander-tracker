@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+  .game-hero {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.9));
+    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+    overflow: hidden;
+  }
+
+  .pill {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.04);
+    color:#fff;
+    font-weight: 800;
+    font-size: 0.88rem;
+    white-space: nowrap;
+  }
+
+  .part-card {
+    border-radius: 18px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 18px rgba(0,0,0,0.35);
+    overflow:hidden;
+  }
+
+  .part-row {
+    display:flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .muted2 { color: var(--font-base-trans); }
+
+  .winner-mark {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: rgba(58,107,84,0.28);
+    border: 1px solid rgba(58,107,84,0.55);
+    color:#fff;
+    font-weight: 900;
+  }
+
+  .art-strip {
+    height: 90px;
+    background: rgba(255,255,255,0.02);
+    position: relative;
+    overflow:hidden;
+  }
+  .art-strip.has-bg { background-size: cover; background-position: top; }
+  .art-strip::after{
+    content:"";
+    position:absolute; inset:0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.65), rgba(0,0,0,0.15));
+  }
+
+  @media (max-width: 576px) {
+    .art-strip { height: 72px; }
+  }
+</style>
+
+<div class="container py-4">
+
+  <div class="game-hero p-4 mb-4">
+    <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+      <div>
+        <h1 class="m-0 fw-bold">Game #{{ game.id }}</h1>
+        <div class="muted2 mt-1">
+          {{ game.date.strftime('%Y-%m-%d %H:%M') }}
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap align-items-center">
+        <span class="pill">Winner: <b class="text-white">{{ game.winner.name }}</b></span>
+
+        <button class="btn btn-sm btn-outline-light" type="button" onclick="history.back()">
+          ← Go Back
+        </button>
+
+        {% if session.get("is_admin") %}
+          <form method="post"
+                action="{{ url_for('delete_game', game_id=game.id) }}"
+                onsubmit="return confirm('Delete Game #{{ game.id }}? This cannot be undone.');"
+                class="m-0">
+            <button type="submit" class="btn btn-sm btn-danger">Delete Game</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <h4 class="mb-3">Players</h4>
+
+  <div class="row g-3">
+    {% for gp in parts %}
+      {% set d = gp.deck %}
+      {% set art = d.commander_local_art or d.commander_art_crop_url %}
+      <div class="col-12 col-md-6">
+        <div class="part-card">
+          <div class="art-strip {% if art %}has-bg{% endif %}"
+               {% if art %}style="background-image:url('{{ art }}');"{% endif %}></div>
+
+          <div class="p-3">
+            <div class="part-row">
+              <div style="min-width:0;">
+                <div class="fw-bold text-white d-flex align-items-center gap-2" style="min-width:0;">
+                  {% if gp.player_id == game.winner_id %}
+                    <span class="winner-mark">W</span>
+                  {% endif %}
+                  <span class="text-truncate" style="max-width: 260px;">{{ gp.player.name }}</span>
+                </div>
+                <div class="muted2 mt-1">
+                  Deck:
+                  <a class="text-white" href="{{ url_for('deck_detail', deck_id=d.id) }}">{{ d.name }}</a>
+                  <span class="muted2"> · </span>
+                  <span>{{ d.commander_name or d.commander }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+</div>
+
+{% endblock %}
