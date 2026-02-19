@@ -391,18 +391,69 @@ def admin_required(f):
 
 
 def get_active_pod():
+    current_user = get_current_user()
+    accessible_ids = {p.id for p in get_accessible_pods(current_user)}
+
     active_pod_id = session.get("active_pod_id")
-    if active_pod_id:
+    if active_pod_id and int(active_pod_id) in accessible_ids:
         pod = db.session.get(Pod, int(active_pod_id))
         if pod and pod.is_active:
             return pod
 
-    pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first() or Pod.query.filter_by(is_active=True).order_by(Pod.id.asc()).first()
+    pod = None
+    if accessible_ids:
+        pod = Pod.query.filter(Pod.id.in_(accessible_ids), Pod.slug == DEFAULT_POD_SLUG).first()
+        if not pod:
+            pod = Pod.query.filter(Pod.id.in_(accessible_ids), Pod.is_active == True).order_by(Pod.id.asc()).first()  # noqa: E712
+
     if pod:
         session["active_pod_id"] = pod.id
         session.modified = True
     return pod
 
+
+def get_accessible_pods(user):
+    if not user:
+        return []
+
+    if user.is_admin:
+        return Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+
+    if not user.player:
+        return []
+
+    return (
+        Pod.query.join(PodMembership, PodMembership.pod_id == Pod.id)
+        .filter(Pod.is_active == True, PodMembership.player_id == user.player.id)  # noqa: E712
+        .order_by(Pod.name.asc())
+        .all()
+    )
+
+
+
+
+def can_manage_pod(user, pod_id):
+    if not user:
+        return False
+    if user.is_admin:
+        return True
+    if not user.player:
+        return False
+
+    membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=user.player.id).first()
+    return bool(membership and membership.role == "podmaster")
+
+
+def ensure_membership(pod_id, player_id, role="member"):
+    membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=player_id).first()
+    if membership:
+        if role == "podmaster" and membership.role != "podmaster":
+            membership.role = "podmaster"
+        return membership
+
+    membership = PodMembership(pod_id=pod_id, player_id=player_id, role=role)
+    db.session.add(membership)
+    return membership
 
 def game_query_for_scope():
     scope = (request.args.get("scope") or "pod").strip().lower()
@@ -573,6 +624,11 @@ def admin_approve_user(user_id):
     # Create linked player if missing
     if not u.player:
         u.player = Player(name=u.display_name)
+        db.session.flush()
+
+    default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+    if default_pod:
+        ensure_membership(default_pod.id, u.player.id)
 
     u.is_active = True
     u.approved_at = datetime.utcnow()
@@ -730,7 +786,8 @@ def admin_deny_user(user_id):
 def index():
     game_q, scope, active_pod = game_query_for_scope()
     game_ids_subquery = game_q.with_entities(Game.id)
-    available_pods = Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+    current_user = get_current_user()
+    available_pods = get_accessible_pods(current_user)
 
     # Player stats
     players = Player.query.all()
@@ -828,20 +885,168 @@ def index():
 @app.route("/pods")
 @login_required
 def pods():
-    pods_list = Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+    me = get_current_user()
+    pods_list = get_accessible_pods(me)
     active_pod = get_active_pod()
-    return render_template("pods.html", pods=pods_list, active_pod=active_pod)
+
+    selected_pod_id = request.args.get("pod_id", type=int)
+    selected_pod = db.session.get(Pod, selected_pod_id) if selected_pod_id else active_pod
+    if selected_pod and selected_pod not in pods_list and not me.is_admin:
+        abort(403)
+
+    memberships = []
+    all_players = []
+    if selected_pod and can_manage_pod(me, selected_pod.id):
+        memberships = (
+            PodMembership.query
+            .filter_by(pod_id=selected_pod.id)
+            .join(Player, Player.id == PodMembership.player_id)
+            .order_by(text("CASE WHEN pod_membership.role = 'podmaster' THEN 0 ELSE 1 END"), Player.name.asc())
+            .all()
+        )
+        all_players = Player.query.order_by(Player.name.asc()).all()
+
+    return render_template(
+        "pods.html",
+        pods=pods_list,
+        active_pod=active_pod,
+        selected_pod=selected_pod,
+        memberships=memberships,
+        all_players=all_players,
+        can_manage_selected=bool(selected_pod and can_manage_pod(me, selected_pod.id)),
+        is_admin=bool(me and me.is_admin),
+    )
+
+
+@app.route("/pods", methods=["POST"])
+@admin_required
+def create_pod():
+    name = (request.form.get("name") or "").strip()
+    slug_input = (request.form.get("slug") or "").strip().lower()
+    slug = slug_input or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+    if not name:
+        flash("Pod name is required.")
+        return redirect(url_for("pods"))
+
+    if not slug:
+        flash("Pod slug is required.")
+        return redirect(url_for("pods"))
+
+    if Pod.query.filter((Pod.name == name) | (Pod.slug == slug)).first():
+        flash("Pod with same name or slug already exists.")
+        return redirect(url_for("pods"))
+
+    pod = Pod(name=name, slug=slug, is_active=True)
+    db.session.add(pod)
+    db.session.flush()
+
+    for player in Player.query.all():
+        ensure_membership(pod.id, player.id, role="member")
+
+    db.session.commit()
+    flash(f"Created pod '{name}'.")
+    return redirect(url_for("pods", pod_id=pod.id))
 
 
 @app.route("/pods/switch/<int:pod_id>", methods=["POST"])
 @login_required
 def switch_pod(pod_id):
+    me = get_current_user()
     pod = db.session.get(Pod, pod_id)
     if not pod or not pod.is_active:
         abort(404)
+
+    allowed_ids = {p.id for p in get_accessible_pods(me)}
+    if pod.id not in allowed_ids:
+        abort(403)
+
     session["active_pod_id"] = pod.id
     session.modified = True
     return {"ok": True, "pod_id": pod.id, "name": pod.name}
+
+
+@app.route("/pods/<int:pod_id>/members", methods=["POST"])
+@login_required
+def add_pod_member(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod or not pod.is_active:
+        abort(404)
+
+    player_id = request.form.get("player_id", type=int)
+    role = (request.form.get("role") or "member").strip().lower()
+    if role not in {"member", "podmaster"}:
+        role = "member"
+
+    player = db.session.get(Player, player_id)
+    if not player:
+        flash("Player not found.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    if role == "podmaster" and not me.is_admin:
+        role = "member"
+
+    ensure_membership(pod_id, player_id, role=role)
+    db.session.commit()
+    flash(f"Added {player.name} to {pod.name}.")
+    return redirect(url_for("pods", pod_id=pod_id))
+
+
+@app.route("/pods/<int:pod_id>/members/<int:player_id>/role", methods=["POST"])
+@login_required
+def update_pod_member_role(pod_id, player_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+
+    membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=player_id).first()
+    if not membership:
+        abort(404)
+
+    role = (request.form.get("role") or "member").strip().lower()
+    if role not in {"member", "podmaster"}:
+        role = "member"
+
+    if role == "podmaster" and not me.is_admin:
+        abort(403)
+
+    membership.role = role
+    db.session.commit()
+    flash("Member role updated.")
+    return redirect(url_for("pods", pod_id=pod_id))
+
+
+@app.route("/pods/<int:pod_id>/members/<int:player_id>/remove", methods=["POST"])
+@login_required
+def remove_pod_member(pod_id, player_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+
+    membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=player_id).first()
+    if not membership:
+        abort(404)
+
+    # Keep at least one podmaster in a pod if possible
+    if membership.role == "podmaster":
+        podmasters_left = PodMembership.query.filter_by(pod_id=pod_id, role="podmaster").count()
+        if podmasters_left <= 1 and not me.is_admin:
+            flash("At least one podmaster must remain. Ask an admin.")
+            return redirect(url_for("pods", pod_id=pod_id))
+
+    db.session.delete(membership)
+    db.session.commit()
+
+    if session.get("active_pod_id") == pod_id:
+        session.pop("active_pod_id", None)
+        session.modified = True
+
+    flash("Member removed from pod.")
+    return redirect(url_for("pods", pod_id=pod_id))
 
 
 @app.route("/delete_deck/<int:deck_id>", methods=["POST"])
@@ -1104,7 +1309,14 @@ def players():
 def add_player():
     name = request.form["name"].strip()
     if name and not Player.query.filter_by(name=name).first():
-        db.session.add(Player(name=name))  # guest/manual player
+        player = Player(name=name)
+        db.session.add(player)
+        db.session.flush()
+
+        default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+        if default_pod:
+            ensure_membership(default_pod.id, player.id)
+
         db.session.commit()
     return redirect(url_for("players"))
 
