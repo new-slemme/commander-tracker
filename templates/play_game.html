@@ -161,37 +161,6 @@
     }
   }
 
-
-  @media (max-width: 576px) {
-    .player-grid,
-    .player-grid.players-2,
-    .player-grid.players-3,
-    .player-grid.players-4,
-    .player-grid.players-5,
-    .player-grid.players-6 {
-      grid-template-columns: 1fr 1fr !important;
-      grid-template-areas: none;
-    }
-
-    .player-grid.players-2 {
-      grid-template-rows: minmax(190px, 1fr);
-    }
-
-    .player-grid.players-3,
-    .player-grid.players-4 {
-      grid-template-rows: repeat(2, minmax(190px, 1fr));
-    }
-
-    .player-grid.players-5,
-    .player-grid.players-6 {
-      grid-template-rows: repeat(3, minmax(190px, 1fr));
-    }
-
-    .player-grid .player-panel {
-      grid-area: auto !important;
-    }
-  }
-
   .player-tile{
     position: relative;
     height: 100%;
@@ -231,6 +200,23 @@
   .player-grid.players-6 .player-panel[data-slot="2"],
   .player-grid.players-6 .player-panel[data-slot="3"] {
     border-bottom: 1px solid rgba(170,181,235,0.34);
+  }
+
+  @media (max-width: 430px) {
+    .player-grid,
+    .player-grid.players-2,
+    .player-grid.players-3,
+    .player-grid.players-4,
+    .player-grid.players-5,
+    .player-grid.players-6 {
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(auto-fill, minmax(190px, 1fr));
+      grid-template-areas: none;
+    }
+
+    .player-grid .player-panel {
+      grid-area: auto !important;
+    }
   }
 
   /* background image layer (reads CSS var) */
