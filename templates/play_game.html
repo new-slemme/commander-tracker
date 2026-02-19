@@ -28,6 +28,21 @@
     justify-content: flex-end;
   }
 
+  .count-picker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 800;
+  }
+
+  .count-picker .form-select {
+    min-height: auto;
+    width: 90px;
+    border-radius: 12px;
+    text-align: center;
+    font-weight: 800;
+  }
+
   .pg-btn {
     border-radius: 14px;
     padding: 10px 16px;
@@ -48,20 +63,103 @@
 
   .player-grid {
     display:grid;
-    grid-template-columns: repeat(12, 1fr);
-    gap: 14px;
+    min-height: 360px;
     margin-top: 10px;
+    border-radius: 20px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.02);
+    overflow: hidden;
   }
-  .player-card { grid-column: span 6; }
-  @media (max-width: 992px) { .player-card { grid-column: span 12; } }
+
+  .player-grid.players-2 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+  }
+
+  .player-grid.players-3 {
+    grid-template-columns: 49% 51%;
+    grid-template-rows: 1fr 1fr;
+    grid-template-areas:
+      "p1 p3"
+      "p2 p3";
+  }
+
+  .player-grid.players-4 {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .player-grid.players-5,
+  .player-grid.players-6 {
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .player-grid.players-3 .player-panel[data-slot="1"] { grid-area: p1; }
+  .player-grid.players-3 .player-panel[data-slot="2"] { grid-area: p2; }
+  .player-grid.players-3 .player-panel[data-slot="3"] { grid-area: p3; }
+
+  .player-panel.hidden { display: none; }
+
+  @media (max-width: 992px) {
+    .player-grid,
+    .player-grid.players-2,
+    .player-grid.players-3,
+    .player-grid.players-4,
+    .player-grid.players-5,
+    .player-grid.players-6 {
+      min-height: auto;
+      grid-template-columns: 1fr;
+      grid-template-rows: repeat(auto-fill, minmax(250px, 1fr));
+      grid-template-areas: none;
+    }
+  }
 
   .player-tile{
     position: relative;
-    border-radius: 20px;
-    border: 1px solid rgba(143,153,197,0.22);
-    background: rgba(0,0,0,0.14);
-    box-shadow: 0 0 22px rgba(0,0,0,0.40);
+    height: 100%;
+    background: rgba(0,0,0,0.2);
     overflow: hidden;
+  }
+
+  .player-panel {
+    min-height: 260px;
+  }
+
+  .player-panel:nth-child(odd):not(.hidden) {
+    border-right: 1px solid rgba(170,181,235,0.6);
+  }
+
+  .player-grid.players-3 .player-panel[data-slot="1"] {
+    border-bottom: 1px solid rgba(170,181,235,0.6);
+  }
+
+  .player-grid.players-4 .player-panel[data-slot="1"],
+  .player-grid.players-4 .player-panel[data-slot="2"],
+  .player-grid.players-5 .player-panel[data-slot="1"],
+  .player-grid.players-5 .player-panel[data-slot="2"],
+  .player-grid.players-5 .player-panel[data-slot="3"],
+  .player-grid.players-6 .player-panel[data-slot="1"],
+  .player-grid.players-6 .player-panel[data-slot="2"],
+  .player-grid.players-6 .player-panel[data-slot="3"] {
+    border-bottom: 1px solid rgba(170,181,235,0.6);
+  }
+
+  .player-grid.players-4 .player-panel[data-slot="2"],
+  .player-grid.players-6 .player-panel[data-slot="3"] {
+    border-right: none;
+  }
+
+  .player-grid.players-5 .player-panel[data-slot="3"],
+  .player-grid.players-5 .player-panel[data-slot="6"],
+  .player-grid.players-6 .player-panel[data-slot="3"],
+  .player-grid.players-6 .player-panel[data-slot="6"] {
+    border-right: none;
+  }
+
+  @media (max-width: 992px) {
+    .player-panel { border-right: none !important; border-bottom: 1px solid rgba(170,181,235,0.35); }
+    .player-panel:last-child { border-bottom: none; }
   }
 
   /* background image layer (reads CSS var) */
@@ -101,15 +199,7 @@
   /* ensure card contents render above overlay */
   .player-tile > * { position: relative; z-index: 2; }
 
-  .player-tile-header{
-    display:flex;
-    align-items:center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.02);
-  }
+  .player-tile-header{ display:none; }
 
   .player-label {
     font-weight: 900;
@@ -118,7 +208,13 @@
     opacity: 0.9;
   }
 
-  .player-tile-body { padding: 14px 16px; }
+  .player-tile-body {
+    padding: 16px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
 
   .form-select, .form-control {
     border-radius: 14px;
@@ -186,24 +282,25 @@
       </div>
 
       <div class="pg-actions">
-        <button type="button" id="addPlayer" class="btn pg-btn pg-btn-secondary">
-          + Add Player <span class="muted" style="font-weight:700;">(up to 6)</span>
-        </button>
+        <div class="count-picker title-font">
+          <label for="playerCountSelect">Players:</label>
+          <select id="playerCountSelect" class="form-select form-select-sm" aria-label="Player count">
+            {% for count in range(2,7) %}
+            <option value="{{ count }}" {% if count == 2 %}selected{% endif %}>{{ count }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
     </div>
   </div>
 
   <form method="post" action="/start_game" id="gameForm">
-    <div class="player-grid" id="playerContainer">
-      {% for i in range(1,5) %}  <!-- Base 4 players -->
-      <div class="player-card">
+    <div class="player-grid players-2" id="playerContainer">
+      {% for i in range(1,7) %}
+      <div class="player-panel {% if i > 2 %}hidden{% endif %}" data-slot="{{ i }}">
         <div class="player-tile" data-slot="{{ i }}">
-          <div class="player-tile-header">
-            <div class="player-label title-font">Player {{ i }}</div>
-          </div>
-
           <div class="player-tile-body">
-            <label class="form-label mb-1">Player</label>
+            <label class="form-label mb-1 title-font">Select Player:</label>
             <select name="player{{ i }}" id="player{{ i }}" class="form-select mb-3">
               <option value="">- None -</option>
               {% for p in players %}
@@ -211,14 +308,10 @@
               {% endfor %}
             </select>
 
-            <label class="form-label mb-1">Deck</label>
+            <label class="form-label mb-1 title-font">Select Deck:</label>
             <select name="deck{{ i }}" id="deck{{ i }}" class="form-select" disabled>
               <option>Select player first</option>
             </select>
-
-            <div class="hint mt-2">
-              Deck list updates after choosing a player.
-            </div>
           </div>
         </div>
       </div>
@@ -247,11 +340,16 @@
 
 <script>
   const decksData = {{ decks_json | safe }};
-  let playerCount = 4;
+  let playerCount = 2;
+
+  function isActiveSlot(i) {
+    return i <= playerCount;
+  }
 
   function getSelectedPlayerIds() {
     const ids = new Set();
-    for (let i = 1; i <= playerCount; i++) {
+    for (let i = 1; i <= 6; i++) {
+      if (!isActiveSlot(i)) continue;
       const sel = document.getElementById('player' + i);
       if (!sel) continue;
       const v = sel.value;
@@ -261,7 +359,8 @@
   }
 
   function updatePlayerOptionDisabling() {
-    for (let i = 1; i <= playerCount; i++) {
+    for (let i = 1; i <= 6; i++) {
+      if (!isActiveSlot(i)) continue;
       const sel = document.getElementById('player' + i);
       if (!sel) continue;
 
@@ -277,7 +376,8 @@
 
   function selectedPlayersMap() {
     const map = new Map();
-    for (let i = 1; i <= playerCount; i++) {
+    for (let i = 1; i <= 6; i++) {
+      if (!isActiveSlot(i)) continue;
       const sel = document.getElementById("player" + i);
       if (!sel) continue;
       const pid = sel.value;
@@ -309,8 +409,12 @@
     const deckSel = document.getElementById("deck" + i);
     if (!playerSel || !deckSel) return;
 
-    const tile = deckSel.closest(".player-card")?.querySelector(".player-tile");
+    if (!isActiveSlot(i)) return;
+
+    const tile = deckSel.closest(".player-panel")?.querySelector(".player-tile");
     if (!tile) return;
+
+    if (!isActiveSlot(i)) return;
 
     const pid = playerSel.value;
     const did = deckSel.value;
@@ -375,57 +479,51 @@
     });
   }
 
-  // Setup initial 4
-  for (let i = 1; i <= 4; i++) {
+  function applyPlayerCount(count) {
+    playerCount = count;
+
+    const container = document.getElementById('playerContainer');
+    container.className = `player-grid players-${playerCount}`;
+
+    for (let i = 1; i <= 6; i++) {
+      const panel = document.querySelector(`.player-panel[data-slot="${i}"]`);
+      const playerSel = document.getElementById('player' + i);
+      const deckSel = document.getElementById('deck' + i);
+      const tile = panel?.querySelector('.player-tile');
+
+      if (!panel || !playerSel || !deckSel) continue;
+
+      const isActive = i <= playerCount;
+      panel.classList.toggle('hidden', !isActive);
+
+      if (!isActive) {
+        playerSel.value = '';
+        deckSel.innerHTML = '<option>Select player first</option>';
+        deckSel.disabled = true;
+        if (tile) {
+          tile.classList.remove('has-bg');
+          tile.style.removeProperty('--deck-bg');
+        }
+      } else {
+        refreshDeckSelect(i);
+      }
+    }
+
+    refreshStartingPlayerOptions();
+    updatePlayerOptionDisabling();
+  }
+
+  for (let i = 1; i <= 6; i++) {
     setupPlayerListeners(i);
     setupDeckListeners(i);
     refreshDeckSelect(i);
   }
+  applyPlayerCount(2);
   refreshStartingPlayerOptions();
   updatePlayerOptionDisabling();
 
-  // Add player button (up to 6)
-  document.getElementById('addPlayer').addEventListener('click', function() {
-    if (playerCount >= 6) return;
-
-    playerCount++;
-    const container = document.getElementById('playerContainer');
-
-    // Clone first card for structure
-    const template = container.querySelector('.player-card');
-    const newCard = template.cloneNode(true);
-
-    // Update label
-    newCard.querySelector('.player-label').textContent = 'Player ' + playerCount;
-
-    // Player select
-    const pSel = newCard.querySelector('select[name^="player"]');
-    pSel.id = 'player' + playerCount;
-    pSel.name = 'player' + playerCount;
-    pSel.value = '';
-
-    // Deck select
-    const dSel = newCard.querySelector('select[name^="deck"]');
-    dSel.id = 'deck' + playerCount;
-    dSel.name = 'deck' + playerCount;
-    dSel.innerHTML = '<option>Select player first</option>';
-    dSel.disabled = true;
-
-    // Clear any bg on cloned card
-    const tile = newCard.querySelector(".player-tile");
-    if (tile) {
-      tile.classList.remove("has-bg");
-      tile.style.removeProperty("--deck-bg");
-    }
-
-    container.appendChild(newCard);
-
-    setupPlayerListeners(playerCount);
-    setupDeckListeners(playerCount);
-    refreshStartingPlayerOptions();
-    updatePlayerOptionDisabling();
-
-    if (playerCount === 6) this.disabled = true;
+  document.getElementById('playerCountSelect').addEventListener('change', function() {
+    applyPlayerCount(Number(this.value));
   });
 
   // ---- Fullscreen + Landscape on Start Game (user gesture) ----
