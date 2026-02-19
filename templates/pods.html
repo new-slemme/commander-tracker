@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="mb-3">Pods</h1>
+<div class="list-group">
+  {% for pod in pods %}
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+      <span>{{ pod.name }}</span>
+      {% if active_pod and pod.id == active_pod.id %}
+        <span class="badge bg-primary">Active</span>
+      {% else %}
+        <form method="post" action="{{ url_for('switch_pod', pod_id=pod.id) }}">
+          <button class="btn btn-sm btn-outline-light" type="submit">Switch</button>
+        </form>
+      {% endif %}
+    </div>
+  {% endfor %}
+</div>
+{% endblock %}
