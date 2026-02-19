@@ -41,13 +41,6 @@
     border-radius: 12px;
     text-align: center;
     font-weight: 800;
-    border: 1px solid rgba(170,181,235,0.55);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 0 16px rgba(170,181,235,0.15);
-  }
-
-  .count-picker label {
-    margin: 0;
-    opacity: 0.9;
   }
 
   .pg-btn {
@@ -486,6 +479,8 @@
 
     const tile = deckSel.closest(".player-panel")?.querySelector(".player-tile");
     if (!tile) return;
+
+    if (!isActiveSlot(i)) return;
 
     const pid = playerSel.value;
     const did = deckSel.value;
