@@ -114,6 +114,15 @@
       grid-template-rows: repeat(auto-fill, minmax(250px, 1fr));
       grid-template-areas: none;
     }
+
+    /* reset 3-player desktop area mapping so mobile stacks cleanly */
+    .player-grid .player-panel {
+      grid-area: auto !important;
+    }
+
+    .player-tile-body {
+      justify-content: flex-start;
+    }
   }
 
   .player-tile{
