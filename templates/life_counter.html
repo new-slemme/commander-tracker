@@ -764,11 +764,12 @@ cards.forEach(card=>{
 
     const rect = card.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
     let delta;
     if(card.classList.contains("p3-slot-3")){
-      // Keep p3 controls consistent: visual left = down, right = up.
-      delta = (x < rect.width / 2) ? -1 : 1;
+      // 3-player right panel uses vertical tap zones: top = up, bottom = down.
+      delta = (y < rect.height / 2) ? 1 : -1;
     }else{
       delta = (x < rect.width / 2) ? -1 : 1;
       if(isTop) delta = -delta;
