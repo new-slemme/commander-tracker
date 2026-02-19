@@ -680,6 +680,8 @@ function applyPendingLife(playerId){
     addTurnDamage(playerId, Math.abs(amount));
   }
 
+  renderDisplayedLife(playerId);
+
   pendingLife[playerId] = 0;
   renderDisplayedLife(playerId);
 
@@ -765,9 +767,8 @@ cards.forEach(card=>{
 
     let delta;
     if(card.classList.contains("p3-slot-3")){
-      // p3 content is rotated: visual left/right maps to top/bottom touch zones.
-      const y = e.clientY - rect.top;
-      delta = (y < rect.height / 2) ? -1 : 1;
+      // Keep p3 controls consistent: visual left = down, right = up.
+      delta = (x < rect.width / 2) ? -1 : 1;
     }else{
       delta = (x < rect.width / 2) ? -1 : 1;
       if(isTop) delta = -delta;
