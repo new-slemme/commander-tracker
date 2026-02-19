@@ -125,18 +125,29 @@
 
   .player-panel {
     min-height: 260px;
+    border-right: none;
+    border-bottom: none;
   }
 
-  .player-panel:nth-child(odd):not(.hidden) {
+  .player-grid.players-2 .player-panel[data-slot="1"],
+  .player-grid.players-3 .player-panel[data-slot="1"],
+  .player-grid.players-3 .player-panel[data-slot="2"],
+  .player-grid.players-4 .player-panel[data-slot="1"],
+  .player-grid.players-4 .player-panel[data-slot="3"],
+  .player-grid.players-5 .player-panel[data-slot="1"],
+  .player-grid.players-5 .player-panel[data-slot="2"],
+  .player-grid.players-5 .player-panel[data-slot="4"],
+  .player-grid.players-6 .player-panel[data-slot="1"],
+  .player-grid.players-6 .player-panel[data-slot="2"],
+  .player-grid.players-6 .player-panel[data-slot="4"],
+  .player-grid.players-6 .player-panel[data-slot="5"] {
     border-right: 1px solid rgba(170,181,235,0.34);
-  }
-
-  .player-grid.players-3 .player-panel[data-slot="1"] {
-    border-bottom: 1px solid rgba(170,181,235,0.34);
   }
 
   .player-grid.players-4 .player-panel[data-slot="1"],
   .player-grid.players-4 .player-panel[data-slot="2"],
+  .player-grid.players-3 .player-panel[data-slot="1"],
+  .player-grid.players-3 .player-panel[data-slot="2"],
   .player-grid.players-5 .player-panel[data-slot="1"],
   .player-grid.players-5 .player-panel[data-slot="2"],
   .player-grid.players-5 .player-panel[data-slot="3"],
@@ -144,18 +155,6 @@
   .player-grid.players-6 .player-panel[data-slot="2"],
   .player-grid.players-6 .player-panel[data-slot="3"] {
     border-bottom: 1px solid rgba(170,181,235,0.34);
-  }
-
-  .player-grid.players-4 .player-panel[data-slot="2"],
-  .player-grid.players-6 .player-panel[data-slot="3"] {
-    border-right: none;
-  }
-
-  .player-grid.players-5 .player-panel[data-slot="3"],
-  .player-grid.players-5 .player-panel[data-slot="6"],
-  .player-grid.players-6 .player-panel[data-slot="3"],
-  .player-grid.players-6 .player-panel[data-slot="6"] {
-    border-right: none;
   }
 
   @media (max-width: 992px) {
