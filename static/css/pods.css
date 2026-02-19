@@ -1,0 +1,13 @@
+  .pods-shell { display: grid; gap: 1rem; }
+  .pods-card {
+    border-radius: 16px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: linear-gradient(135deg, rgba(23,26,38,0.9), rgba(16,18,26,0.9));
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  }
+  .pod-item {
+    border: 1px solid rgba(143,153,197,0.2);
+    border-radius: 12px;
+    background: rgba(16,18,26,0.55);
+  }
+  .pods-muted { color: var(--font-base-trans); }

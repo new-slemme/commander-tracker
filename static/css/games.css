@@ -1,0 +1,228 @@
+  .games-head {
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap: 12px;
+    flex-wrap:wrap;
+    margin-bottom: 14px;
+  }
+
+  .games-title h1 {
+    margin:0;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+  }
+
+  .games-sub {
+    color: var(--font-base-trans);
+    margin-top: 4px;
+  }
+
+  .filter-card {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow:hidden;
+    margin-bottom: 18px;
+  }
+
+  .filter-card-head {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .filter-grid {
+    padding: 12px 14px 14px;
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 10px;
+  }
+
+  .fg-3 { grid-column: span 3; }
+  .fg-2 { grid-column: span 2; }
+  .fg-4 { grid-column: span 4; }
+  .fg-6 { grid-column: span 6; }
+  .fg-12 { grid-column: span 12; }
+
+  .filter-label {
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.75);
+    margin-bottom: 6px;
+    font-weight: 800;
+  }
+
+  .filter-actions {
+    display:flex;
+    gap: 10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+
+  /* Games list */
+  .game-list {
+    display:flex;
+    flex-direction:column;
+    gap: 12px;
+  }
+
+  .game-tile {
+    position:relative;
+    border-radius: 18px;
+    overflow:hidden;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(0,0,0,0.18);
+    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+  }
+
+  .game-bg {
+    position:absolute;
+    inset:0;
+    display:flex;
+    opacity: 0.9;
+  }
+  .game-slice {
+    flex:1;
+    background-size:cover;
+    background-position: top;
+    filter: saturate(1.05) contrast(1.05);
+  }
+  .game-overlay {
+    position:absolute;
+    inset:0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.86), rgba(0,0,0,0.45));
+  }
+
+  .game-content {
+    position:relative;
+    padding: 14px;
+    display:flex;
+    flex-direction:column;
+    gap: 10px;
+  }
+
+  .game-top {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap: 10px;
+    flex-wrap:wrap;
+  }
+
+  .game-date {
+    color:#fff;
+    font-weight: 900;
+  }
+  .game-meta {
+    color: var(--font-base-trans);
+    font-weight: 700;
+    font-size: 0.92rem;
+    margin-top: 2px;
+  }
+
+  .winner-pill {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-weight: 900;
+    border: 1px solid rgba(58,107,84,0.55);
+    background: rgba(58,107,84,0.22);
+    color:#fff;
+    white-space: nowrap;
+  }
+  .winner-pill .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--green);
+    box-shadow: 0 0 10px rgba(58,107,84,0.65);
+  }
+
+  .players-row {
+    display:flex;
+    flex-wrap:wrap;
+    gap: 8px;
+  }
+
+  .ppill {
+    display:inline-flex;
+    align-items:center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.05);
+    color:#fff;
+    max-width: 100%;
+  }
+
+  .ppill.win {
+    border-color: rgba(58,107,84,0.55);
+    background: rgba(58,107,84,0.18);
+  }
+
+  .ppill .wmark {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 22px;
+    height: 22px;
+    border-radius: 8px;
+    background: rgba(58,107,84,0.28);
+    border: 1px solid rgba(58,107,84,0.6);
+    font-weight: 900;
+    font-size: 0.8rem;
+  }
+
+  .ppill .name {
+    font-weight: 900;
+    min-width: 0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width: 170px;
+  }
+  .ppill .deck {
+    color: var(--font-base-trans);
+    font-weight: 800;
+    min-width: 0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width: 220px;
+  }
+
+  /* Pagination */
+  .pager {
+    margin-top: 16px;
+    display:flex;
+    justify-content:space-between;
+    gap: 10px;
+    flex-wrap:wrap;
+    align-items:center;
+  }
+  .pager .muted { color: var(--font-base-trans); font-weight: 700; }
+
+  @media (max-width: 992px) {
+    .fg-3 { grid-column: span 6; }
+    .fg-2 { grid-column: span 6; }
+    .fg-4 { grid-column: span 12; }
+  }
+
+  @media (max-width: 576px) {
+    .filter-card { border-radius: 18px; }
+    .game-content { padding: 12px; }
+    .ppill { width: 100%; justify-content:space-between; }
+    .ppill .name { max-width: 55%; }
+    .ppill .deck { max-width: 45%; text-align:right; }
+  }

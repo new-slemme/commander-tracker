@@ -1,0 +1,201 @@
+  .salt-hero{
+    border-radius: 24px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background:
+      radial-gradient(circle at 18% 20%, rgba(229,92,54,0.16), transparent 45%),
+      linear-gradient(135deg, rgba(22,45,61,0.50), rgba(23,26,38,0.92));
+    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+    padding: 18px 18px;
+    overflow: hidden;
+    position: relative;
+  }
+  .salt-hero::before{
+    content:"";
+    position:absolute;
+    inset:-1px;
+    background:
+      radial-gradient(circle at 80% 10%, rgba(70,84,147,0.18), transparent 45%),
+      radial-gradient(circle at 10% 80%, rgba(143,153,197,0.14), transparent 55%);
+    pointer-events:none;
+  }
+  .salt-hero > * { position: relative; z-index: 1; }
+
+  .salt-title{
+    margin:0;
+    line-height: 1.0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--font-base);
+  }
+
+  .salt-sub{
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-highlight-trans);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+  }
+  .salt-dot{
+    width: 10px; height: 10px;
+    border-radius: 999px;
+    background: rgba(229,92,54,0.95);
+    box-shadow: 0 0 12px rgba(229,92,54,0.45);
+  }
+
+  .salt-grid{
+    display:grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 14px;
+  }
+
+  .salt-card{
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow:hidden;
+  }
+
+  .salt-card-head{
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .salt-card-title{
+    margin:0;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+  }
+
+  .salt-chip{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 900;
+    font-size: 0.88rem;
+    white-space: nowrap;
+  }
+  .salt-chip b { color:#fff; }
+
+  .muted { color: var(--font-base-trans); font-weight: 700; }
+
+  /* Tables */
+  .salt-table thead th{
+    font-size: 0.86rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .salt-table tbody tr{
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .salt-pill{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(229,92,54,0.45);
+    background: rgba(229,92,54,0.16);
+    color: #fff;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+
+  /* Saltiest games list tiles */
+  .game-list{
+    display:flex;
+    flex-direction:column;
+    gap: 12px;
+    padding: 14px;
+  }
+  .game-tile{
+    position:relative;
+    border-radius: 18px;
+    overflow:hidden;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(0,0,0,0.18);
+    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+  }
+  .game-overlay{
+    position:absolute;
+    inset:0;
+    background: linear-gradient(90deg, rgba(0,0,0,0.88), rgba(0,0,0,0.45));
+  }
+  .game-content{
+    position:relative;
+    padding: 14px;
+    display:flex;
+    gap: 10px;
+    align-items:flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  .game-left{ min-width: 220px; }
+  .game-date{
+    color:#fff;
+    font-weight: 900;
+  }
+  .game-meta{
+    color: var(--font-base-trans);
+    font-weight: 800;
+    font-size: 0.92rem;
+    margin-top: 2px;
+  }
+  .game-right{
+    display:flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items:center;
+    justify-content:flex-end;
+  }
+  .winner-pill{
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-weight: 900;
+    border: 1px solid rgba(58,107,84,0.55);
+    background: rgba(58,107,84,0.22);
+    color:#fff;
+    white-space: nowrap;
+  }
+  .winner-pill .dot{
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--green);
+    box-shadow: 0 0 10px rgba(58,107,84,0.65);
+  }
+
+  /* Layout spans */
+  .span-6 { grid-column: span 6; }
+  .span-12 { grid-column: span 12; }
+
+  @media (max-width: 992px) {
+    .span-6 { grid-column: span 12; }
+  }
+  @media (max-width: 576px) {
+    .salt-hero{ border-radius: 20px; padding: 14px; }
+    .salt-card{ border-radius: 18px; }
+    .salt-card-head{ padding: 12px 12px; }
+  }
