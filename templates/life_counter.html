@@ -680,6 +680,8 @@ function applyPendingLife(playerId){
     addTurnDamage(playerId, Math.abs(amount));
   }
 
+  renderDisplayedLife(playerId);
+
   pendingLife[playerId] = 0;
   renderDisplayedLife(playerId);
 
@@ -770,6 +772,8 @@ cards.forEach(card=>{
       const lifeRect = lifeEl?.getBoundingClientRect();
       const splitX = lifeRect ? (lifeRect.left + lifeRect.width / 2) : (rect.left + rect.width / 2);
       delta = (e.clientX < splitX) ? -1 : 1;
+      // Keep p3 controls consistent: visual left = down, right = up.
+      delta = (x < rect.width / 2) ? -1 : 1;
     }else{
       delta = (x < rect.width / 2) ? -1 : 1;
       if(isTop) delta = -delta;
