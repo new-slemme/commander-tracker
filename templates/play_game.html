@@ -108,24 +108,27 @@
       gap: 10px;
       padding: 10px;
       overflow: visible;
+      grid-template-columns: 1fr !important;
+      grid-template-rows: none !important;
+      grid-template-areas: none !important;
     }
 
     .player-grid.players-2 {
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      grid-template-rows: minmax(210px, 1fr);
+      grid-template-columns: 1fr !important;
+      grid-template-rows: none !important;
     }
 
     .player-grid.players-3,
     .player-grid.players-4 {
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      grid-template-rows: repeat(2, minmax(210px, 1fr));
+      grid-template-columns: 1fr !important;
+      grid-template-rows: none !important;
       grid-template-areas: none;
     }
 
     .player-grid.players-5,
     .player-grid.players-6 {
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      grid-template-rows: repeat(3, minmax(210px, 1fr));
+      grid-template-columns: 1fr !important;
+      grid-template-rows: none !important;
       grid-template-areas: none;
     }
 
@@ -136,14 +139,41 @@
     }
 
     .player-panel {
-      min-height: 210px;
+      min-height: 170px;
       border: 1px solid rgba(170,181,235,0.35) !important;
       border-radius: 16px;
+    }
+
+    .player-grid .player-panel {
+      border-right: 1px solid rgba(170,181,235,0.35) !important;
+      border-bottom: 1px solid rgba(170,181,235,0.35) !important;
     }
 
     .player-tile-body {
       justify-content: flex-start;
       padding: 14px 12px;
+    }
+
+    .life-position-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+      margin-bottom: 8px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(170,181,235,0.35);
+      color: rgba(230,235,255,0.95);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .life-position-indicator .pos-icon {
+      font-size: 0.95rem;
+      line-height: 1;
     }
 
     .player-tile .form-label {
@@ -254,6 +284,10 @@
   .player-tile > * { position: relative; z-index: 2; }
 
   .player-tile-header{ display:none; }
+
+  .life-position-indicator {
+    display: none;
+  }
 
   .player-label {
     font-weight: 900;
@@ -404,6 +438,10 @@
       <div class="player-panel {% if i > 2 %}hidden{% endif %}" data-slot="{{ i }}">
         <div class="player-tile" data-slot="{{ i }}">
           <div class="player-tile-body">
+            <div class="life-position-indicator" id="positionHint{{ i }}" aria-live="polite">
+              <span class="pos-icon" aria-hidden="true">↖</span>
+              <span class="pos-text">Life layout</span>
+            </div>
             <label class="form-label mb-1 title-font">Select Player:</label>
             <select name="player{{ i }}" id="player{{ i }}" class="form-select mb-3">
               <option value="">- None -</option>
@@ -568,6 +606,60 @@
     }
   }
 
+  function getLifeLayoutPosition(count, slot) {
+    const byCount = {
+      2: {
+        1: { icon: "⬅️", label: "Left" },
+        2: { icon: "➡️", label: "Right" },
+      },
+      3: {
+        1: { icon: "↖️", label: "Top Left" },
+        2: { icon: "↙️", label: "Bottom Left" },
+        3: { icon: "➡️", label: "Right" },
+      },
+      4: {
+        1: { icon: "↖️", label: "Top Left" },
+        2: { icon: "↗️", label: "Top Right" },
+        3: { icon: "↙️", label: "Bottom Left" },
+        4: { icon: "↘️", label: "Bottom Right" },
+      },
+      5: {
+        1: { icon: "↖️", label: "Top Left" },
+        2: { icon: "⬆️", label: "Top Middle" },
+        3: { icon: "↗️", label: "Top Right" },
+        4: { icon: "↙️", label: "Bottom Left" },
+        5: { icon: "↘️", label: "Bottom Middle" },
+      },
+      6: {
+        1: { icon: "↖️", label: "Top Left" },
+        2: { icon: "⬆️", label: "Top Middle" },
+        3: { icon: "↗️", label: "Top Right" },
+        4: { icon: "↙️", label: "Bottom Left" },
+        5: { icon: "⬇️", label: "Bottom Middle" },
+        6: { icon: "↘️", label: "Bottom Right" },
+      },
+    };
+
+    return byCount[count]?.[slot] || { icon: "•", label: "Position" };
+  }
+
+  function refreshLifeLayoutHints() {
+    for (let i = 1; i <= 6; i++) {
+      const hint = document.getElementById("positionHint" + i);
+      if (!hint) continue;
+
+      const isActive = isActiveSlot(i);
+      hint.style.display = isActive ? "inline-flex" : "none";
+      if (!isActive) continue;
+
+      const pos = getLifeLayoutPosition(playerCount, i);
+      const iconEl = hint.querySelector(".pos-icon");
+      const textEl = hint.querySelector(".pos-text");
+      if (iconEl) iconEl.textContent = pos.icon;
+      if (textEl) textEl.textContent = `Life layout: ${pos.label}`;
+    }
+  }
+
   function refreshDeckSelect(i) {
     const playerSel = document.getElementById('player' + i);
     const deckSel = document.getElementById('deck' + i);
@@ -644,6 +736,7 @@
 
     refreshStartingPlayerOptions();
     updatePlayerOptionDisabling();
+    refreshLifeLayoutHints();
   }
 
   for (let i = 1; i <= 6; i++) {
@@ -654,6 +747,7 @@
   applyPlayerCount(2);
   refreshStartingPlayerOptions();
   updatePlayerOptionDisabling();
+  refreshLifeLayoutHints();
 
   document.getElementById('playerCountSelect').addEventListener('change', function() {
     applyPlayerCount(Number(this.value));
