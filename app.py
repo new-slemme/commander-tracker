@@ -417,7 +417,7 @@ def get_accessible_pods(user):
         return []
 
     if user.is_admin:
-        return Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+        return Pod.query.order_by(Pod.is_active.desc(), Pod.name.asc()).all()
 
     if not user.player:
         return []
@@ -963,7 +963,71 @@ def switch_pod(pod_id):
 
     session["active_pod_id"] = pod.id
     session.modified = True
-    return {"ok": True, "pod_id": pod.id, "name": pod.name}
+    flash(f"Switched active pod to {pod.name}.")
+    return redirect(url_for("pods", pod_id=pod.id))
+
+
+@app.route("/pods/<int:pod_id>/retire", methods=["POST"])
+@admin_required
+def retire_pod(pod_id):
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        abort(404)
+
+    if pod.slug == DEFAULT_POD_SLUG:
+        flash("The default pod cannot be retired.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    pod.is_active = False
+    db.session.commit()
+
+    if session.get("active_pod_id") == pod_id:
+        session.pop("active_pod_id", None)
+        session.modified = True
+
+    flash(f"Retired pod '{pod.name}'.")
+    return redirect(url_for("pods"))
+
+
+@app.route("/pods/<int:pod_id>/restore", methods=["POST"])
+@admin_required
+def restore_pod(pod_id):
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        abort(404)
+
+    pod.is_active = True
+    db.session.commit()
+    flash(f"Restored pod '{pod.name}'.")
+    return redirect(url_for("pods", pod_id=pod.id))
+
+
+@app.route("/pods/<int:pod_id>/delete", methods=["POST"])
+@admin_required
+def delete_pod(pod_id):
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        abort(404)
+
+    if pod.slug == DEFAULT_POD_SLUG:
+        flash("The default pod cannot be deleted.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    games_count = Game.query.filter_by(pod_id=pod_id).count()
+    if games_count > 0:
+        flash("Cannot delete pod with recorded games. Retire it instead.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    PodMembership.query.filter_by(pod_id=pod_id).delete()
+
+    if session.get("active_pod_id") == pod_id:
+        session.pop("active_pod_id", None)
+        session.modified = True
+
+    db.session.delete(pod)
+    db.session.commit()
+    flash("Pod deleted.")
+    return redirect(url_for("pods"))
 
 
 @app.route("/pods/<int:pod_id>/members", methods=["POST"])
