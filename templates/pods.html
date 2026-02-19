@@ -1,18 +1,125 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="mb-3">Pods</h1>
-<div class="list-group">
-  {% for pod in pods %}
-    <div class="list-group-item d-flex justify-content-between align-items-center">
-      <span>{{ pod.name }}</span>
-      {% if active_pod and pod.id == active_pod.id %}
-        <span class="badge bg-primary">Active</span>
-      {% else %}
-        <form method="post" action="{{ url_for('switch_pod', pod_id=pod.id) }}">
-          <button class="btn btn-sm btn-outline-light" type="submit">Switch</button>
-        </form>
-      {% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h2 class="h5 mb-3">Available Pods</h2>
+      <div class="list-group">
+        {% for pod in pods %}
+          <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <a href="{{ url_for('pods', pod_id=pod.id) }}" class="text-decoration-none text-light fw-semibold">{{ pod.name }}</a>
+            <div class="d-flex align-items-center gap-2">
+              {% if active_pod and pod.id == active_pod.id %}
+                <span class="badge bg-primary">Active</span>
+              {% else %}
+                <form method="post" action="{{ url_for('switch_pod', pod_id=pod.id) }}">
+                  <button class="btn btn-sm btn-outline-light" type="submit">Switch</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% else %}
+          <div class="list-group-item">No pods available for your account.</div>
+        {% endfor %}
+      </div>
     </div>
-  {% endfor %}
+  </div>
+
+  {% if is_admin %}
+  <div class="col-lg-6">
+    <div class="card p-3 h-100">
+      <h2 class="h5 mb-3">Create Pod (Admin)</h2>
+      <form method="post" action="{{ url_for('create_pod') }}" class="row g-2">
+        <div class="col-12">
+          <label class="form-label">Pod name</label>
+          <input class="form-control" name="name" required>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Slug (optional)</label>
+          <input class="form-control" name="slug" placeholder="auto-generated-if-empty">
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary" type="submit">Create Pod</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 </div>
+
+{% if selected_pod %}
+<div class="card p-3 mt-4">
+  <div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="h5 mb-0">Members · {{ selected_pod.name }}</h2>
+    <small class="text-muted">Manage members + Podmaster role</small>
+  </div>
+
+  {% if can_manage_selected %}
+    <form method="post" action="{{ url_for('add_pod_member', pod_id=selected_pod.id) }}" class="row g-2 mb-3">
+      <div class="col-md-6">
+        <select class="form-select" name="player_id" required>
+          <option value="">Select player…</option>
+          {% for player in all_players %}
+          <option value="{{ player.id }}">{{ player.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <select class="form-select" name="role">
+          <option value="member">member</option>
+          {% if is_admin %}<option value="podmaster">podmaster</option>{% endif %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-outline-light w-100" type="submit">Add member</button>
+      </div>
+    </form>
+  {% endif %}
+
+  <div class="table-responsive">
+    <table class="table table-dark table-striped align-middle mb-0">
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>Role</th>
+          {% if can_manage_selected %}<th class="text-end">Actions</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for m in memberships %}
+        <tr>
+          <td>{{ m.player.name }}</td>
+          <td>
+            {% if can_manage_selected %}
+            <form method="post" action="{{ url_for('update_pod_member_role', pod_id=selected_pod.id, player_id=m.player_id) }}" class="d-flex gap-2">
+              <select class="form-select form-select-sm" name="role" {% if not is_admin %}disabled{% endif %}>
+                <option value="member" {% if m.role == 'member' %}selected{% endif %}>member</option>
+                <option value="podmaster" {% if m.role == 'podmaster' %}selected{% endif %}>podmaster</option>
+              </select>
+              {% if is_admin %}<button class="btn btn-sm btn-outline-light" type="submit">Save</button>{% endif %}
+            </form>
+            {% else %}
+            {{ m.role }}
+            {% endif %}
+          </td>
+          {% if can_manage_selected %}
+          <td class="text-end">
+            <form method="post" action="{{ url_for('remove_pod_member', pod_id=selected_pod.id, player_id=m.player_id) }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="3">No members yet.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
