@@ -404,14 +404,40 @@
   </div>
 
   <!-- Modal -->
+  <div class="modal fade" id="quickMenuModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+      <div class="modal-content bg-dark text-light">
+        <div class="modal-body p-4 d-flex flex-column gap-3">
+          <div class="text-center mb-2">
+            <h2 class="h4 mb-1">Game Actions</h2>
+            <div class="text-secondary">Choose what you want to do next.</div>
+          </div>
+
+          <button class="btn btn-primary btn-lg w-100" id="quickToggleFsBtn" type="button">
+            Toggle Fullscreen
+          </button>
+
+          <button class="btn btn-success btn-lg w-100" id="openEndGameBtn" type="button">
+            End &amp; Record Game
+          </button>
+
+          <button class="btn btn-outline-danger btn-lg w-100" id="quickQuitBtn" type="button">
+            Quit without Saving
+          </button>
+
+          <button class="btn btn-outline-light btn-lg w-100" data-bs-dismiss="modal" type="button">
+            Back to Game
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- End game modal -->
   <div class="modal fade" id="menuModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
       <div class="modal-content bg-dark text-light">
         <div class="modal-body text-center p-4 d-flex flex-column gap-3">
-          <button class="btn btn-primary btn-lg w-100" id="toggleFsBtn" type="button">
-            Toggle Fullscreen
-          </button>
-
           <form method="post" action="/end_game">
             <select name="winner" class="form-select form-select-lg" required>
               <option value="" disabled selected>Select Winner</option>
@@ -445,15 +471,15 @@
             </button>
           </form>
 
-          <form method="post" action="/cancel_game" onsubmit="return confirm('Quit without saving?')">
-            <button class="btn btn-outline-danger btn-lg w-100">
-              Quit without Saving
-            </button>
-          </form>
+          <button class="btn btn-outline-light btn-lg w-100" type="button" data-bs-dismiss="modal">
+            Back
+          </button>
         </div>
       </div>
     </div>
   </div>
+
+  <form id="quickQuitForm" method="post" action="/cancel_game" class="d-none"></form>
 
 <script>
 /* ---------- FULLSCREEN + ORIENTATION (life_counter only) ---------- */
@@ -509,14 +535,32 @@ function hideFsOverlay(){
 
 document.getElementById("fsBtn")?.addEventListener("click", goFullscreen);
 
-document.getElementById("toggleFsBtn")?.addEventListener("click", async ()=>{
+async function toggleFullscreenFromMenu(){
   try{
-    const modalEl = document.getElementById("menuModal");
-    const modal = bootstrap.Modal.getInstance(modalEl);
-    modal?.hide();
+    const quickModalEl = document.getElementById("quickMenuModal");
+    bootstrap.Modal.getInstance(quickModalEl)?.hide();
   }catch(e){}
   if(isFs()) await exitFullscreen();
   else await goFullscreen();
+}
+
+document.getElementById("quickToggleFsBtn")?.addEventListener("click", toggleFullscreenFromMenu);
+
+document.getElementById("openEndGameBtn")?.addEventListener("click", ()=>{
+  const quickModalEl = document.getElementById("quickMenuModal");
+  bootstrap.Modal.getInstance(quickModalEl)?.hide();
+
+  setTimeout(()=>{
+    const endModalEl = document.getElementById("menuModal");
+    if(!endModalEl) return;
+    bootstrap.Modal.getOrCreateInstance(endModalEl).show();
+  }, 160);
+});
+
+document.getElementById("quickQuitBtn")?.addEventListener("click", ()=>{
+  const confirmed = confirm("Quit without saving?");
+  if(!confirmed) return;
+  document.getElementById("quickQuitForm")?.submit();
 });
 
 document.addEventListener("fullscreenchange", ()=>{
@@ -780,7 +824,7 @@ cards.forEach(card=>{
 });
 
 function openMenu(){
-  const modalEl = document.getElementById("menuModal");
+  const modalEl = document.getElementById("quickMenuModal");
   if(!modalEl) return;
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
