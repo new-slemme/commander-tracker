@@ -258,7 +258,7 @@
     .player-pill { width: 100%; }
     .player-pill .deck { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
-    .home-hero {
+  .home-hero {
     border-radius: 24px;
     border: 1px solid rgba(143,153,197,0.25);
     background:
@@ -268,6 +268,46 @@
     padding: 18px 18px;
     overflow: hidden;
     position: relative;
+  }
+
+  .pod-selector {
+    position: relative;
+  }
+
+  .pod-button {
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: 16px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.04);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .pod-options {
+    margin-top: 8px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    opacity: 0;
+  }
+
+  .pod-selector.pod-selector--open .pod-options {
+    max-height: 280px;
+    opacity: 1;
+  }
+
+  .pod-option {
+    width: 100%;
+    border: 1px solid rgba(143,153,197,0.20);
+    border-radius: 12px;
+    background: rgba(0,0,0,0.25);
+    color: var(--font-base);
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    text-align: left;
   }
 
   .home-hero::before{
@@ -318,12 +358,50 @@
 </style>
 
 <div class="home-hero mb-4">
-  <h1 class="keller-title title-font">Der Keller</h1>
-  <div class="salz-sub">
+  <h1 class="keller-title title-font">{{ active_pod.name if active_pod else "Der Keller" }}</h1>
+  <div class="salz-sub mb-2">
     <span class="salz-dot"></span>
-    Die Salzmine
+    Active Pod
   </div>
+
+  {% if session.get("user_id") %}
+  <div class="pod-selector" id="pod-selector">
+    <button class="pod-button" id="pod-toggle" type="button">
+      Switch pod ▾
+    </button>
+    <div class="pod-options" id="pod-options">
+      {% for pod in available_pods if active_pod %}
+        {% if pod.id != active_pod.id %}
+        <button class="pod-option" type="button" data-pod-id="{{ pod.id }}">{{ pod.name }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
+
+<div class="d-flex gap-2 mb-4">
+  <a class="btn btn-sm {% if scope == 'pod' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='pod') }}">This Pod</a>
+  <a class="btn btn-sm {% if scope == 'all' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='all') }}">All Pods</a>
+</div>
+
+<script>
+  (() => {
+    const selector = document.getElementById('pod-selector');
+    const toggle = document.getElementById('pod-toggle');
+    if (!selector || !toggle) return;
+
+    toggle.addEventListener('click', () => selector.classList.toggle('pod-selector--open'));
+
+    selector.querySelectorAll('[data-pod-id]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const podId = btn.getAttribute('data-pod-id');
+        const res = await fetch(`/pods/switch/${podId}`, { method: 'POST' });
+        if (res.ok) window.location.reload();
+      });
+    });
+  })();
+</script>
 
   <!-- =========================
       TOP PLAYERS (PYRAMID)

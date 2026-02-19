@@ -30,6 +30,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+DEFAULT_POD_NAME = "Der Keller – Die Salzmine"
+DEFAULT_POD_SLUG = "der-keller-die-salzmine"
+
 ART_DIR = Path("/data/art")
 ART_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -109,6 +112,32 @@ class Game(db.Model):
 
     note = db.Column(db.Text, nullable=True)
 
+    pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=True, index=True)
+    pod = db.relationship("Pod", backref="games", lazy=True)
+
+
+class Pod(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    slug = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PodMembership(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="member")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    pod = db.relationship("Pod", backref="memberships", lazy=True)
+    player = db.relationship("Player", backref="pod_memberships", lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("pod_id", "player_id", name="uq_pod_membership_pod_player"),
+    )
+
 
 
 
@@ -126,10 +155,105 @@ class GameParticipant(db.Model):
 
 
 # -------------------------
-# DB init (you said you'll reset DB, so no migrations)
+# App bootstrap
 # -------------------------
 with app.app_context():
-    db.create_all()
+    def run_schema_migrations():
+        existing_tables = {
+            row[0]
+            for row in db.session.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table'")
+            ).fetchall()
+        }
+
+        if "game" not in existing_tables:
+            db.create_all()
+            existing_tables = {
+                row[0]
+                for row in db.session.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table'")
+                ).fetchall()
+            }
+
+        db.session.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP)"
+            )
+        )
+
+        applied = {
+            row[0] for row in db.session.execute(text("SELECT version FROM schema_migrations")).fetchall()
+        }
+
+        if "001_pods" not in applied:
+            db.session.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS pod (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(100) NOT NULL UNIQUE,
+                        slug VARCHAR(120) NOT NULL UNIQUE,
+                        is_active BOOLEAN NOT NULL DEFAULT 1,
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_pod_slug ON pod (slug)"))
+            db.session.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS pod_membership (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        pod_id INTEGER NOT NULL,
+                        player_id INTEGER NOT NULL,
+                        role VARCHAR(20) NOT NULL DEFAULT 'member',
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(pod_id) REFERENCES pod (id),
+                        FOREIGN KEY(player_id) REFERENCES player (id),
+                        CONSTRAINT uq_pod_membership_pod_player UNIQUE (pod_id, player_id)
+                    )
+                    """
+                )
+            )
+
+            cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game)")).fetchall()
+            }
+            if "pod_id" not in cols:
+                db.session.execute(text("ALTER TABLE game ADD COLUMN pod_id INTEGER"))
+                db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_game_pod_id ON game (pod_id)"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('001_pods')")
+            )
+
+        default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+        if not default_pod:
+            default_pod = Pod(name=DEFAULT_POD_NAME, slug=DEFAULT_POD_SLUG, is_active=True)
+            db.session.add(default_pod)
+            db.session.flush()
+
+        db.session.execute(
+            text("UPDATE game SET pod_id = :pod_id WHERE pod_id IS NULL"),
+            {"pod_id": default_pod.id},
+        )
+
+        db.session.execute(
+            text(
+                """
+                INSERT OR IGNORE INTO pod_membership (pod_id, player_id, role)
+                SELECT :pod_id, player.id, 'member' FROM player
+                """
+            ),
+            {"pod_id": default_pod.id},
+        )
+        db.session.commit()
+
+    run_schema_migrations()
+
+    if os.getenv("AUTO_CREATE_DB") == "1":
+        db.create_all()
 
     # Bootstrap admin (env var BOOTSTRAP_ADMIN_USERNAME)
     admin_username = os.getenv("BOOTSTRAP_ADMIN_USERNAME")
@@ -266,6 +390,30 @@ def admin_required(f):
     return wrapper
 
 
+def get_active_pod():
+    active_pod_id = session.get("active_pod_id")
+    if active_pod_id:
+        pod = db.session.get(Pod, int(active_pod_id))
+        if pod and pod.is_active:
+            return pod
+
+    pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first() or Pod.query.filter_by(is_active=True).order_by(Pod.id.asc()).first()
+    if pod:
+        session["active_pod_id"] = pod.id
+        session.modified = True
+    return pod
+
+
+def game_query_for_scope():
+    scope = (request.args.get("scope") or "pod").strip().lower()
+    q = Game.query
+    active_pod = get_active_pod()
+    if scope != "all" and active_pod:
+        q = q.filter(Game.pod_id == active_pod.id)
+        scope = "pod"
+    return q, scope, active_pod
+
+
 # -------------------------
 # Login Required
 # -------------------------
@@ -275,6 +423,8 @@ def require_login():
         # Allow auth routes + static assets + art
         if request.endpoint not in ("login", "register", "static", "art"):
             return redirect(url_for("login") + "?next=" + quote(request.full_path))
+
+    get_active_pod()
 
 
 # -------------------------
@@ -337,6 +487,7 @@ def login():
             session["username"] = user.username
             session["display_name"] = user.display_name
             session["is_admin"] = user.is_admin
+            get_active_pod()
 
             next_url = request.args.get("next")
             return redirect(next_url or url_for("index"))
@@ -433,9 +584,11 @@ def admin_approve_user(user_id):
 @app.route("/saltmine")
 @login_required
 def saltmine():
+    game_q, scope, active_pod = game_query_for_scope()
+
     # Top salty games
     salty_games = (
-        Game.query
+        game_q
         .filter(Game.salt_rating.isnot(None))
         .order_by(Game.salt_rating.desc(), Game.date.desc())
         .limit(10)
@@ -447,6 +600,7 @@ def saltmine():
         db.session.query(Player, func.avg(Game.salt_rating).label("avg_salt"), func.count(Game.id).label("games"))
         .join(GameParticipant, GameParticipant.player_id == Player.id)
         .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
         .filter(Game.salt_rating.isnot(None))
         .group_by(Player.id)
         .having(func.count(Game.id) >= 3)
@@ -460,6 +614,7 @@ def saltmine():
         db.session.query(Deck, func.avg(Game.salt_rating).label("avg_salt"), func.count(Game.id).label("games"))
         .join(GameParticipant, GameParticipant.deck_id == Deck.id)
         .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
         .filter(Game.salt_rating.isnot(None))
         .group_by(Deck.id)
         .having(func.count(Game.id) >= 3)
@@ -480,6 +635,7 @@ def saltmine():
             ).label("wins")
         )
         .filter(Game.starting_player_id.isnot(None))
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
         .first()
     )
     start_games = int(sp.games or 0)
@@ -494,6 +650,8 @@ def saltmine():
         start_games=start_games,
         start_wins=start_wins,
         start_winrate=start_winrate,
+        scope=scope,
+        active_pod=active_pod,
     )
 
 
@@ -570,12 +728,16 @@ def admin_deny_user(user_id):
 
 @app.route("/")
 def index():
+    game_q, scope, active_pod = game_query_for_scope()
+    game_ids_subquery = game_q.with_entities(Game.id)
+    available_pods = Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+
     # Player stats
     players = Player.query.all()
     player_stats = []
     for p in players:
-        wins = Game.query.filter_by(winner_id=p.id).count()
-        played = GameParticipant.query.filter_by(player_id=p.id).count()
+        wins = game_q.filter_by(winner_id=p.id).count()
+        played = GameParticipant.query.join(Game).filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery)).count()
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"player": p, "wins": wins, "played": played, "winrate": winrate})
 
@@ -589,7 +751,8 @@ def index():
         most_played = (
             db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
             .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-            .filter(GameParticipant.player_id == p.id)
+            .join(Game, Game.id == GameParticipant.game_id)
+            .filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery))
             .group_by(Deck.id)
             .order_by(text("plays DESC"))
             .first()
@@ -609,10 +772,10 @@ def index():
     for d in decks:
         wins = (
             GameParticipant.query.join(Game)
-            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id, Game.id.in_(game_ids_subquery))
             .count()
         )
-        uses = GameParticipant.query.filter_by(deck_id=d.id).count()
+        uses = GameParticipant.query.join(Game).filter(GameParticipant.deck_id == d.id, Game.id.in_(game_ids_subquery)).count()
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate})
 
@@ -620,7 +783,7 @@ def index():
     top_decks = deck_stats[:6]
 
     # Recent games
-    recent_games = Game.query.order_by(Game.date.desc()).limit(10).all()
+    recent_games = game_q.order_by(Game.date.desc()).limit(10).all()
     game_parts = {g.id: GameParticipant.query.filter_by(game_id=g.id).all() for g in recent_games}
 
     # Deck Spotlight: deck that won last (winner's deck in most recent game)
@@ -656,7 +819,29 @@ def index():
         top_players=top_players,
         best_deck=best_deck,
         last_winning_deck=last_winning_deck,
+        scope=scope,
+        active_pod=active_pod,
+        available_pods=available_pods,
     )
+
+
+@app.route("/pods")
+@login_required
+def pods():
+    pods_list = Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+    active_pod = get_active_pod()
+    return render_template("pods.html", pods=pods_list, active_pod=active_pod)
+
+
+@app.route("/pods/switch/<int:pod_id>", methods=["POST"])
+@login_required
+def switch_pod(pod_id):
+    pod = db.session.get(Pod, pod_id)
+    if not pod or not pod.is_active:
+        abort(404)
+    session["active_pod_id"] = pod.id
+    session.modified = True
+    return {"ok": True, "pod_id": pod.id, "name": pod.name}
 
 
 @app.route("/delete_deck/<int:deck_id>", methods=["POST"])
@@ -740,6 +925,7 @@ def delete_player(player_id):
 
 @app.route("/games")
 def games():
+    game_q, scope, active_pod = game_query_for_scope()
     # --------
     # Filters (GET)
     # --------
@@ -777,7 +963,7 @@ def games():
     # --------
     # Base query
     # --------
-    q = Game.query
+    q = game_q
 
     if winner_id:
         q = q.filter(Game.winner_id == winner_id)
@@ -855,6 +1041,8 @@ def games():
         min_players=min_players,
         max_players=max_players,
         per_page=per_page,
+        scope=scope,
+        active_pod=active_pod,
     )
 
 @app.route("/games/<int:game_id>")
@@ -1265,11 +1453,16 @@ def end_game():
     if win_type is not None and win_type not in allowed_win_types:
         return "Invalid win type", 400
 
+    active_pod = get_active_pod()
+    if not active_pod:
+        return "No active pod available", 400
+
     game = Game(
         winner_id=winner_id,
         starting_player_id=starting_player_id,
         salt_rating=salt_rating,
         win_type=win_type,
+        pod_id=active_pod.id,
     )
     db.session.add(game)
     db.session.flush()
@@ -1327,7 +1520,11 @@ def manual_record_game():
     if int(winner_id) not in seen:
         return "Winner must be a participant", 400
 
-    game = Game(winner_id=int(winner_id))
+    active_pod = get_active_pod()
+    if not active_pod:
+        return "No active pod available", 400
+
+    game = Game(winner_id=int(winner_id), pod_id=active_pod.id)
     db.session.add(game)
     db.session.flush()
 
@@ -1369,7 +1566,11 @@ def record_game():
     if int(winner_id) not in seen:
         return "Winner must be a participant", 400
 
-    game = Game(winner_id=int(winner_id))
+    active_pod = get_active_pod()
+    if not active_pod:
+        return "No active pod available", 400
+
+    game = Game(winner_id=int(winner_id), pod_id=active_pod.id)
     db.session.add(game)
     db.session.flush()
 
