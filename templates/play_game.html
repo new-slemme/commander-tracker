@@ -230,9 +230,46 @@
   .starting-card {
     margin-top: 14px;
     border-radius: 20px;
-    border: 1px solid rgba(143,153,197,0.22);
-    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(143,153,197,0.3);
+    background: linear-gradient(135deg, rgba(23,26,38,0.85), rgba(14,18,30,0.75));
     padding: 14px 16px;
+    box-shadow: 0 0 24px rgba(0,0,0,0.35);
+  }
+
+  .starting-player-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .start-pill {
+    border: 1px solid rgba(170,181,235,0.35);
+    background: rgba(255,255,255,0.04);
+    color: #dbe2ff;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-weight: 700;
+    transition: all .2s ease;
+  }
+
+  .start-pill:hover {
+    border-color: rgba(170,181,235,0.7);
+    background: rgba(170,181,235,0.14);
+    transform: translateY(-1px);
+  }
+
+  .start-pill.active {
+    background: linear-gradient(135deg, rgba(90,114,219,0.9), rgba(130,150,240,0.9));
+    color: #fff;
+    border-color: rgba(211,220,255,0.95);
+    box-shadow: 0 0 20px rgba(124,146,245,0.35);
+  }
+
+  .start-pill-empty {
+    color: var(--font-base-trans);
+    font-size: 0.95rem;
+    padding: 4px 2px;
   }
 
   .sticky-actions {
@@ -319,11 +356,12 @@
     </div>
 
     <div class="starting-card">
-      <label class="form-label mb-1">Starting Player</label>
-      <select name="starting_player" id="startingPlayer" class="form-select" required>
+      <label class="form-label mb-1">Starting Position</label>
+      <select name="starting_player" id="startingPlayer" class="form-select d-none" required>
         <option value="" disabled selected>Select starting player</option>
       </select>
-      <div class="hint mt-2">Only selected players appear here.</div>
+      <div id="startingPlayerPills" class="starting-player-pills"></div>
+      <div class="hint mt-2">Choose who takes turn 1.</div>
     </div>
 
     <div class="sticky-actions">
@@ -391,7 +429,8 @@
 
   function refreshStartingPlayerOptions() {
     const startSel = document.getElementById("startingPlayer");
-    if (!startSel) return;
+    const pills = document.getElementById("startingPlayerPills");
+    if (!startSel || !pills) return;
 
     const prev = startSel.value;
     const players = selectedPlayersMap();
@@ -401,7 +440,34 @@
       startSel.add(new Option(name, pid));
     }
 
-    if (prev && players.has(prev)) startSel.value = prev;
+    if (prev && players.has(prev)) {
+      startSel.value = prev;
+    } else {
+      startSel.value = "";
+    }
+
+    pills.innerHTML = "";
+
+    if (!players.size) {
+      const empty = document.createElement("div");
+      empty.className = "start-pill-empty";
+      empty.textContent = "Select players above to choose a starting position.";
+      pills.appendChild(empty);
+      return;
+    }
+
+    for (const [pid, name] of players.entries()) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = `start-pill${startSel.value === pid ? " active" : ""}`;
+      btn.textContent = name;
+      btn.addEventListener("click", () => {
+        startSel.value = pid;
+        pills.querySelectorAll('.start-pill').forEach(x => x.classList.remove('active'));
+        btn.classList.add("active");
+      });
+      pills.appendChild(btn);
+    }
   }
 
   function setPlayerCardBackground(i) {
