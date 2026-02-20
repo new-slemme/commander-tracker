@@ -127,36 +127,9 @@
     -webkit-text-fill-color: transparent;
   }
 
-  .head-badges {
-    display:flex;
-    flex-wrap:wrap;
-    gap: 10px;
-    margin-top: 10px;
-  }
 
-  .head-pill {
-    display:inline-flex;
-    align-items:center;
-    gap: 8px;
-    padding: 8px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(143,153,197,0.25);
-    background: rgba(255,255,255,0.04);
-    color: var(--font-base);
-    white-space: nowrap;
-    font-size: 0.92rem;
-  }
-  .head-pill b { color:#fff; }
 
-  .head-pill.good { border-color: rgba(58,107,84,0.55); background: rgba(58,107,84,0.18); }
-  .head-pill.mid  { border-color: rgba(30,58,95,0.55); background: rgba(30,58,95,0.18); }
 
-  .add-deck-btn {
-    border-radius: 14px;
-    padding: 10px 18px;
-    font-weight: 800;
-    box-shadow: 0 0 14px rgba(143,153,197,0.25);
-  }
 
   /* Mobile floating Add button (keeps normal button on desktop) */
   .fab-add-deck {

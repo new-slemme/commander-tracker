@@ -21,12 +21,12 @@
         <h2 class="salt-card-title m-0">Starting Player Advantage</h2>
         <div class="d-flex gap-2 flex-wrap">
           {% if start_winrate is not none %}
-            <div class="salt-chip">Winrate: <b>{{ start_winrate }}%</b></div>
+            <div class="app-badge">Winrate: <b>{{ start_winrate }}%</b></div>
           {% else %}
-            <div class="salt-chip">Winrate: <b>—</b></div>
+            <div class="app-badge">Winrate: <b>—</b></div>
           {% endif %}
-          <div class="salt-chip">Games tracked: <b>{{ start_games }}</b></div>
-          <div class="salt-chip">Starter wins: <b>{{ start_wins }}</b></div>
+          <div class="app-badge">Games tracked: <b>{{ start_games }}</b></div>
+          <div class="app-badge">Starter wins: <b>{{ start_wins }}</b></div>
         </div>
       </div>
       <div class="p-3">
@@ -59,7 +59,7 @@
               {% set avg = row[1] %}
               {% set gcount = row[2] %}
               <tr>
-                <td><span class="salt-pill">#{{ loop.index }}</span></td>
+                <td><span class="app-badge alert">#{{ loop.index }}</span></td>
                 <td class="fw-bold text-white">{{ p.name }}</td>
                 <td class="text-end fw-bold text-white">
                   {{ "%.2f"|format(avg) }} 🧂
@@ -99,7 +99,7 @@
               {% set avg = row[1] %}
               {% set gcount = row[2] %}
               <tr>
-                <td><span class="salt-pill">#{{ loop.index }}</span></td>
+                <td><span class="app-badge alert">#{{ loop.index }}</span></td>
                 <td style="min-width:0;">
                   <div class="fw-bold text-white text-truncate" style="max-width: 360px;">
                     <a class="text-white" href="{{ url_for('deck_detail', deck_id=d.id) }}">{{ d.name }}</a>
@@ -162,7 +162,7 @@
                   </div>
 
                   <div class="game-right">
-                    <div class="salt-pill">🧂 {{ g.salt_rating }}</div>
+                    <div class="app-badge alert">🧂 {{ g.salt_rating }}</div>
                     <div class="winner-pill">
                       <span class="dot"></span>
                       Winner: {{ g.winner.name }}

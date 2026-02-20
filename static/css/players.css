@@ -25,12 +25,6 @@
     border-radius: 14px;
   }
 
-  .btn-hero {
-    border-radius: 14px;
-    padding: 10px 18px;
-    font-weight: 800;
-    box-shadow: 0 0 14px rgba(143,153,197,0.22);
-  }
 
   .player-card {
     border-radius: 18px;
@@ -117,6 +111,5 @@
 
   @media (max-width: 576px) {
     .add-guest-wrap .form-control { min-width: 160px; flex: 1 1 auto; }
-    .btn-hero { width: auto; }
     .player-name { max-width: 64vw; }
   }
