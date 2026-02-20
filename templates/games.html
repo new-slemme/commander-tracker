@@ -152,25 +152,10 @@
 
       {% for g in games %}
 
-        {# Collect commander art URLs for this game (up to 6) #}
-        {% set ns = namespace(arts=[]) %}
-        {% for gp in game_parts[g.id] %}
-          {% set art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
-          {% if art and (ns.arts|length) < 6 %}
-            {% set ns.arts = ns.arts + [art] %}
-          {% endif %}
-        {% endfor %}
-
         <a href="{{ url_for('game_detail', game_id=g.id) }}" class="list-group-item p-0 game-tile-link">
         <div class="game-tile recent-game-inner">
           <div class="game-bg">
-            {% if ns.arts|length == 0 %}
-              <div class="game-slice" style="background: rgba(255,255,255,0.04);"></div>
-            {% else %}
-              {% for art in ns.arts %}
-                <div class="game-slice" style="background-image:url('{{ art }}');"></div>
-              {% endfor %}
-            {% endif %}
+            <div class="game-slice"></div>
           </div>
 
           <div class="game-overlay"></div>
@@ -216,7 +201,11 @@
 
             <div class="players-row">
               {% for gp in game_parts[g.id] %}
+                {% set commander_art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
                 <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}">
+                  {% if commander_art %}
+                    <span class="ppill-art" style="background-image:url('{{ commander_art }}');"></span>
+                  {% endif %}
                   <span class="ppill-top">
                     {% if gp.player_id == g.winner_id %}
                       <span class="wmark">W</span>
