@@ -264,6 +264,37 @@
                     Game #{{ g.id }}
                   </div>
 
+                <div class="open-head">
+                  <div class="open-head__left">
+                    <div class="open-head__date">{{ g.date.strftime('%Y-%m-%d %H:%M') }}</div>
+                    <div class="open-head__meta">
+                      {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
+                      <span class="muted">·</span>
+                      Game #{{ g.id }}
+                      {% if g.win_type %}
+                        <span class="muted">·</span>
+                        {{ g.win_type.replace('_',' ')|title }}
+                      {% endif %}
+                      {% if g.salt_rating %}
+                        <span class="muted">·</span>
+                        Salt {{ g.salt_rating }} 🧂
+                      {% endif %}
+                    </div>
+                  </div>
+                
+                  <div class="open-head__right">
+                    <button class="copy-link-btn" type="button"
+                            data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}"
+                            aria-label="Copy game link" title="Copy game link">
+                      <span class="copy-link-icon" aria-hidden="true">🔗</span>
+                    </button>
+                
+                    <button type="button" class="collapse-btn" data-collapse aria-label="Collapse">
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                    
                   {% if g.win_type or g.salt_rating %}
                     <div class="game-meta game-meta--redundant">
                       {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
@@ -408,6 +439,19 @@
       d.addEventListener('toggle', set);
     });
   })();
+
+     // Collapse button inside details (because summary may be hidden on mobile)
+    (function() {
+      document.querySelectorAll('[data-collapse]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const details = btn.closest('details');
+          if (details) details.open = false;
+        });
+      });
+    })();   
+    
 </script>
 
 {% endblock %}
