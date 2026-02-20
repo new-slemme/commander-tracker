@@ -151,11 +151,15 @@ def parse_moxfield_url(url: str, *, timeout: int = 15) -> ParsedDeck:
 
     section_buckets: dict[str, dict[str, ParsedCardEntry]] = {}
 
-    _merge_mapping_cards(section_buckets, "mainboard", payload.get("mainboard") or {})
-    _merge_mapping_cards(section_buckets, "sideboard", payload.get("sideboard") or {})
-    _merge_mapping_cards(section_buckets, "maybeboard", payload.get("maybeboard") or {})
+    _merge_mapping_cards(section_buckets, "mainboard", _extract_moxfield_section(payload, "mainboard"))
+    _merge_mapping_cards(section_buckets, "sideboard", _extract_moxfield_section(payload, "sideboard"))
+    _merge_mapping_cards(section_buckets, "maybeboard", _extract_moxfield_section(payload, "maybeboard"))
 
-    commanders_payload = payload.get("commanders") or payload.get("commander") or {}
+    commanders_payload = (
+        _extract_moxfield_section(payload, "commanders")
+        or _extract_moxfield_section(payload, "commander")
+        or {}
+    )
     _merge_mapping_cards(section_buckets, "commander", commanders_payload)
 
     sections = _finalize_sections(section_buckets)
@@ -337,9 +341,32 @@ def _categorize_archidekt(categories: list[str]) -> str:
 
 
 def _merge_mapping_cards(
-    buckets: dict[str, dict[str, ParsedCardEntry]], section: str, payload: dict[str, Any]
+    buckets: dict[str, dict[str, ParsedCardEntry]], section: str, payload: dict[str, Any] | list[Any]
 ) -> None:
+    if isinstance(payload, list):
+        for entry in payload:
+            if not isinstance(entry, dict):
+                continue
+            quantity = entry.get("quantity", 1)
+            card_name = (
+                (entry.get("card") or {}).get("name")
+                or (entry.get("card") or {}).get("oracleCard", {}).get("name")
+                or entry.get("name")
+            )
+            try:
+                quantity = int(quantity)
+            except (TypeError, ValueError):
+                continue
+            if quantity <= 0 or not card_name:
+                continue
+            _add_card(buckets, section, str(card_name), quantity)
+        return
+
     if not isinstance(payload, dict):
+        return
+
+    if isinstance(payload.get("cards"), (dict, list)):
+        _merge_mapping_cards(buckets, section, payload.get("cards") or {})
         return
 
     for key, entry in payload.items():
@@ -359,6 +386,27 @@ def _merge_mapping_cards(
             continue
 
         _add_card(buckets, section, card_name, quantity)
+
+
+def _extract_moxfield_section(payload: dict[str, Any], section: str) -> dict[str, Any] | list[Any]:
+    direct = payload.get(section)
+    if isinstance(direct, (dict, list)):
+        return direct
+
+    boards = payload.get("boards")
+    if isinstance(boards, dict):
+        board = boards.get(section)
+        if isinstance(board, (dict, list)):
+            return board
+
+        # Some payloads use singular commander board names.
+        if section in {"commander", "commanders"}:
+            for alias in ("commanders", "commander"):
+                board = boards.get(alias)
+                if isinstance(board, (dict, list)):
+                    return board
+
+    return {}
 
 
 def _add_card(
