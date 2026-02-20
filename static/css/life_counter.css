@@ -15,6 +15,8 @@
 
     html,body{
       height:100%;
+      -webkit-text-size-adjust:100%;
+      text-size-adjust:100%;
       margin:0;
       overflow:hidden;
       background:var(--darkest);
@@ -121,7 +123,7 @@ body.sigtaara-ui .h4 {
     }
 
     .life-display{
-      font-size:18vh;
+      font-size:clamp(3.25rem, 18vh, 11rem);
       font-weight:900;
       color:#fff;
       text-shadow:0 0 10px rgba(0,0,0,.9), 0 0 28px rgba(0,0,0,.7);
@@ -390,3 +392,13 @@ body.sigtaara-ui .h4 {
 
 .players-3 .life-card.p3-slot-3 .player-timer{ top:auto; bottom:12px; }
 .mode-2p .player-timer{ font-size:clamp(.78rem,1.7vw,.95rem); }
+
+
+    @media (max-width:576px){
+      .life-display{ font-size:clamp(2.8rem, 15vh, 7.5rem); }
+      .center-pass-btn{ width:78px; height:78px; }
+      .turn-pill{ padding:8px 12px; font-size:.8rem; }
+      .turn-timer-pill{ padding:9px 14px; min-width:96px; }
+      .turn-dmg{ font-size:.8rem; padding:5px 8px; }
+      .player-name{ padding:10px 10px; font-size:.9rem; }
+    }
