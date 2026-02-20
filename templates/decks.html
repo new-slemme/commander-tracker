@@ -260,6 +260,10 @@
             <img id="commanderImg" alt="Commander preview" style="max-width:100%; border-radius: 12px;" />
           </div>
 
+          <div id="partnerCommanderPreview" class="mt-3" style="display:none;">
+            <img id="partnerCommanderImg" alt="Partner commander preview" style="max-width:100%; border-radius: 12px;" />
+          </div>
+
           <div class="mt-3">
             <label class="form-label">Decklist URL (optional)</label>
             <input class="form-control" name="decklist_url" placeholder="https://www.moxfield.com/decks/... or https://archidekt.com/decks/..." />
@@ -334,10 +338,12 @@
 <script>
   // --- Commander autocomplete + preview via Scryfall (client-side) ---
   const commanderInput = document.getElementById('commanderInput');
+  const partnerInput = document.getElementById('partnerCommanderInput');
   const previewWrap = document.getElementById('commanderPreview');
   const previewImg = document.getElementById('commanderImg');
-
-  let acTimer = null;
+  const partnerPreviewWrap = document.getElementById('partnerCommanderPreview');
+  const partnerPreviewImg = document.getElementById('partnerCommanderImg');
+  const autocompleteTimers = new WeakMap();
 
   async function scryfallAutocomplete(q) {
     const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(q)}`;
@@ -347,16 +353,6 @@
     return data.data || [];
   }
 
-  const addDeckForm = document.getElementById('addDeckForm');
-  if (addDeckForm && commanderInput) {
-    addDeckForm.addEventListener('submit', () => {
-      const partnerInput = document.getElementById('partnerCommanderInput');
-      const primary = commanderInput.value.trim();
-      const partner = partnerInput ? partnerInput.value.trim() : '';
-      commanderInput.value = (primary && partner) ? `${primary} + ${partner}` : primary;
-    });
-  }
-
   async function scryfallCardByExactName(name) {
     const url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`;
     const res = await fetch(url);
@@ -364,7 +360,37 @@
     return await res.json();
   }
 
-  function attachDropdown(items, inputEl, menuId) {
+  function setCommanderPreview(name, wrapEl, imgEl) {
+    if (!wrapEl || !imgEl || !name) {
+      if (wrapEl) wrapEl.style.display = 'none';
+      return;
+    }
+
+    scryfallCardByExactName(name).then((card) => {
+      if (card && card.image_uris && card.image_uris.normal) {
+        imgEl.src = card.image_uris.normal;
+        wrapEl.style.display = '';
+      } else {
+        wrapEl.style.display = 'none';
+      }
+    });
+  }
+
+  function buildCommanderPayload(primaryRaw, partnerRaw) {
+    const deduped = [];
+    const seen = new Set();
+    [primaryRaw, partnerRaw].forEach((value) => {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return;
+      const key = trimmed.toLocaleLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      deduped.push(trimmed);
+    });
+    return deduped.join(' + ');
+  }
+
+  function attachDropdown(items, inputEl, menuId, onSelect) {
     let box = document.getElementById(`${menuId}Wrap`);
     if (!box) {
       box = document.createElement('div');
@@ -392,43 +418,52 @@
       a.type = 'button';
       a.className = 'list-group-item list-group-item-action';
       a.textContent = name;
-      a.addEventListener('click', async () => {
+      a.addEventListener('click', () => {
         inputEl.value = name;
         menu.innerHTML = '';
-        const card = await scryfallCardByExactName(name);
-        if (card && card.image_uris && card.image_uris.normal) {
-          previewImg.src = card.image_uris.normal;
-          previewWrap.style.display = '';
-        } else {
-          previewWrap.style.display = 'none';
-        }
+        onSelect(name);
       });
       menu.appendChild(a);
     }
   }
 
-  if (commanderInput) {
-    commanderInput.addEventListener('input', () => {
-      clearTimeout(acTimer);
-      const q = commanderInput.value.trim();
-      previewWrap.style.display = 'none';
+  function initCommanderAutocomplete(inputEl, menuId, onSelect) {
+    if (!inputEl) return;
+
+    inputEl.addEventListener('input', () => {
+      clearTimeout(autocompleteTimers.get(inputEl));
+      const q = inputEl.value.trim();
       if (q.length < 3) {
-        attachDropdown([], commanderInput, 'commanderSuggestMenu');
+        attachDropdown([], inputEl, menuId, onSelect);
         return;
       }
-      acTimer = setTimeout(async () => {
+
+      const timer = setTimeout(async () => {
         const items = await scryfallAutocomplete(q);
-        attachDropdown(items, commanderInput, 'commanderSuggestMenu');
+        attachDropdown(items, inputEl, menuId, onSelect);
       }, 200);
+      autocompleteTimers.set(inputEl, timer);
     });
 
     document.addEventListener('click', (e) => {
-      const menu = document.getElementById('commanderSuggestMenu');
+      const menu = document.getElementById(menuId);
       if (!menu) return;
-      if (e.target === commanderInput || menu.contains(e.target)) return;
+      if (e.target === inputEl || menu.contains(e.target)) return;
       menu.innerHTML = '';
     });
   }
+
+  const addDeckForm = document.getElementById('addDeckForm');
+  if (addDeckForm && commanderInput) {
+    addDeckForm.addEventListener('submit', () => {
+      const primary = commanderInput.value;
+      const partner = partnerInput ? partnerInput.value : '';
+      commanderInput.value = buildCommanderPayload(primary, partner);
+    });
+  }
+
+  initCommanderAutocomplete(commanderInput, 'commanderSuggestMenu', (name) => setCommanderPreview(name, previewWrap, previewImg));
+  initCommanderAutocomplete(partnerInput, 'partnerCommanderSuggestMenu', (name) => setCommanderPreview(name, partnerPreviewWrap, partnerPreviewImg));
 
   // Commander click -> open Scryfall
   document.querySelectorAll('.commander-link').forEach(el => {

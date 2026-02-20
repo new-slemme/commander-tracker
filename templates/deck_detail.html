@@ -290,6 +290,10 @@
             <img id="editCommanderImg" alt="Commander preview" src="{{ deck.commander_local_art or deck.commander_art_crop_url or '' }}" style="max-width:100%; border-radius: 12px;" />
           </div>
 
+          <div id="editPartnerCommanderPreview" class="mt-3" style="display:none;">
+            <img id="editPartnerCommanderImg" alt="Partner commander preview" style="max-width:100%; border-radius: 12px;" />
+          </div>
+
           <div class="mt-3">
             <label class="form-label">Decklist URL (optional)</label>
             <input class="form-control" name="decklist_url" placeholder="https://www.moxfield.com/decks/... or https://archidekt.com/decks/..." />
@@ -317,9 +321,12 @@
 
 <script>
   const editCommanderInput = document.getElementById('editCommanderInput');
+  const editPartnerInput = document.getElementById('editPartnerCommanderInput');
   const editPreviewWrap = document.getElementById('editCommanderPreview');
   const editPreviewImg = document.getElementById('editCommanderImg');
-  let editAcTimer = null;
+  const editPartnerPreviewWrap = document.getElementById('editPartnerCommanderPreview');
+  const editPartnerPreviewImg = document.getElementById('editPartnerCommanderImg');
+  const autocompleteTimers = new WeakMap();
 
   async function scryfallAutocomplete(q) {
     const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(q)}`;
@@ -336,16 +343,46 @@
     return await res.json();
   }
 
-  function attachDropdown(items) {
-    let box = document.getElementById('editCommanderSuggest');
+  function setCommanderPreview(name, wrapEl, imgEl) {
+    if (!wrapEl || !imgEl || !name) {
+      if (wrapEl) wrapEl.style.display = 'none';
+      return;
+    }
+
+    scryfallCardByExactName(name).then((card) => {
+      if (card && card.image_uris && card.image_uris.normal) {
+        imgEl.src = card.image_uris.normal;
+        wrapEl.style.display = '';
+      } else {
+        wrapEl.style.display = 'none';
+      }
+    });
+  }
+
+  function buildCommanderPayload(primaryRaw, partnerRaw) {
+    const deduped = [];
+    const seen = new Set();
+    [primaryRaw, partnerRaw].forEach((value) => {
+      const trimmed = (value || '').trim();
+      if (!trimmed) return;
+      const key = trimmed.toLocaleLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      deduped.push(trimmed);
+    });
+    return deduped.join(' + ');
+  }
+
+  function attachDropdown(items, inputEl, menuId, onSelect) {
+    let box = document.getElementById(`${menuId}Wrap`);
     if (!box) {
       box = document.createElement('div');
-      box.id = 'editCommanderSuggest';
+      box.id = `${menuId}Wrap`;
       box.style.position = 'relative';
-      editCommanderInput.parentNode.appendChild(box);
+      inputEl.parentNode.appendChild(box);
 
       const menu = document.createElement('div');
-      menu.id = 'editCommanderSuggestMenu';
+      menu.id = menuId;
       menu.className = 'list-group';
       menu.style.position = 'absolute';
       menu.style.zIndex = '2000';
@@ -355,7 +392,7 @@
       box.appendChild(menu);
     }
 
-    const menu = document.getElementById('editCommanderSuggestMenu');
+    const menu = document.getElementById(menuId);
     menu.innerHTML = '';
     if (!items.length) return;
 
@@ -364,52 +401,52 @@
       a.type = 'button';
       a.className = 'list-group-item list-group-item-action';
       a.textContent = name;
-      a.addEventListener('click', async () => {
-        editCommanderInput.value = name;
+      a.addEventListener('click', () => {
+        inputEl.value = name;
         menu.innerHTML = '';
-        const card = await scryfallCardByExactName(name);
-        if (card && card.image_uris && card.image_uris.normal) {
-          editPreviewImg.src = card.image_uris.normal;
-          editPreviewWrap.style.display = '';
-        } else {
-          editPreviewWrap.style.display = 'none';
-        }
+        onSelect(name);
       });
       menu.appendChild(a);
     }
   }
 
-  const editDeckForm = document.querySelector('#editDeckModal form');
-  if (editDeckForm && editCommanderInput) {
-    editDeckForm.addEventListener('submit', () => {
-      const partnerInput = document.getElementById('editPartnerCommanderInput');
-      const primary = editCommanderInput.value.trim();
-      const partner = partnerInput ? partnerInput.value.trim() : '';
-      editCommanderInput.value = (primary && partner) ? `${primary} + ${partner}` : primary;
-    });
-  }
+  function initCommanderAutocomplete(inputEl, menuId, onSelect) {
+    if (!inputEl) return;
 
-  if (editCommanderInput) {
-    editCommanderInput.addEventListener('input', () => {
-      clearTimeout(editAcTimer);
-      const q = editCommanderInput.value.trim();
+    inputEl.addEventListener('input', () => {
+      clearTimeout(autocompleteTimers.get(inputEl));
+      const q = inputEl.value.trim();
       if (q.length < 3) {
-        attachDropdown([]);
+        attachDropdown([], inputEl, menuId, onSelect);
         return;
       }
-      editAcTimer = setTimeout(async () => {
+
+      const timer = setTimeout(async () => {
         const items = await scryfallAutocomplete(q);
-        attachDropdown(items);
+        attachDropdown(items, inputEl, menuId, onSelect);
       }, 200);
+      autocompleteTimers.set(inputEl, timer);
     });
 
     document.addEventListener('click', (e) => {
-      const menu = document.getElementById('editCommanderSuggestMenu');
+      const menu = document.getElementById(menuId);
       if (!menu) return;
-      if (e.target === editCommanderInput || menu.contains(e.target)) return;
+      if (e.target === inputEl || menu.contains(e.target)) return;
       menu.innerHTML = '';
     });
   }
+
+  const editDeckForm = document.querySelector('#editDeckModal form');
+  if (editDeckForm && editCommanderInput) {
+    editDeckForm.addEventListener('submit', () => {
+      const primary = editCommanderInput.value;
+      const partner = editPartnerInput ? editPartnerInput.value : '';
+      editCommanderInput.value = buildCommanderPayload(primary, partner);
+    });
+  }
+
+  initCommanderAutocomplete(editCommanderInput, 'editCommanderSuggestMenu', (name) => setCommanderPreview(name, editPreviewWrap, editPreviewImg));
+  initCommanderAutocomplete(editPartnerInput, 'editPartnerCommanderSuggestMenu', (name) => setCommanderPreview(name, editPartnerPreviewWrap, editPartnerPreviewImg));
 </script>
 
 {% endblock %}
