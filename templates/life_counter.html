@@ -347,7 +347,7 @@ function initializeTimers(){
   }else if(timerState.mode === "turn_timer"){
     timerState.ropeRemainingMs = timerState.ropeDurationMs;
     cards.forEach(card=> card.classList.remove("has-player-timer"));
-    if(center) center.style.display = "block";
+    if(center) center.style.display = "none";
   }else{
     cards.forEach(card=> card.classList.remove("has-player-timer"));
     if(center) center.style.display = "none";
@@ -362,16 +362,36 @@ function renderTimers(){
       const pid = String(card.dataset.player);
       const el = document.getElementById("timer-" + pid);
       if(!el) return;
+      card.classList.remove("rope-active");
       el.textContent = formatMs(timerState.chessClocksMs[pid] || 0);
       el.classList.toggle("active", pid === String(active));
       el.classList.toggle("low-time", (timerState.chessClocksMs[pid] || 0) <= 10000);
     });
+  }else if(timerState.mode === "turn_timer"){
+    cards.forEach(card=>{
+      const pid = String(card.dataset.player);
+      const el = document.getElementById("timer-" + pid);
+      if(!el) return;
+
+      const isActive = pid === String(active);
+      card.classList.toggle("rope-active", isActive);
+      el.textContent = formatMs(timerState.ropeRemainingMs);
+      el.classList.toggle("active", isActive);
+      el.classList.toggle("low-time", isActive && timerState.ropeRemainingMs <= 10000);
+    });
+  }else{
+    cards.forEach(card=>{
+      const pid = String(card.dataset.player);
+      const el = document.getElementById("timer-" + pid);
+      if(!el) return;
+      card.classList.remove("rope-active");
+      el.classList.remove("active", "low-time");
+    });
   }
 
   const center = document.getElementById("centralTurnTimer");
-  if(center && timerState.mode === "turn_timer"){
-    center.textContent = formatMs(timerState.ropeRemainingMs);
-    center.classList.toggle("low-time", timerState.ropeRemainingMs <= 10000);
+  if(center){
+    center.style.display = "none";
   }
 }
 
