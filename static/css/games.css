@@ -18,7 +18,8 @@
     margin-top: 4px;
   }
 
-  .filter-card {
+  .filter-card,
+  .recent-card {
     border-radius: 22px;
     border: 1px solid rgba(143,153,197,0.25);
     background: rgba(23,26,38,0.55);
@@ -27,7 +28,8 @@
     margin-bottom: 18px;
   }
 
-  .filter-card-head {
+  .filter-card-head,
+  .recent-card-head {
     padding: 12px 14px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
     background: rgba(255,255,255,0.02);
@@ -74,11 +76,24 @@
     gap: 12px;
   }
 
+  .game-tile-link {
+    border-radius: 18px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: transparent;
+    overflow: hidden;
+  }
+
+  .game-tile-link:hover {
+    border-color: rgba(143,153,197,0.36);
+    transform: translateY(-1px);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+
   .game-tile {
     position:relative;
     border-radius: 18px;
     overflow:hidden;
-    border: 1px solid rgba(143,153,197,0.25);
+    border: 0;
     background: rgba(0,0,0,0.18);
     box-shadow: 0 0 22px rgba(0,0,0,0.45);
   }
@@ -98,7 +113,9 @@
   .game-overlay {
     position:absolute;
     inset:0;
-    background: linear-gradient(90deg, rgba(0,0,0,0.86), rgba(0,0,0,0.45));
+    background:
+      linear-gradient(90deg, rgba(0,0,0,0.86), rgba(0,0,0,0.45)),
+      radial-gradient(circle at 18% 30%, rgba(0,0,0,0.55), transparent 55%);
   }
 
   .game-content {
@@ -148,6 +165,31 @@
     box-shadow: 0 0 10px rgba(58,107,84,0.65);
   }
 
+  .game-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .game-tag {
+    display:inline-flex;
+    align-items:center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(255,255,255,0.05);
+    color: var(--font-base);
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  .game-tag--salt {
+    border-color: rgba(229,92,54,0.45);
+    background: rgba(229,92,54,0.16);
+    color: #fff;
+  }
+
   .players-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -164,7 +206,7 @@
     border: 1px solid rgba(143,153,197,0.22);
     background: rgba(255,255,255,0.05);
     color: #fff;
-    min-width: 0; /* important for clamping */
+    min-width: 0;
   }
 
   .ppill-top {
@@ -203,17 +245,39 @@
   }
 
   .ppill .deck {
-    color: var(--font-base-trans);
+    color: #fff;
     font-weight: 800;
     min-width: 0;
     max-width: 100%;
-
-    /* allow wrap + clamp to 2 lines */
     white-space: normal;
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
+  }
+
+  .deck-meta {
+    color: var(--font-base-trans);
+    font-size: 0.82rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .retired-pill {
+    display:inline-flex;
+    align-items:center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.3);
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
   /* Pagination */
@@ -234,9 +298,14 @@
   }
 
   @media (max-width: 576px) {
-    .filter-card { border-radius: 18px; }
+    .filter-card,
+    .recent-card { border-radius: 18px; }
     .game-content { padding: 12px; }
     .players-row {
       grid-template-columns: 1fr;
+    }
+
+    .game-tag {
+      font-size: 0.78rem;
     }
   }
