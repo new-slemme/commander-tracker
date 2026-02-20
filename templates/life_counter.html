@@ -127,7 +127,7 @@
     </button>
 
     <button class="btn btn-danger w-100" id="playerFlagSaltedBtn" type="button">
-      Mark Salted
+      Add Salt (+1)
     </button>
 
     <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
@@ -319,14 +319,14 @@ function getPlayerFlagState(playerId){
   const existing = participantFlagsByPlayer[playerId] || {};
   return {
     mana_fucked: !!existing.mana_fucked,
-    salted: !!existing.salted,
+    salt_count: Math.max(0, Number(existing.salt_count ?? (existing.salted ? 1 : 0)) || 0),
   };
 }
 
 function setPlayerFlagState(playerId, nextFlags){
   participantFlagsByPlayer[playerId] = {
     mana_fucked: !!nextFlags.mana_fucked,
-    salted: !!nextFlags.salted,
+    salt_count: Math.max(0, Number(nextFlags.salt_count) || 0),
   };
 }
 
@@ -883,10 +883,12 @@ function openPlayerFlagMenu(playerId, anchorEl = null, pointerEvent = null){
     mark: "Mark Mana Fucked",
     unmark: "Unmark Mana Fucked",
   }, "btn-warning");
-  updatePlayerFlagButton("playerFlagSaltedBtn", playerFlags.salted, {
-    mark: "Mark Salted",
-    unmark: "Unmark Salted",
-  }, "btn-danger");
+  const saltBtn = document.getElementById("playerFlagSaltedBtn");
+  if(saltBtn){
+    saltBtn.textContent = `Add Salt (+1) · Salt: ${playerFlags.salt_count}`;
+    saltBtn.classList.add("btn-danger");
+    saltBtn.classList.remove("btn-outline-danger");
+  }
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
   if(!flyoutEl) return;
@@ -945,15 +947,14 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
 document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
-  const nextValue = !playerFlags.salted;
+  const nextCount = playerFlags.salt_count + 1;
   setPlayerFlagState(playerFlagTargetId, {
     ...playerFlags,
-    salted: nextValue,
+    salt_count: nextCount,
   });
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
-  const actionText = nextValue ? "flagged as salted" : "unflagged for salted";
-  alert(`${playerLabel} was ${actionText}.`);
+  alert(`${playerLabel} received salt #${nextCount}.`);
   openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorEl, playerFlagPointer);
 });
 
@@ -988,9 +989,9 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
       if(!flags || typeof flags !== "object") return;
       const normalizedFlags = {
         mana_fucked: !!flags.mana_fucked,
-        salted: !!flags.salted,
+        salt_count: Math.max(0, Number(flags.salt_count ?? (flags.salted ? 1 : 0)) || 0),
       };
-      const hasTruthyFlag = Object.values(normalizedFlags).some(Boolean);
+      const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.salt_count > 0;
       if(hasTruthyFlag) payload[playerId] = normalizedFlags;
     });
     participantFlagsInput.value = JSON.stringify(payload);

@@ -184,10 +184,10 @@
                           <span class="game-submeta__dot">•</span>
                           <span class="game-submeta__item">{{ g.win_type.replace('_',' ')|title }}</span>
                         {% endif %}
-                        {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length}) %}
+                        {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length, 'salt_clicks': 0}) %}
                         {% if salt_stats.salted_players > 0 %}
                           <span class="game-submeta__dot">•</span>
-                          <span class="game-submeta__item">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}</span>
+                          <span class="game-submeta__item">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}</span>
                         {% elif g.salt_rating %}
                           <span class="game-submeta__dot">•</span>
                           <span class="game-submeta__item">Legacy salt {{ g.salt_rating }} 🧂</span>
@@ -252,7 +252,7 @@
                       Decks in game: {{ game_parts[g.id]|length }}
                     </span>
                     {% if salt_stats.salted_players > 0 %}
-                      <span class="game-tag game-tag--salt">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}</span>
+                      <span class="game-tag game-tag--salt">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}</span>
                     {% elif g.salt_rating %}
                       <span class="game-tag game-tag--salt">Legacy salt {{ g.salt_rating }} 🧂</span>
                     {% endif %}
@@ -283,7 +283,7 @@
                       {% endif %}
                       {% if salt_stats.salted_players > 0 %}
                         <span class="muted">·</span>
-                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}
+                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}
                       {% elif g.salt_rating %}
                         <span class="muted">·</span>
                         Legacy salt {{ g.salt_rating }} 🧂
@@ -309,7 +309,7 @@
                       {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
                       {% if g.win_type and (salt_stats.salted_players > 0 or g.salt_rating) %}<span class="muted">·</span>{% endif %}
                       {% if salt_stats.salted_players > 0 %}
-                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}
+                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}
                       {% elif g.salt_rating %}
                         Legacy salt {{ g.salt_rating }} 🧂
                       {% endif %}
@@ -329,8 +329,9 @@
                         </span>
 
                         <span class="deck">{{ gp.deck.name }}</span>
-                        {% if gp.parsed_flags.get('salted') %}
-                          <span class="badge rounded-pill text-bg-danger mt-1">Salted</span>
+                        {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
+                        {% if gp_salt_count > 0 %}
+                          <span class="badge rounded-pill text-bg-danger mt-1">Salt x{{ gp_salt_count }}</span>
                         {% endif %}
                         <span class="deck-meta">
                           {{ gp.deck.commander_name or gp.deck.commander }}

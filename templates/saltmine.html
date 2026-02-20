@@ -140,7 +140,7 @@
     <div class="salt-card span-12">
       <div class="salt-card-head">
         <h2 class="salt-card-title m-0">Saltiest Games</h2>
-        <div class="muted">Most salted players first</div>
+        <div class="muted">Most salted players first (ties by total salt clicks)</div>
       </div>
 
       {% if salty_games|length == 0 %}
@@ -163,7 +163,7 @@
                         {{ g.win_type.replace('_',' ') }}
                         <span class="muted">·</span>
                       {% endif %}
-                      Salted players: {{ game_salt_stats[g.id]["salted_players"] }}/{{ game_salt_stats[g.id]["participants"] }}
+                      Salted players: {{ game_salt_stats[g.id]["salted_players"] }}/{{ game_salt_stats[g.id]["participants"] }} · Salt clicks: {{ game_salt_stats[g.id]["salt_clicks"] }}
                       {% if game_salt_stats[g.id]["has_legacy_salt"] %}
                         <span class="muted">·</span>
                         Legacy salt rating {{ game_salt_stats[g.id]["legacy_salt_rating"] }} 🧂
@@ -176,7 +176,7 @@
                   </div>
 
                   <div class="game-right">
-                    <div class="app-badge alert">🧂 {{ game_salt_stats[g.id]["salted_players"] }}</div>
+                    <div class="app-badge alert">🧂 {{ game_salt_stats[g.id]["salt_clicks"] }}</div>
                     <div class="winner-pill">
                       <span class="dot"></span>
                       Winner: {{ g.winner.name }}
