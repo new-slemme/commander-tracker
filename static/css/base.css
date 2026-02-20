@@ -868,3 +868,17 @@
 .sigtaara-ui textarea {
   font-family: 'Sigtaara', Arial, sans-serif;
 }
+
+.sigtaara-ui h1,
+.sigtaara-ui h2,
+.sigtaara-ui h3,
+.sigtaara-ui h4,
+.sigtaara-ui h5,
+.sigtaara-ui .display-1,
+.sigtaara-ui .display-2,
+.sigtaara-ui .display-3,
+.sigtaara-ui .display-4,
+.sigtaara-ui .title-font,
+.sigtaara-ui .navbar-brand {
+  font-family: 'Sigtaara', Arial, sans-serif;
+}

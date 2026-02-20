@@ -1,3 +1,11 @@
+@font-face {
+  font-family: 'Sigtaara';
+  src: url('/static/fonts/Old_Tongue_Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
     :root{
       --darkest:#10121a;
       --darker:#171a26;
@@ -14,6 +22,21 @@
       touch-action:manipulation;
       overscroll-behavior:none;
     }
+
+
+body.sigtaara-ui,
+body.sigtaara-ui .life-display,
+body.sigtaara-ui .player-name,
+body.sigtaara-ui .turn-pill,
+body.sigtaara-ui .turn-timer-pill,
+body.sigtaara-ui h1,
+body.sigtaara-ui h2,
+body.sigtaara-ui h3,
+body.sigtaara-ui h4,
+body.sigtaara-ui h5,
+body.sigtaara-ui .h4 {
+  font-family: 'Sigtaara', Arial, sans-serif;
+}
 
     /* -------- Fullscreen overlay (mobile requirement) -------- */
     .fs-overlay{
