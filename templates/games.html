@@ -180,6 +180,14 @@
                         <span class="game-submeta__item">{{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players</span>
                         <span class="game-submeta__dot">•</span>
                         <span class="game-submeta__item">Game #{{ g.id }}</span>
+                        {% if g.win_type %}
+                          <span class="game-submeta__dot">•</span>
+                          <span class="game-submeta__item">{{ g.win_type.replace('_',' ')|title }}</span>
+                        {% endif %}
+                        {% if g.salt_rating %}
+                          <span class="game-submeta__dot">•</span>
+                          <span class="game-submeta__item">Salt {{ g.salt_rating }} 🧂</span>
+                        {% endif %}
                       </div>
                     </div>
 
@@ -250,14 +258,14 @@
                 </summary>
 
                 <div class="game-content game-content--details">
-                  <div class="game-meta">
+                  <div class="game-meta game-meta--redundant">
                     {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
                     <span class="muted">·</span>
                     Game #{{ g.id }}
                   </div>
 
                   {% if g.win_type or g.salt_rating %}
-                    <div class="game-meta">
+                    <div class="game-meta game-meta--redundant">
                       {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
                       {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
                       {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}

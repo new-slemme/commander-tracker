@@ -638,50 +638,39 @@
     font-size: 0.76rem;
     gap: 4px;
   }
-  /* ---------- MOBILE: remove the huge summary "cover" when expanded ---------- */
+}
 
-/* Default summary is fine when collapsed */
-.game-content--summary { padding: 12px 14px; }
+/* When expanded: hide redundant meta lines in details */
+.game-tile.is-open .game-meta--redundant {
+  display: none !important;
+}
 
-/* When open: turn summary into a compact header row */
-.game-tile.is-open > .game-content--summary {
+/* When expanded: make summary a tight header only */
+.game-tile.is-open .game-content--summary {
   padding: 10px 12px 8px;
 }
 
-/* Hide the decks + tags in summary when open (they create height) */
+/* Keep summary extras hidden when open */
 .game-tile.is-open .game-summary-extras {
   display: none !important;
 }
 
-/* Make the header never stack into tall columns */
-.game-tile.is-open .game-summary-head {
-  align-items: center;
-}
-
-.game-tile.is-open .game-summary-right {
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Make the details start immediately after the header */
-.game-content--details {
-  padding: 0 12px 12px;
+/* Pull details up immediately */
+.game-tile.is-open .game-content--details {
+  padding-top: 0;
   margin-top: 0;
 }
 
-/* Reduce vertical gap inside details */
-.game-tile.is-open .game-content--details {
-  gap: 8px;
+/* The “big dark slab” effect is mostly overlay; soften it when open */
+.game-tile.is-open .game-overlay {
+  background:
+    linear-gradient(90deg, rgba(0,0,0,0.60), rgba(0,0,0,0.40)),
+    radial-gradient(circle at 18% 30%, rgba(0,0,0,0.30), transparent 55%);
 }
 
-/* Mobile tightening */
+/* Mobile: even tighter */
 @media (max-width: 576px) {
-  .game-tile.is-open > .game-content--summary {
-    padding: 9px 10px 6px;
+  .game-tile.is-open .game-content--summary {
+    padding: 8px 10px 6px;
   }
-  .game-content--details {
-    padding: 0 10px 10px;
-  }
-}
 }
