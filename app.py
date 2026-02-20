@@ -61,6 +61,7 @@ COMMON_WEAK_PASSWORDS = {
 MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 4096
 ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "mana_fucked",
+    "salted",
 }
 
 
@@ -2505,12 +2506,7 @@ def end_game():
         except Exception:
             starting_player_id = None
 
-    # Phase 1 inputs
-    salt_rating = request.form.get("salt_rating", type=int)
-    if salt_rating is not None:
-        if salt_rating < 1 or salt_rating > 5:
-            return "Invalid salt rating", 400
-
+    # Legacy game-level salt rating is deprecated for new submissions.
     win_type = (request.form.get("win_type") or "").strip() or None
     allowed_win_types = {
         "combat", "combo", "infinite_turns", "mill", "alt_win", "concede", "scoop"
@@ -2623,7 +2619,6 @@ def end_game():
     game = Game(
         winner_id=winner_id,
         starting_player_id=starting_player_id,
-        salt_rating=salt_rating,
         win_type=win_type,
         timed_mode=timed_mode,
         time_control=time_control,

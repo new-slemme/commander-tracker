@@ -125,8 +125,12 @@
             <div class="text-secondary" id="playerFlagSubtitle">Flag actions for this player.</div>
           </div>
 
-          <button class="btn btn-warning btn-lg w-100" id="playerFlagMarkBtn" type="button">
-            Mark Flag
+          <button class="btn btn-warning btn-lg w-100" id="playerFlagManaBtn" type="button">
+            Mark Mana Fucked
+          </button>
+
+          <button class="btn btn-danger btn-lg w-100" id="playerFlagSaltedBtn" type="button">
+            Mark Salted
           </button>
 
           <button class="btn btn-outline-light btn-lg w-100" data-bs-dismiss="modal" type="button">
@@ -165,15 +169,6 @@
               <option value="alt_win">Alternate Win</option>
               <option value="concede">Concede</option>
               <option value="scoop">Salt-Induced Scoop</option>
-            </select>
-
-            <select name="salt_rating" class="form-select form-select-lg">
-              <option value="" selected>Salt (optional)</option>
-              <option value="1">1 🧂</option>
-              <option value="2">2 🧂🧂</option>
-              <option value="3">3 🧂🧂🧂</option>
-              <option value="4">4 🧂🧂🧂🧂</option>
-              <option value="5">5 🧂🧂🧂🧂🧂</option>
             </select>
 
             <button type="submit" class="btn btn-success btn-lg w-100">
@@ -309,6 +304,29 @@ const PENDING_FADE_DELAY_MS = 1500;
 const nameLongPressState = {};
 let playerFlagTargetId = null;
 const participantFlagsByPlayer = {};
+
+function getPlayerFlagState(playerId){
+  const existing = participantFlagsByPlayer[playerId] || {};
+  return {
+    mana_fucked: !!existing.mana_fucked,
+    salted: !!existing.salted,
+  };
+}
+
+function setPlayerFlagState(playerId, nextFlags){
+  participantFlagsByPlayer[playerId] = {
+    mana_fucked: !!nextFlags.mana_fucked,
+    salted: !!nextFlags.salted,
+  };
+}
+
+function updatePlayerFlagButton(buttonId, enabled, labels, baseClass){
+  const btn = document.getElementById(buttonId);
+  if(!btn) return;
+  btn.textContent = enabled ? labels.unmark : labels.mark;
+  btn.classList.toggle(baseClass, !enabled);
+  btn.classList.toggle(`btn-outline-${baseClass.replace("btn-", "")}`, enabled);
+}
 
 const cards = [...document.querySelectorAll(".life-card")];
 cards.forEach(card=>{
@@ -769,13 +787,15 @@ function openPlayerFlagMenu(playerId){
   if(titleEl) titleEl.textContent = `Player Flag: ${playerLabel}`;
   if(subtitleEl) subtitleEl.textContent = `Flag actions for ${playerLabel}.`;
 
-  const markBtn = document.getElementById("playerFlagMarkBtn");
-  if(markBtn){
-    const isFlagged = !!participantFlagsByPlayer[playerFlagTargetId]?.mana_fucked;
-    markBtn.textContent = isFlagged ? "Unmark Mana Fucked" : "Mark Mana Fucked";
-    markBtn.classList.toggle("btn-warning", !isFlagged);
-    markBtn.classList.toggle("btn-outline-warning", isFlagged);
-  }
+  const playerFlags = getPlayerFlagState(playerFlagTargetId);
+  updatePlayerFlagButton("playerFlagManaBtn", playerFlags.mana_fucked, {
+    mark: "Mark Mana Fucked",
+    unmark: "Unmark Mana Fucked",
+  }, "btn-warning");
+  updatePlayerFlagButton("playerFlagSaltedBtn", playerFlags.salted, {
+    mark: "Mark Salted",
+    unmark: "Unmark Salted",
+  }, "btn-danger");
 
   const modalEl = document.getElementById("playerFlagModal");
   if(!modalEl) return;
@@ -791,18 +811,33 @@ document.getElementById("playerFlagModal")?.addEventListener("hidden.bs.modal", 
 document.getElementById("menuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("end-menu"));
 document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("end-menu"));
 
-document.getElementById("playerFlagMarkBtn")?.addEventListener("click", ()=>{
+document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
-  const playerFlags = participantFlagsByPlayer[playerFlagTargetId] || {};
+  const playerFlags = getPlayerFlagState(playerFlagTargetId);
   const nextValue = !playerFlags.mana_fucked;
-  participantFlagsByPlayer[playerFlagTargetId] = {
+  setPlayerFlagState(playerFlagTargetId, {
     ...playerFlags,
     mana_fucked: nextValue,
-  };
+  });
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
-  const actionText = nextValue ? "flagged" : "unflagged";
-  alert(`${playerLabel} has been ${actionText}.`);
+  const actionText = nextValue ? "flagged as mana fucked" : "unflagged for mana fucked";
+  alert(`${playerLabel} was ${actionText}.`);
+  openPlayerFlagMenu(playerFlagTargetId);
+});
+
+document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
+  if(!playerFlagTargetId) return;
+  const playerFlags = getPlayerFlagState(playerFlagTargetId);
+  const nextValue = !playerFlags.salted;
+  setPlayerFlagState(playerFlagTargetId, {
+    ...playerFlags,
+    salted: nextValue,
+  });
+
+  const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
+  const actionText = nextValue ? "flagged as salted" : "unflagged for salted";
+  alert(`${playerLabel} was ${actionText}.`);
   openPlayerFlagMenu(playerFlagTargetId);
 });
 
@@ -835,8 +870,12 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
     const payload = {};
     Object.entries(participantFlagsByPlayer).forEach(([playerId, flags])=>{
       if(!flags || typeof flags !== "object") return;
-      const hasTruthyFlag = Object.values(flags).some(Boolean);
-      if(hasTruthyFlag) payload[playerId] = flags;
+      const normalizedFlags = {
+        mana_fucked: !!flags.mana_fucked,
+        salted: !!flags.salted,
+      };
+      const hasTruthyFlag = Object.values(normalizedFlags).some(Boolean);
+      if(hasTruthyFlag) payload[playerId] = normalizedFlags;
     });
     participantFlagsInput.value = JSON.stringify(payload);
   }
