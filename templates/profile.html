@@ -72,7 +72,9 @@
         Your display name is used for stats and game tracking.
       </div>
 
-      <form method="POST">
+      <form method="POST" class="mb-4">
+        <input type="hidden" name="action" value="update_profile">
+
         <div class="profile-form-grid mb-3">
           <div>
             <label class="form-label mb-1">Display name</label>
@@ -96,6 +98,38 @@
                 type="submit"
                 style="border-radius:14px; font-weight:800;">
           Save
+        </button>
+      </form>
+
+      <div class="divider"></div>
+
+      <h3 class="profile-card-title mb-2">Change password</h3>
+      <div class="help-text mb-3">
+        Use a strong password with at least 8 characters.
+      </div>
+
+      <form method="POST">
+        <input type="hidden" name="action" value="change_password">
+
+        <div class="profile-form-grid mb-3">
+          <div>
+            <label class="form-label mb-1" for="current_password">Current password</label>
+            <input class="form-control" type="password" id="current_password" name="current_password" required>
+          </div>
+          <div>
+            <label class="form-label mb-1" for="new_password">New password</label>
+            <input class="form-control" type="password" id="new_password" name="new_password" minlength="8" required>
+          </div>
+          <div>
+            <label class="form-label mb-1" for="confirm_new_password">Confirm new password</label>
+            <input class="form-control" type="password" id="confirm_new_password" name="confirm_new_password" minlength="8" required>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-lg"
+                type="submit"
+                style="border-radius:14px; font-weight:800;">
+          Change password
         </button>
       </form>
     </div>
