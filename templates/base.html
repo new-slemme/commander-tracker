@@ -13,7 +13,7 @@
     <link href="{{ url_for('static', filename='css/base.css') }}" rel="stylesheet">
 </head>
 
-<body>
+<body class="{% if use_sigtaara %}sigtaara-ui{% endif %}">
 {% if request.endpoint != 'life_counter' %}
 <nav class="navbar navbar-expand-lg">
   <div class="container d-flex align-items-center justify-content-between">

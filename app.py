@@ -61,6 +61,7 @@ class User(db.Model):
 
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    use_sigtaara = db.Column(db.Boolean, default=False, nullable=False)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     approved_at = db.Column(db.DateTime, nullable=True)
@@ -333,6 +334,19 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('002_game_timer_metadata')")
             )
 
+        if "003_user_sigtaara_preference" not in applied:
+            user_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(user)")).fetchall()
+            }
+            if "use_sigtaara" not in user_cols:
+                db.session.execute(
+                    text("ALTER TABLE user ADD COLUMN use_sigtaara BOOLEAN NOT NULL DEFAULT 0")
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('003_user_sigtaara_preference')")
+            )
+
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
         if not default_pod:
             default_pod = Pod(name=DEFAULT_POD_NAME, slug=DEFAULT_POD_SLUG, is_active=True)
@@ -566,11 +580,16 @@ def ensure_membership(pod_id, player_id, role="member"):
 def inject_pod_context():
     user = get_current_user()
     if not user:
-        return {"nav_active_pod": None, "nav_available_pods": []}
+        return {
+            "nav_active_pod": None,
+            "nav_available_pods": [],
+            "use_sigtaara": False,
+        }
 
     return {
         "nav_active_pod": get_active_pod(),
         "nav_available_pods": get_accessible_pods(user),
+        "use_sigtaara": bool(user.use_sigtaara),
     }
 
 
@@ -603,6 +622,7 @@ def require_login():
                 session["username"] = u.username
                 session["display_name"] = u.display_name
                 session["is_admin"] = u.is_admin
+                session["use_sigtaara"] = u.use_sigtaara
                 get_active_pod()
                 return None
 
@@ -673,6 +693,7 @@ def login():
             session["username"] = user.username
             session["display_name"] = user.display_name
             session["is_admin"] = user.is_admin
+            session["use_sigtaara"] = user.use_sigtaara
             get_active_pod()
 
             next_url = request.args.get("next")
@@ -699,6 +720,7 @@ def profile():
 
     if request.method == "POST":
         new_display = request.form.get("display_name", "").strip()
+        use_sigtaara = request.form.get("use_sigtaara") == "on"
 
         if not new_display:
             flash("Display name cannot be empty.")
@@ -712,12 +734,14 @@ def profile():
             return redirect(url_for("profile"))
 
         u.display_name = new_display
+        u.use_sigtaara = use_sigtaara
         if u.player:
             u.player.name = new_display  # keep in sync with game tracking
 
         db.session.commit()
         session["display_name"] = new_display
-        flash("Display name updated.")
+        session["use_sigtaara"] = use_sigtaara
+        flash("Profile updated.")
         return redirect(url_for("profile"))
 
     return render_template("profile.html", user=u)

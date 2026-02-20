@@ -10,7 +10,7 @@
       <div>
         <h1 class="profile-title">Profile</h1>
         <div class="profile-sub">
-          Manage your display name and view account details.
+          Manage your display name, account details, and interface language style.
         </div>
       </div>
 
@@ -67,28 +67,36 @@
       <div class="divider"></div>
 
       <!-- Change display name -->
-      <h3 class="profile-card-title mb-2">Change display name</h3>
+      <h3 class="profile-card-title mb-2">Profile settings</h3>
       <div class="help-text mb-3">
-        This name is used for stats and game tracking.
+        Your display name is used for stats and game tracking.
       </div>
 
       <form method="POST">
-        <div class="profile-form-grid">
+        <div class="profile-form-grid mb-3">
           <div>
-            <label class="form-label mb-1">New display name</label>
+            <label class="form-label mb-1">Display name</label>
             <input class="form-control"
                    name="display_name"
                    value="{{ user.display_name }}"
                    maxlength="100"
                    required>
           </div>
-
-          <button class="btn btn-primary btn-lg"
-                  type="submit"
-                  style="border-radius:14px; font-weight:800;">
-            Save
-          </button>
         </div>
+
+        <div class="form-check form-switch profile-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="use_sigtaara" name="use_sigtaara" {% if user.use_sigtaara %}checked{% endif %}>
+          <label class="form-check-label" for="use_sigtaara">
+            Use Sigtaara for the whole interface
+          </label>
+          <div class="help-text mt-1">Applies the Old Tongue font across the app.</div>
+        </div>
+
+        <button class="btn btn-primary btn-lg"
+                type="submit"
+                style="border-radius:14px; font-weight:800;">
+          Save
+        </button>
       </form>
     </div>
   </div>
