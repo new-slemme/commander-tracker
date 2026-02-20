@@ -271,6 +271,14 @@
             </div>
           </div>
 
+          <div class="mb-3">
+            <label class="form-label">Partner commander (optional)</label>
+            <input class="form-control" id="editPartnerCommanderInput" name="partner_commander" autocomplete="off">
+            <div class="form-text" style="color: var(--font-base-trans);">
+              Optional: use this only for partner/background-style decks.
+            </div>
+          </div>
+
           {% if is_admin %}
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="editRetiredInput" name="retired" value="1" {% if deck.retired %}checked{% endif %}>
@@ -369,6 +377,16 @@
       });
       menu.appendChild(a);
     }
+  }
+
+  const editDeckForm = document.querySelector('#editDeckModal form');
+  if (editDeckForm && editCommanderInput) {
+    editDeckForm.addEventListener('submit', () => {
+      const partnerInput = document.getElementById('editPartnerCommanderInput');
+      const primary = editCommanderInput.value.trim();
+      const partner = partnerInput ? partnerInput.value.trim() : '';
+      editCommanderInput.value = (primary && partner) ? `${primary} + ${partner}` : primary;
+    });
   }
 
   if (editCommanderInput) {

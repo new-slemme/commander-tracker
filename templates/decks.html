@@ -248,6 +248,14 @@
             </div>
           </div>
 
+          <div class="mb-2">
+            <label class="form-label">Partner commander (optional)</label>
+            <input class="form-control" id="partnerCommanderInput" name="partner_commander" autocomplete="off" />
+            <div class="form-text" style="color: var(--font-base-trans);">
+              Optional: use this only for partner/background-style decks.
+            </div>
+          </div>
+
           <div id="commanderPreview" class="mt-3" style="display:none;">
             <img id="commanderImg" alt="Commander preview" style="max-width:100%; border-radius: 12px;" />
           </div>
@@ -337,6 +345,16 @@
     if (!res.ok) return [];
     const data = await res.json();
     return data.data || [];
+  }
+
+  const addDeckForm = document.getElementById('addDeckForm');
+  if (addDeckForm && commanderInput) {
+    addDeckForm.addEventListener('submit', () => {
+      const partnerInput = document.getElementById('partnerCommanderInput');
+      const primary = commanderInput.value.trim();
+      const partner = partnerInput ? partnerInput.value.trim() : '';
+      commanderInput.value = (primary && partner) ? `${primary} + ${partner}` : primary;
+    });
   }
 
   async function scryfallCardByExactName(name) {
