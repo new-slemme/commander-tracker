@@ -129,6 +129,14 @@
   </div>
 </div>
 
+  <div class="scope-indicator d-flex align-items-center justify-content-between gap-3 mb-4">
+    <div class="scope-indicator__label">Scope: <strong>{{ "This Pod" if scope == "pod" else "All Pods" }}</strong></div>
+    <div class="d-flex gap-2 scope-toggle">
+      <a class="btn btn-sm {% if scope == "pod" %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('games', scope='pod') }}">This Pod</a>
+      <a class="btn btn-sm {% if scope == "all" %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('games', scope='all') }}">All Pods</a>
+    </div>
+  </div>
+
   <!-- Games -->
   {% if games|length == 0 %}
     <div class="card p-3">
