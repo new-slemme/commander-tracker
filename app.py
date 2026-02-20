@@ -719,29 +719,61 @@ def profile():
         return redirect(url_for("login"))
 
     if request.method == "POST":
-        new_display = request.form.get("display_name", "").strip()
-        use_sigtaara = request.form.get("use_sigtaara") == "on"
+        action = request.form.get("action", "update_profile")
 
-        if not new_display:
-            flash("Display name cannot be empty.")
+        if action == "change_password":
+            current_password = request.form.get("current_password", "")
+            new_password = request.form.get("new_password", "")
+            confirm_new_password = request.form.get("confirm_new_password", "")
+
+            if not current_password or not new_password or not confirm_new_password:
+                flash("Please fill out all password fields.")
+                return redirect(url_for("profile"))
+
+            if not check_password_hash(u.password_hash, current_password):
+                flash("Current password is incorrect.")
+                return redirect(url_for("profile"))
+
+            if len(new_password) < 8:
+                flash("New password must be at least 8 characters long.")
+                return redirect(url_for("profile"))
+
+            if new_password != confirm_new_password:
+                flash("New password and confirmation do not match.")
+                return redirect(url_for("profile"))
+
+            u.password_hash = generate_password_hash(new_password)
+            db.session.commit()
+            flash("Password changed successfully.")
             return redirect(url_for("profile"))
 
-        existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
-        existing_player = Player.query.filter(Player.name == new_display).first()
+        if action == "update_profile":
+            new_display = request.form.get("display_name", "").strip()
+            use_sigtaara = request.form.get("use_sigtaara") == "on"
 
-        if existing_user or (existing_player and (not u.player or existing_player.id != u.player.id)):
-            flash("That display name is already taken.")
+            if not new_display:
+                flash("Display name cannot be empty.")
+                return redirect(url_for("profile"))
+
+            existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
+            existing_player = Player.query.filter(Player.name == new_display).first()
+
+            if existing_user or (existing_player and (not u.player or existing_player.id != u.player.id)):
+                flash("That display name is already taken.")
+                return redirect(url_for("profile"))
+
+            u.display_name = new_display
+            u.use_sigtaara = use_sigtaara
+            if u.player:
+                u.player.name = new_display  # keep in sync with game tracking
+
+            db.session.commit()
+            session["display_name"] = new_display
+            session["use_sigtaara"] = use_sigtaara
+            flash("Profile updated.")
             return redirect(url_for("profile"))
 
-        u.display_name = new_display
-        u.use_sigtaara = use_sigtaara
-        if u.player:
-            u.player.name = new_display  # keep in sync with game tracking
-
-        db.session.commit()
-        session["display_name"] = new_display
-        session["use_sigtaara"] = use_sigtaara
-        flash("Profile updated.")
+        flash("Unknown profile action.")
         return redirect(url_for("profile"))
 
     return render_template("profile.html", user=u)
