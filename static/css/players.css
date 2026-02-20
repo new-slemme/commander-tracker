@@ -1,18 +1,5 @@
   /* Players page polish */
-  .players-hero {
-    background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.92));
-    border: 1px solid rgba(143,153,197,0.25);
-    border-radius: 22px;
-    box-shadow: 0 0 28px rgba(0,0,0,0.55);
-  }
 
-  .players-head {
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap:14px;
-    flex-wrap:wrap;
-  }
 
   .players-sub {
     color: var(--font-base-trans);

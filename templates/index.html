@@ -2,10 +2,10 @@
 {% block content %}
     <link href="{{ url_for('static', filename='css/index.css') }}" rel="stylesheet">
 
-<div class="home-hero mb-4">
-  <h1 class="keller-title title-font">{{ active_pod.name if active_pod else "Der Keller" }}</h1>
-  <div class="salz-sub mb-2">
-    <span class="salz-dot"></span>
+<div class="app-hero mb-4">
+  <h1 class="card-head-title title-font">{{ active_pod.name if active_pod else "Der Keller" }}</h1>
+  <div class="app-hero__pill mb-2">
+    <span class="app-hero__dot"></span>
     Active Pod
   </div>
 
