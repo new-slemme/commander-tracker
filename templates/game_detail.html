@@ -23,8 +23,10 @@
           <span class="pill">Win: <b class="text-white">{{ game.win_type.replace('_',' ') }}</b></span>
         {% endif %}
         
-        {% if game.salt_rating %}
-          <span class="pill">Salt: <b class="text-white">{{ game.salt_rating }}</b> 🧂</span>
+        {% if game.salted_players %}
+          <span class="pill">Salted players: <b class="text-white">{{ game.salted_players }}/{{ parts|length }}</b> 🧂</span>
+        {% elif game.salt_rating %}
+          <span class="pill">Legacy salt: <b class="text-white">{{ game.salt_rating }}</b> 🧂</span>
         {% endif %}
         {% if game.timed_mode and game.timed_mode != 'off' %}
           <span class="pill">Timer: <b class="text-white">{{ game.timed_mode.replace('_', ' ') }}</b></span>

@@ -49,7 +49,7 @@
     <div class="salt-card span-6">
       <div class="salt-card-head">
         <h2 class="salt-card-title m-0">Saltiest Players</h2>
-        <div class="muted">Avg 🧂 (min 3 games)</div>
+        <div class="muted">Salted participation rate (min 3 games)</div>
       </div>
       <div class="table-responsive p-3">
         <table class="table table-hover align-middle mb-0 salt-table">
@@ -57,7 +57,7 @@
             <tr>
               <th style="width:60px;">#</th>
               <th>Player</th>
-              <th class="text-end">Avg</th>
+              <th class="text-end">Salted %</th>
               <th class="text-end">Games</th>
             </tr>
           </thead>
@@ -65,14 +65,15 @@
             {% for row in salty_players %}
               {% set p = row[0] %}
               {% set avg = row[1] %}
-              {% set gcount = row[2] %}
+              {% set salted_games = row[2] %}
+              {% set gcount = row[3] %}
               <tr>
                 <td><span class="app-badge alert">#{{ loop.index }}</span></td>
                 <td class="fw-bold text-white">{{ p.name }}</td>
                 <td class="text-end fw-bold text-white">
-                  {{ "%.2f"|format(avg) }} 🧂
+                  {{ "%.1f"|format(avg) }}%
                 </td>
-                <td class="text-end">{{ gcount }}</td>
+                <td class="text-end">{{ salted_games }}/{{ gcount }}</td>
               </tr>
             {% endfor %}
             {% if salty_players|length == 0 %}
@@ -89,7 +90,7 @@
     <div class="salt-card span-6">
       <div class="salt-card-head">
         <h2 class="salt-card-title m-0">Saltiest Decks</h2>
-        <div class="muted">Avg 🧂 (min 3 games)</div>
+        <div class="muted">Salted participation rate (min 3 games)</div>
       </div>
       <div class="table-responsive p-3">
         <table class="table table-hover align-middle mb-0 salt-table">
@@ -97,7 +98,7 @@
             <tr>
               <th style="width:60px;">#</th>
               <th>Deck</th>
-              <th class="text-end">Avg</th>
+              <th class="text-end">Salted %</th>
               <th class="text-end">Games</th>
             </tr>
           </thead>
@@ -105,7 +106,8 @@
             {% for row in salty_decks %}
               {% set d = row[0] %}
               {% set avg = row[1] %}
-              {% set gcount = row[2] %}
+              {% set salted_games = row[2] %}
+              {% set gcount = row[3] %}
               <tr>
                 <td><span class="app-badge alert">#{{ loop.index }}</span></td>
                 <td style="min-width:0;">
@@ -119,9 +121,9 @@
                   </div>
                 </td>
                 <td class="text-end fw-bold text-white">
-                  {{ "%.2f"|format(avg) }} 🧂
+                  {{ "%.1f"|format(avg) }}%
                 </td>
-                <td class="text-end">{{ gcount }}</td>
+                <td class="text-end">{{ salted_games }}/{{ gcount }}</td>
               </tr>
             {% endfor %}
             {% if salty_decks|length == 0 %}
@@ -138,12 +140,12 @@
     <div class="salt-card span-12">
       <div class="salt-card-head">
         <h2 class="salt-card-title m-0">Saltiest Games</h2>
-        <div class="muted">Highest 🧂 first</div>
+        <div class="muted">Most salted players first</div>
       </div>
 
       {% if salty_games|length == 0 %}
         <div class="p-3">
-          <div class="muted">No salty games yet. Add salt when ending a game.</div>
+          <div class="muted">No salted games yet. Mark salted players in Life Counter.</div>
         </div>
       {% else %}
         <div class="game-list">
@@ -161,7 +163,11 @@
                         {{ g.win_type.replace('_',' ') }}
                         <span class="muted">·</span>
                       {% endif %}
-                      Salt {{ g.salt_rating }} 🧂
+                      Salted players: {{ game_salt_stats[g.id]["salted_players"] }}/{{ game_salt_stats[g.id]["participants"] }}
+                      {% if game_salt_stats[g.id]["has_legacy_salt"] %}
+                        <span class="muted">·</span>
+                        Legacy salt rating {{ game_salt_stats[g.id]["legacy_salt_rating"] }} 🧂
+                      {% endif %}
                       {% if g.starting_player %}
                         <span class="muted">·</span>
                         Started: {{ g.starting_player.name }}
@@ -170,7 +176,7 @@
                   </div>
 
                   <div class="game-right">
-                    <div class="app-badge alert">🧂 {{ g.salt_rating }}</div>
+                    <div class="app-badge alert">🧂 {{ game_salt_stats[g.id]["salted_players"] }}</div>
                     <div class="winner-pill">
                       <span class="dot"></span>
                       Winner: {{ g.winner.name }}
