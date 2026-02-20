@@ -39,6 +39,13 @@
     </a>
 
     <div class="d-flex align-items-center gap-2 banner-actions">
+      <button type="button"
+              class="btn btn-light btn-sm"
+              data-bs-toggle="modal"
+              data-bs-target="#editDeckModal">
+        Edit
+      </button>
+
       {% if deck.retired %}
         <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
           <button type="submit" class="btn btn-warning btn-sm">
@@ -173,5 +180,148 @@
   {% endif %}
 
 </div>
+
+
+<!-- Edit Deck Modal -->
+<div class="modal fade" id="editDeckModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-body p-4">
+        <h4 class="mb-3">Edit Deck</h4>
+
+        <form method="post" action="{{ url_for('update_deck', deck_id=deck.id) }}">
+          <input type="hidden" name="next" value="{{ url_for('deck_detail', deck_id=deck.id) }}">
+
+          {% if is_admin %}
+          <div class="mb-3">
+            <label class="form-label">Owner</label>
+            <select class="form-select" name="player_id" required>
+              {% for p in players %}
+                <option value="{{ p.id }}" {% if p.id == deck.player_id %}selected{% endif %}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label">Deck name</label>
+            <input class="form-control" name="name" value="{{ deck.name }}" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Commander</label>
+            <input class="form-control" id="editCommanderInput" name="commander" value="{{ deck.commander_name or deck.commander }}" autocomplete="off" required>
+            <div class="form-text" style="color: var(--font-base-trans);">
+              Start typing a card name; suggestions come from Scryfall.
+            </div>
+          </div>
+
+          {% if is_admin %}
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="editRetiredInput" name="retired" value="1" {% if deck.retired %}checked{% endif %}>
+            <label class="form-check-label" for="editRetiredInput">Retired deck</label>
+          </div>
+          {% endif %}
+
+          <div id="editCommanderPreview" class="mt-3" {% if not (deck.commander_local_art or deck.commander_art_crop_url) %}style="display:none;"{% endif %}>
+            <img id="editCommanderImg" alt="Commander preview" src="{{ deck.commander_local_art or deck.commander_art_crop_url or '' }}" style="max-width:100%; border-radius: 12px;" />
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-success w-100 btn-lg app-btn" type="submit">Save</button>
+            <button class="btn btn-secondary w-100 btn-lg app-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const editCommanderInput = document.getElementById('editCommanderInput');
+  const editPreviewWrap = document.getElementById('editCommanderPreview');
+  const editPreviewImg = document.getElementById('editCommanderImg');
+  let editAcTimer = null;
+
+  async function scryfallAutocomplete(q) {
+    const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(q)}`;
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.data || [];
+  }
+
+  async function scryfallCardByExactName(name) {
+    const url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  function attachDropdown(items) {
+    let box = document.getElementById('editCommanderSuggest');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'editCommanderSuggest';
+      box.style.position = 'relative';
+      editCommanderInput.parentNode.appendChild(box);
+
+      const menu = document.createElement('div');
+      menu.id = 'editCommanderSuggestMenu';
+      menu.className = 'list-group';
+      menu.style.position = 'absolute';
+      menu.style.zIndex = '2000';
+      menu.style.width = '100%';
+      menu.style.maxHeight = '260px';
+      menu.style.overflowY = 'auto';
+      box.appendChild(menu);
+    }
+
+    const menu = document.getElementById('editCommanderSuggestMenu');
+    menu.innerHTML = '';
+    if (!items.length) return;
+
+    for (const name of items.slice(0, 12)) {
+      const a = document.createElement('button');
+      a.type = 'button';
+      a.className = 'list-group-item list-group-item-action';
+      a.textContent = name;
+      a.addEventListener('click', async () => {
+        editCommanderInput.value = name;
+        menu.innerHTML = '';
+        const card = await scryfallCardByExactName(name);
+        if (card && card.image_uris && card.image_uris.normal) {
+          editPreviewImg.src = card.image_uris.normal;
+          editPreviewWrap.style.display = '';
+        } else {
+          editPreviewWrap.style.display = 'none';
+        }
+      });
+      menu.appendChild(a);
+    }
+  }
+
+  if (editCommanderInput) {
+    editCommanderInput.addEventListener('input', () => {
+      clearTimeout(editAcTimer);
+      const q = editCommanderInput.value.trim();
+      if (q.length < 3) {
+        attachDropdown([]);
+        return;
+      }
+      editAcTimer = setTimeout(async () => {
+        const items = await scryfallAutocomplete(q);
+        attachDropdown(items);
+      }, 200);
+    });
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('editCommanderSuggestMenu');
+      if (!menu) return;
+      if (e.target === editCommanderInput || menu.contains(e.target)) return;
+      menu.innerHTML = '';
+    });
+  }
+</script>
 
 {% endblock %}
