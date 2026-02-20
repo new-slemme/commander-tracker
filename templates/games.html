@@ -49,85 +49,87 @@
 
         <form method="get" action="{{ url_for('games') }}" id="gamesFilterForm">
           <div class="filter-grid">
-        <div class="fg-3">
-          <div class="filter-label">Player</div>
-          <select class="form-select" name="player_id" data-autosubmit>
-            <option value="">Any</option>
-            {% for p in players %}
-              <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
-                {{ p.name }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
 
-        <div class="fg-3">
-          <div class="filter-label">Deck</div>
-          <select class="form-select" name="deck_id" data-autosubmit>
-            <option value="">Any</option>
-            {% for d in decks %}
-              <option value="{{ d.id }}" {% if selected_deck_id == d.id %}selected{% endif %}>
-                {{ d.name }}{% if d.retired %} (Retired){% endif %}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">Player</div>
+              <select class="form-select" name="player_id" data-autosubmit>
+                <option value="">Any</option>
+                {% for p in players %}
+                  <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
+                    {{ p.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <div class="fg-3">
-          <div class="filter-label">Winner</div>
-          <select class="form-select" name="winner_id" data-autosubmit>
-            <option value="">Any</option>
-            {% for p in players %}
-              <option value="{{ p.id }}" {% if selected_winner_id == p.id %}selected{% endif %}>
-                {{ p.name }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">Deck</div>
+              <select class="form-select" name="deck_id" data-autosubmit>
+                <option value="">Any</option>
+                {% for d in decks %}
+                  <option value="{{ d.id }}" {% if selected_deck_id == d.id %}selected{% endif %}>
+                    {{ d.name }}{% if d.retired %} (Retired){% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <div class="fg-3">
-          <div class="filter-label">Per page</div>
-          <select class="form-select" name="per_page" data-autosubmit>
-            {% for n in [10,25,50,100] %}
-              <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
-            {% endfor %}
-          </select>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">Winner</div>
+              <select class="form-select" name="winner_id" data-autosubmit>
+                <option value="">Any</option>
+                {% for p in players %}
+                  <option value="{{ p.id }}" {% if selected_winner_id == p.id %}selected{% endif %}>
+                    {{ p.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <div class="fg-3">
-          <div class="filter-label">From</div>
-          <input type="date" class="form-control" name="date_from" value="{{ date_from }}" data-autosubmit>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">Per page</div>
+              <select class="form-select" name="per_page" data-autosubmit>
+                {% for n in [10,25,50,100] %}
+                  <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
 
-        <div class="fg-3">
-          <div class="filter-label">To</div>
-          <input type="date" class="form-control" name="date_to" value="{{ date_to }}" data-autosubmit>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">From</div>
+              <input type="date" class="form-control" name="date_from" value="{{ date_from }}" data-autosubmit>
+            </div>
 
-        <div class="fg-3">
-          <div class="filter-label">Min players</div>
-          <select class="form-select" name="min_players" data-autosubmit>
-            <option value="">Any</option>
-            {% for n in [2,3,4,5,6] %}
-              <option value="{{ n }}" {% if min_players == n %}selected{% endif %}>{{ n }}+</option>
-            {% endfor %}
-          </select>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">To</div>
+              <input type="date" class="form-control" name="date_to" value="{{ date_to }}" data-autosubmit>
+            </div>
 
-        <div class="fg-3">
-          <div class="filter-label">Max players</div>
-          <select class="form-select" name="max_players" data-autosubmit>
-            <option value="">Any</option>
-            {% for n in [2,3,4,5,6] %}
-              <option value="{{ n }}" {% if max_players == n %}selected{% endif %}>{{ n }}</option>
-            {% endfor %}
-          </select>
-        </div>
+            <div class="fg-3">
+              <div class="filter-label">Min players</div>
+              <select class="form-select" name="min_players" data-autosubmit>
+                <option value="">Any</option>
+                {% for n in [2,3,4,5,6] %}
+                  <option value="{{ n }}" {% if min_players == n %}selected{% endif %}>{{ n }}+</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="fg-3">
+              <div class="filter-label">Max players</div>
+              <select class="form-select" name="max_players" data-autosubmit>
+                <option value="">Any</option>
+                {% for n in [2,3,4,5,6] %}
+                  <option value="{{ n }}" {% if max_players == n %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
           </div>
         </form>
       </div>
+    </div>
   </div>
-</div>
 
   <div class="scope-indicator d-flex align-items-center justify-content-between gap-3 mb-4">
     <div class="scope-indicator__label">Scope: <strong>{{ "This Pod" if scope == "pod" else "All Pods" }}</strong></div>
@@ -156,133 +158,149 @@
       </div>
 
       <div class="p-3">
-      <div class="game-list">
+        <div class="game-list">
 
-      {% for g in games %}
+          {% for g in games %}
 
-        <div class="list-group-item p-0 game-tile-link">
-        <details class="game-tile recent-game-inner" id="game-{{ g.id }}">
-          <div class="game-bg">
-            <div class="game-slice"></div>
-          </div>
-
-          <div class="game-overlay"></div>
-
-          <summary class="game-content game-content--summary">
-
-            <div class="game-top">
-              <div>
-                <div class="game-date">
-                  {{ g.date.strftime('%Y-%m-%d %H:%M') }}
+            <div class="list-group-item p-0 game-tile-link">
+              <details class="game-tile recent-game-inner" id="game-{{ g.id }}">
+                <div class="game-bg">
+                  <div class="game-slice"></div>
                 </div>
-              </div>
 
-              <div class="game-top-actions">
-                {% if scope == "all" and g.pod %}
-                  <span class="game-tag game-tag--pod" title="Pod">
-                    Pod · {{ g.pod.name }}
-                  </span>
-                {% endif %}
+                <div class="game-overlay"></div>
 
-                <button class="copy-link-btn" type="button" data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}" aria-label="Copy game link" title="Copy game link">
-                  🔗
-                </button>
+                <summary class="game-content game-content--summary">
+                  <div class="game-summary-head">
+                    <div class="game-summary-left">
+                      <div class="game-date">
+                        {{ g.date.strftime('%Y-%m-%d %H:%M') }}
+                      </div>
+                      <div class="game-submeta">
+                        <span class="game-submeta__item">{{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players</span>
+                        <span class="game-submeta__dot">•</span>
+                        <span class="game-submeta__item">Game #{{ g.id }}</span>
+                      </div>
+                    </div>
 
-                <div class="winner-pill">
-                  <span class="dot"></span>
-                  Winner: {{ g.winner.name }}
-                </div>
-              </div>
-            </div>
+                    <div class="game-summary-right">
+                      <div class="game-top-actions">
+                        {% if scope == "all" and g.pod %}
+                          <span class="game-tag game-tag--pod" title="Pod">
+                            Pod · {{ g.pod.name }}
+                          </span>
+                        {% endif %}
 
-            <div class="decks-compact" data-decks-compact>
-              {% for gp in game_parts[g.id][:3] %}
-                <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
-                  <span class="deck-mini__player">{{ gp.player.name }}</span>
-                  <span class="deck-mini__deck">{{ gp.deck.name }}</span>
-                </span>
-              {% endfor %}
+                        <button class="copy-link-btn" type="button"
+                                data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}"
+                                aria-label="Copy game link" title="Copy game link">
+                          <span class="copy-link-icon" aria-hidden="true">🔗</span>
+                        </button>
 
-              {% if game_parts[g.id]|length > 3 %}
-                <button class="deck-more-toggle" type="button" data-decks-toggle aria-expanded="false">
-                  <span class="deck-more-label">+{{ game_parts[g.id]|length - 3 }} more</span>
-                  <span class="deck-chevron" aria-hidden="true">⌄</span>
-                </button>
+                        <div class="winner-pill">
+                          <span class="dot"></span>
+                          Winner: {{ g.winner.name }}
+                        </div>
+                      </div>
 
-                <div class="deck-mini-extra" data-decks-extra hidden>
-                  {% for gp in game_parts[g.id][3:] %}
-                    <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
-                      <span class="deck-mini__player">{{ gp.player.name }}</span>
-                      <span class="deck-mini__deck">{{ gp.deck.name }}</span>
+                      <div class="expander-hint" aria-hidden="true">
+                        <span class="expander-text">Open</span>
+                        <span class="expander-chevron">⌄</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="decks-compact" data-decks-compact>
+                    {% for gp in game_parts[g.id][:3] %}
+                      <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
+                        <span class="deck-mini__player">{{ gp.player.name }}</span>
+                        <span class="deck-mini__deck">{{ gp.deck.name }}</span>
+                      </span>
+                    {% endfor %}
+
+                    {% if game_parts[g.id]|length > 3 %}
+                      <button class="deck-more-toggle" type="button" data-decks-toggle aria-expanded="false">
+                        <span class="deck-more-label">+{{ game_parts[g.id]|length - 3 }} more</span>
+                        <span class="deck-chevron" aria-hidden="true">⌄</span>
+                      </button>
+
+                      <div class="deck-mini-extra" data-decks-extra hidden>
+                        {% for gp in game_parts[g.id][3:] %}
+                          <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
+                            <span class="deck-mini__player">{{ gp.player.name }}</span>
+                            <span class="deck-mini__deck">{{ gp.deck.name }}</span>
+                          </span>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+
+                  <div class="game-tags">
+                    <span class="game-tag">
+                      Decks in game: {{ game_parts[g.id]|length }}
                     </span>
-                  {% endfor %}
-                </div>
-              {% endif %}
-            </div>
-
-            <div class="game-tags">
-              <span class="game-tag">
-                Decks in game: {{ game_parts[g.id]|length }}
-              </span>
-              {% if g.salt_rating %}
-                <span class="game-tag game-tag--salt">Salt {{ g.salt_rating }} 🧂</span>
-              {% endif %}
-              {% if g.win_type %}
-                <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
-              {% endif %}
-            </div>
-
-          </summary>
-
-          <div class="game-content game-content--details">
-            <div class="game-meta">
-              {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
-              <span class="muted">·</span>
-              Game #{{ g.id }}
-            </div>
-            {% if g.win_type or g.salt_rating %}
-              <div class="game-meta">
-                {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
-                {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
-                {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}
-              </div>
-            {% endif %}
-
-            <div class="players-row">
-              {% for gp in game_parts[g.id] %}
-                {% set commander_art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
-                <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}"{% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
-                  <span class="ppill-top">
-                    {% if gp.player_id == g.winner_id %}
-                      <span class="wmark">W</span>
+                    {% if g.salt_rating %}
+                      <span class="game-tag game-tag--salt">Salt {{ g.salt_rating }} 🧂</span>
                     {% endif %}
-                    <span class="name">{{ gp.player.name }}</span>
-                  </span>
+                    {% if g.win_type %}
+                      <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
+                    {% endif %}
+                  </div>
 
-                  <span class="deck">{{ gp.deck.name }}</span>
-                  <span class="deck-meta">
-                    {{ gp.deck.commander_name or gp.deck.commander }}
+                </summary>
+
+                <div class="game-content game-content--details">
+                  <div class="game-meta">
+                    {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
                     <span class="muted">·</span>
-                    {{ gp.deck.owner.name }}
-                    {% if gp.deck.retired %}
-                      <span class="retired-pill">Retired</span>
-                    {% endif %}
-                  </span>
-                </span>
-              {% endfor %}
+                    Game #{{ g.id }}
+                  </div>
+
+                  {% if g.win_type or g.salt_rating %}
+                    <div class="game-meta">
+                      {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
+                      {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
+                      {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}
+                    </div>
+                  {% endif %}
+
+                  <div class="players-row">
+                    {% for gp in game_parts[g.id] %}
+                      {% set commander_art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
+                      <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}"
+                            {% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
+                        <span class="ppill-top">
+                          {% if gp.player_id == g.winner_id %}
+                            <span class="wmark">W</span>
+                          {% endif %}
+                          <span class="name">{{ gp.player.name }}</span>
+                        </span>
+
+                        <span class="deck">{{ gp.deck.name }}</span>
+                        <span class="deck-meta">
+                          {{ gp.deck.commander_name or gp.deck.commander }}
+                          <span class="muted">·</span>
+                          {{ gp.deck.owner.name }}
+                          {% if gp.deck.retired %}
+                            <span class="retired-pill">Retired</span>
+                          {% endif %}
+                        </span>
+                      </span>
+                    {% endfor %}
+                  </div>
+
+                  <a href="{{ url_for('game_detail', game_id=g.id) }}" class="btn btn-sm btn-outline-light align-self-start mt-1">
+                    Open game #{{ g.id }}
+                  </a>
+
+                </div>
+              </details>
             </div>
 
-            <a href="{{ url_for('game_detail', game_id=g.id) }}" class="btn btn-sm btn-outline-light align-self-start mt-1">
-              Open game #{{ g.id }}
-            </a>
+          {% endfor %}
 
-          </div>
-        </details>
         </div>
-
-      {% endfor %}
-    </div>
-    </div>
+      </div>
     </div>
 
     <!-- Pagination -->
@@ -371,6 +389,15 @@
           window.prompt('Copy game link:', url);
         }
       });
+    });
+  })();
+
+  // Add an "is-open" class for styling without :has()
+  (function() {
+    document.querySelectorAll('.game-tile').forEach((d) => {
+      const set = () => d.classList.toggle('is-open', d.open);
+      set();
+      d.addEventListener('toggle', set);
     });
   })();
 </script>
