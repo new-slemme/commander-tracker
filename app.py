@@ -476,6 +476,71 @@ def extract_art_crop(card: dict):
     return None
 
 
+def _split_commander_names(value: str) -> list[str]:
+    if not value:
+        return []
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for part in value.split("+"):
+        name = part.strip()
+        if not name:
+            continue
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        names.append(name)
+    return names
+
+
+def resolve_commander_metadata(commander_input: str) -> dict:
+    commander_names = _split_commander_names(commander_input)
+    if not commander_names and commander_input.strip():
+        commander_names = [commander_input.strip()]
+
+    cards = []
+    for name in commander_names:
+        card = scryfall_named_exact(name)
+        if card:
+            cards.append(card)
+
+    if not cards:
+        return {
+            "commander": " + ".join(commander_names) if commander_names else commander_input.strip(),
+            "commander_name": None,
+            "commander_scryfall_id": None,
+            "commander_art_crop_url": None,
+            "commander_local_art": None,
+            "color_identity": None,
+            "lookup_ok": False,
+        }
+
+    canonical_names = [card.get("name") or commander_names[i] for i, card in enumerate(cards)]
+    combined_commander = " + ".join(canonical_names)
+
+    primary_card = cards[0]
+    scry_id = primary_card.get("id")
+    art_crop = extract_art_crop(primary_card)
+    local_art = None
+    if art_crop and scry_id:
+        local_art = download_art_crop(art_crop, scry_id, canonical_names[0])
+
+    color_identity = "".join(
+        c for c in "WUBRG" if any(c in (card.get("color_identity") or []) for card in cards)
+    )
+
+    return {
+        "commander": combined_commander,
+        "commander_name": combined_commander,
+        "commander_scryfall_id": scry_id,
+        "commander_art_crop_url": art_crop,
+        "commander_local_art": local_art,
+        "color_identity": color_identity,
+        "lookup_ok": len(cards) == len(commander_names),
+    }
+
+
 def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> str | None:
     """
     Downloads art_crop into /data/art (persistent).
@@ -2045,22 +2110,13 @@ def add_deck():
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
 
-    card = scryfall_named_exact(commander_to_set)
-    if card:
-        scry_id = card.get("id")
-        canonical_name = card.get("name") or commander_to_set
-        art_crop = extract_art_crop(card)
-        color_identity = "".join(card.get("color_identity") or [])
-
-        local_art = None
-        if art_crop and scry_id:
-            local_art = download_art_crop(art_crop, scry_id, canonical_name)
-
-        deck.commander_name = canonical_name
-        deck.commander_scryfall_id = scry_id
-        deck.commander_art_crop_url = art_crop
-        deck.commander_local_art = local_art
-        deck.color_identity = color_identity
+    commander_meta = resolve_commander_metadata(commander_to_set)
+    deck.commander = commander_meta["commander"] or commander_to_set
+    deck.commander_name = commander_meta["commander_name"]
+    deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
+    deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
+    deck.commander_local_art = commander_meta["commander_local_art"]
+    deck.color_identity = commander_meta["color_identity"]
 
     db.session.add(deck)
     db.session.commit()
@@ -2073,8 +2129,8 @@ def add_deck():
         warnings = []
         if resolved_commander and commander_input and resolved_commander.lower() != commander_input.lower():
             warnings.append(f"manual commander '{commander_input}' overridden")
-        if not card:
-            warnings.append("Scryfall lookup failed")
+        if not commander_meta["lookup_ok"]:
+            warnings.append("Scryfall lookup failed for one or more commanders")
 
         warning_msg = f"; warnings: {', '.join(warnings)}" if warnings else ""
         flash(
@@ -2147,28 +2203,13 @@ def update_deck(deck_id):
                 deck.player_id = owner.id
         deck.retired = bool(request.form.get("retired"))
 
-    card = scryfall_named_exact(commander_to_set)
-    if card:
-        scry_id = card.get("id")
-        canonical_name = card.get("name") or commander_to_set
-        art_crop = extract_art_crop(card)
-        color_identity = "".join(card.get("color_identity") or [])
-
-        local_art = deck.commander_local_art
-        if art_crop and scry_id and scry_id != deck.commander_scryfall_id:
-            local_art = download_art_crop(art_crop, scry_id, canonical_name)
-
-        deck.commander_name = canonical_name
-        deck.commander_scryfall_id = scry_id
-        deck.commander_art_crop_url = art_crop
-        deck.commander_local_art = local_art
-        deck.color_identity = color_identity
-    else:
-        deck.commander_name = None
-        deck.commander_scryfall_id = None
-        deck.commander_art_crop_url = None
-        deck.commander_local_art = None
-        deck.color_identity = None
+    commander_meta = resolve_commander_metadata(commander_to_set)
+    deck.commander = commander_meta["commander"] or commander_to_set
+    deck.commander_name = commander_meta["commander_name"]
+    deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
+    deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
+    deck.commander_local_art = commander_meta["commander_local_art"]
+    deck.color_identity = commander_meta["color_identity"]
 
     try:
         db.session.commit()
@@ -2197,8 +2238,8 @@ def update_deck(deck_id):
         warnings = []
         if resolved_commander and commander_input and resolved_commander.lower() != commander_input.lower():
             warnings.append(f"manual commander '{commander_input}' overridden")
-        if not card:
-            warnings.append("Scryfall lookup failed")
+        if not commander_meta["lookup_ok"]:
+            warnings.append("Scryfall lookup failed for one or more commanders")
 
         warning_msg = f"; warnings: {', '.join(warnings)}" if warnings else ""
         flash(
