@@ -160,33 +160,21 @@
 
       {% for g in games %}
 
-        <a href="{{ url_for('game_detail', game_id=g.id) }}" class="list-group-item p-0 game-tile-link">
-        <div class="game-tile recent-game-inner">
+        <div class="list-group-item p-0 game-tile-link">
+        <details class="game-tile recent-game-inner" id="game-{{ g.id }}">
           <div class="game-bg">
             <div class="game-slice"></div>
           </div>
 
           <div class="game-overlay"></div>
 
-          <div class="game-content">
+          <summary class="game-content game-content--summary">
 
             <div class="game-top">
               <div>
                 <div class="game-date">
                   {{ g.date.strftime('%Y-%m-%d %H:%M') }}
                 </div>
-                <div class="game-meta">
-                  {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
-                  <span class="muted">·</span>
-                  Game #{{ g.id }}
-                </div>
-                {% if g.win_type or g.salt_rating %}
-                  <div class="game-meta">
-                    {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
-                    {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
-                    {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}
-                  </div>
-                {% endif %}
               </div>
 
               <div class="winner-pill">
@@ -206,6 +194,22 @@
                 <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
               {% endif %}
             </div>
+
+          </summary>
+
+          <div class="game-content game-content--details">
+            <div class="game-meta">
+              {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
+              <span class="muted">·</span>
+              Game #{{ g.id }}
+            </div>
+            {% if g.win_type or g.salt_rating %}
+              <div class="game-meta">
+                {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
+                {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
+                {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}
+              </div>
+            {% endif %}
 
             <div class="players-row">
               {% for gp in game_parts[g.id] %}
@@ -231,9 +235,13 @@
               {% endfor %}
             </div>
 
+            <a href="{{ url_for('game_detail', game_id=g.id) }}" class="btn btn-sm btn-outline-light align-self-start mt-1">
+              Open game #{{ g.id }}
+            </a>
+
           </div>
+        </details>
         </div>
-        </a>
 
       {% endfor %}
     </div>
