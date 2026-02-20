@@ -234,6 +234,41 @@
     <p class="text-muted mt-3">No matchup data yet.</p>
   {% endif %}
 
+  <h4 class="mt-5">Deck Breakdown</h4>
+
+  {% if deck_matchups %}
+    <div class="row g-4 mt-2">
+      {% for m in deck_matchups %}
+        <div class="col-md-4">
+          <div class="card p-4 text-center matchup-card">
+            <h5 class="mb-2">
+              {% if m.deck_id %}
+                <a class="matchup-link" href="{{ url_for('deck_detail', deck_id=m.deck_id) }}">{{ m.deck_name }}</a>
+              {% else %}
+                {{ m.deck_name }}
+              {% endif %}
+            </h5>
+
+            <small class="text-muted d-block mb-2">
+              {{ m.commander or "Unknown commander" }}
+              • {{ m.owner_name }}
+            </small>
+
+            <div class="d-flex justify-content-center gap-3 my-2">
+              <span class="text-success">{{ m.wins }}W</span>
+              <span class="text-danger">{{ m.losses }}L</span>
+            </div>
+
+            <div class="fw-bold">{{ m.winrate }}%</div>
+            <small class="text-muted">{{ m.games }} games</small>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted mt-3">No deck matchup data yet.</p>
+  {% endif %}
+
 </div>
 
 

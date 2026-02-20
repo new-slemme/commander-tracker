@@ -2151,6 +2151,7 @@ def deck_detail(deck_id):
 
     history = []
     matchups = {}
+    deck_matchups = {}
 
     for part in participations:
         game = part.game
@@ -2175,6 +2176,31 @@ def deck_detail(deck_id):
             else:
                 matchups[name]["losses"] += 1
 
+            matchup_key = o.deck_id if o.deck_id else "Unknown deck"
+            opponent_deck = o.deck
+            if matchup_key not in deck_matchups:
+                deck_matchups[matchup_key] = {
+                    "deck_id": opponent_deck.id if opponent_deck else None,
+                    "deck_name": (opponent_deck.name if opponent_deck else "Unknown deck"),
+                    "commander": (
+                        (opponent_deck.commander_name or opponent_deck.commander)
+                        if opponent_deck
+                        else None
+                    ),
+                    "owner_name": (
+                        opponent_deck.owner.name
+                        if opponent_deck and opponent_deck.owner
+                        else o.player.name
+                    ),
+                    "wins": 0,
+                    "losses": 0,
+                }
+
+            if won_game:
+                deck_matchups[matchup_key]["wins"] += 1
+            else:
+                deck_matchups[matchup_key]["losses"] += 1
+
         history.append(
             {"game_id": game.id, "date": game.date, "won": won_game, "opponents": opponent_names}
         )
@@ -2185,6 +2211,17 @@ def deck_detail(deck_id):
         data["winrate"] = round((data["wins"] / total) * 100, 1) if total else 0.0
 
     matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
+
+    deck_matchup_rows = []
+    for matchup in deck_matchups.values():
+        total = matchup["wins"] + matchup["losses"]
+        matchup["games"] = total
+        matchup["winrate"] = round((matchup["wins"] / total) * 100, 1) if total else 0.0
+        deck_matchup_rows.append(matchup)
+
+    deck_matchup_rows.sort(
+        key=lambda row: (-row["games"], -row["winrate"], row["deck_name"].lower())
+    )
 
     decklist_data = _load_decklist_data(deck)
 
@@ -2197,6 +2234,7 @@ def deck_detail(deck_id):
         winrate=winrate,
         history=history,
         matchups=matchups,
+        deck_matchups=deck_matchup_rows,
         decklist_data=decklist_data,
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
