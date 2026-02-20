@@ -122,6 +122,7 @@ class Deck(db.Model):
     commander_art_crop_url = db.Column(db.String(300))
     commander_local_art = db.Column(db.String(300))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
+    decklist_text = db.Column(db.Text)
 
 
 class Game(db.Model):
@@ -370,6 +371,17 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('003_user_sigtaara_preference')")
+            )
+
+        if "004_deck_decklist_text" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "decklist_text" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN decklist_text TEXT"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('004_deck_decklist_text')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
