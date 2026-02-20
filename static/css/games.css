@@ -153,7 +153,7 @@
   padding: 12px 14px;
   display:flex;
   flex-direction:column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .game-content--summary {
@@ -170,7 +170,7 @@
 .game-summary-head {
   display:flex;
   justify-content:space-between;
-  align-items:flex-start;
+  align-items:center;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -184,9 +184,10 @@
 
 .game-summary-right {
   display:flex;
-  flex-direction:column;
-  align-items:flex-end;
-  gap: 8px;
+  flex-direction:row;
+  align-items:center;
+  justify-content:flex-end;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -211,23 +212,24 @@
 
 /* Open/close affordance */
 .expander-hint {
-  display:inline-flex;
-  align-items:center;
-  gap: 8px;
-  color: rgba(255,255,255,0.70);
-  font-weight: 900;
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(143,153,197,0.35);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
 }
+
 .expander-chevron {
-  font-size: 0.95rem;
-  transform: translateY(-1px);
+  font-size: 1rem;
   transition: transform .15s ease;
 }
-.game-tile.is-open .expander-text { content: ""; }
-.game-tile.is-open .expander-hint .expander-chevron {
-  transform: rotate(180deg) translateY(1px);
+
+.game-tile.is-open .expander-chevron {
+  transform: rotate(180deg);
 }
 
 /* Focus ring for accessibility */
@@ -549,6 +551,42 @@
 }
 
 @media (max-width: 576px) {
+  .game-content { padding: 10px 11px; gap: 7px; }
+
+  .game-summary-head {
+    gap: 10px;
+  }
+
+  /* Make the header stack less and wrap smarter */
+  .game-summary-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .game-summary-right {
+    width: auto;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .winner-pill {
+    width: auto;
+    padding: 7px 10px;
+    font-size: 0.92rem;
+  }
+
+  /* Let actions wrap but avoid creating a full new row just for expander */
+  .game-top-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .copy-link-btn,
+  .expander-hint {
+    width: 34px;
+    height: 34px;
+  }
+
   .app-hero {
     padding: 18px;
     border-radius: 18px;
@@ -573,23 +611,6 @@
 
   .filter-card,
   .recent-card { border-radius: 18px; }
-
-  .game-content { padding: 11px; }
-
-  .game-summary-right {
-    width: 100%;
-    align-items: flex-start;
-  }
-
-  .game-top-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .winner-pill {
-    width: 100%;
-    justify-content: center;
-  }
 
   .game-tags { gap: 6px; }
 
