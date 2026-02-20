@@ -1272,7 +1272,8 @@ def delete_player(player_id):
 
     played = GameParticipant.query.filter_by(player_id=player_id).count()
     won = Game.query.filter_by(winner_id=player_id).count()
-    if played > 0 or won > 0:
+    started = Game.query.filter_by(starting_player_id=player_id).count()
+    if played > 0 or won > 0 or started > 0:
         flash("Can't delete this player: they appear in recorded games.")
         return redirect(url_for("players"))
 
@@ -1286,6 +1287,9 @@ def delete_player(player_id):
     # Safe to delete decks first, then player
     for d in list(player.decks):
         db.session.delete(d)
+
+    # Remove pod memberships before deleting the player to satisfy FK constraints
+    PodMembership.query.filter_by(player_id=player_id).delete()
 
     db.session.delete(player)
     db.session.commit()
