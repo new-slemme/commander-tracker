@@ -119,6 +119,10 @@ class Game(db.Model):
 
     salt_rating = db.Column(db.Integer, nullable=True)  # 1..5
     win_type = db.Column(db.String(32), nullable=True)
+    timed_mode = db.Column(db.String(32), nullable=True)
+    time_control = db.Column(db.Text, nullable=True)
+    ended_on_time = db.Column(db.Boolean, nullable=True)
+    duration_seconds = db.Column(db.Integer, nullable=True)
 
     note = db.Column(db.Text, nullable=True)
 
@@ -309,6 +313,24 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('001_pods')")
+            )
+
+        if "002_game_timer_metadata" not in applied:
+            cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game)")).fetchall()
+            }
+
+            if "timed_mode" not in cols:
+                db.session.execute(text("ALTER TABLE game ADD COLUMN timed_mode VARCHAR(32)"))
+            if "time_control" not in cols:
+                db.session.execute(text("ALTER TABLE game ADD COLUMN time_control TEXT"))
+            if "ended_on_time" not in cols:
+                db.session.execute(text("ALTER TABLE game ADD COLUMN ended_on_time BOOLEAN"))
+            if "duration_seconds" not in cols:
+                db.session.execute(text("ALTER TABLE game ADD COLUMN duration_seconds INTEGER"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('002_game_timer_metadata')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -1940,6 +1962,7 @@ def start_game():
     session["active_player_id"] = starting_player
     session["turn_number"] = 1
     session["timer_config"] = timer_config
+    session["game_started_at"] = int(datetime.utcnow().timestamp())
     session.modified = True
 
     return redirect(url_for("life_counter"))
@@ -1979,6 +2002,7 @@ def life_counter():
         participants=participants,
         starting_player_id=session.get("active_player_id"),
         timer_config=session.get("timer_config", {"mode": "off"}),
+        game_started_at=session.get("game_started_at"),
     )
 
 
@@ -2016,6 +2040,63 @@ def end_game():
     if win_type is not None and win_type not in allowed_win_types:
         return "Invalid win type", 400
 
+    timed_mode_raw = (request.form.get("timed_mode") or "").strip().lower()
+    allowed_timed_modes = {"off", "chess_clock", "turn_timer"}
+    timed_mode = timed_mode_raw if timed_mode_raw in allowed_timed_modes else None
+
+    time_control_raw = (request.form.get("time_control") or "").strip()
+    time_control = None
+    if time_control_raw:
+        if len(time_control_raw) > 1000:
+            return "Invalid time control payload", 400
+        try:
+            parsed_time_control = json.loads(time_control_raw)
+        except json.JSONDecodeError:
+            return "Invalid time control JSON", 400
+        if not isinstance(parsed_time_control, dict):
+            return "Invalid time control JSON", 400
+        sanitized_time_control = {}
+        if timed_mode == "chess_clock":
+            minutes = parsed_time_control.get("minutes_per_player")
+            increment = parsed_time_control.get("increment_seconds", 0)
+            if not isinstance(minutes, int) or minutes < 1 or minutes > 180:
+                return "Invalid chess clock minutes", 400
+            if not isinstance(increment, int) or increment < 0 or increment > 300:
+                return "Invalid chess clock increment", 400
+            sanitized_time_control = {
+                "minutes_per_player": minutes,
+                "increment_seconds": increment,
+            }
+        elif timed_mode == "turn_timer":
+            seconds = parsed_time_control.get("seconds_per_turn")
+            if not isinstance(seconds, int) or seconds < 5 or seconds > 3600:
+                return "Invalid turn timer seconds", 400
+            sanitized_time_control = {"seconds_per_turn": seconds}
+        elif timed_mode == "off":
+            sanitized_time_control = {}
+
+        time_control = json.dumps(sanitized_time_control) if timed_mode else None
+
+    ended_on_time_raw = (request.form.get("ended_on_time") or "").strip().lower()
+    ended_on_time = None
+    if ended_on_time_raw:
+        if ended_on_time_raw not in {"true", "false"}:
+            return "Invalid ended_on_time value", 400
+        ended_on_time = ended_on_time_raw == "true"
+
+    duration_seconds_raw = (request.form.get("duration_seconds") or "").strip()
+    duration_seconds = None
+    if duration_seconds_raw:
+        try:
+            duration_seconds = int(duration_seconds_raw)
+        except ValueError:
+            return "Invalid duration_seconds", 400
+        if duration_seconds < 0 or duration_seconds > 172800:
+            return "Invalid duration_seconds", 400
+
+    if timed_mode is None and (time_control is not None or ended_on_time is not None):
+        return "Timer metadata requires valid timed_mode", 400
+
     active_pod = get_active_pod()
     if not active_pod:
         return "No active pod available", 400
@@ -2025,6 +2106,10 @@ def end_game():
         starting_player_id=starting_player_id,
         salt_rating=salt_rating,
         win_type=win_type,
+        timed_mode=timed_mode,
+        time_control=time_control,
+        ended_on_time=ended_on_time,
+        duration_seconds=duration_seconds,
         pod_id=active_pod.id,
     )
     db.session.add(game)
@@ -2036,6 +2121,8 @@ def end_game():
     db.session.commit()
     session.pop("game_participants", None)
     session.pop("active_player_id", None)
+    session.pop("timer_config", None)
+    session.pop("game_started_at", None)
     return redirect(url_for("index"))
 
 
