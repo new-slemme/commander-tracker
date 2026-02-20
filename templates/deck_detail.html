@@ -131,6 +131,56 @@
 
   <hr class="my-4">
 
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <h4 class="mt-0 mb-0">Decklist</h4>
+    {% if decklist_data.has_list %}
+      <a class="btn btn-outline-light btn-sm" href="{{ url_for('deck_export', deck_id=deck.id) }}">Export .txt</a>
+    {% endif %}
+  </div>
+
+  {% if decklist_data.has_list %}
+    {% if decklist_data.mode == 'parsed' %}
+      <div class="decklist-summary mt-3">
+        <span class="badge rounded-pill text-bg-dark">Total cards: {{ decklist_data.total_cards }}</span>
+        <span class="badge rounded-pill text-bg-dark">Commander cards: {{ decklist_data.commander_count }}</span>
+      </div>
+
+      <ul class="list-group mt-3 decklist-hints">
+        {% for hint in decklist_data.validation_hints %}
+          <li class="list-group-item hint-{{ hint.status }}">{{ hint.text }}</li>
+        {% endfor %}
+      </ul>
+
+      <div class="row g-3 mt-1">
+        {% for section in decklist_data.sections %}
+          <div class="col-lg-6">
+            <div class="card p-3 h-100 decklist-card">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">{{ section.label }}</h5>
+                <small class="text-muted">{{ section.total }} cards</small>
+              </div>
+              <ul class="list-unstyled mb-0 decklist-entries">
+                {% for entry in section.entries %}
+                  <li><span class="decklist-qty">{{ entry.quantity }}×</span> {{ entry.name }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="text-muted mt-3 mb-2">Stored decklist could not be normalized, showing raw text:</p>
+      <pre class="decklist-raw mt-2">{{ decklist_data.raw_text }}</pre>
+    {% endif %}
+  {% else %}
+    <div class="card p-4 mt-3 empty-decklist-state">
+      <h5 class="mb-2">No decklist imported yet</h5>
+      <p class="mb-0 text-muted">Use <strong>Edit</strong> to import from Moxfield/Archidekt, upload a file, or paste a decklist.</p>
+    </div>
+  {% endif %}
+
+  <hr class="my-4">
+
   <h4 class="mt-4">Game History</h4>
 
   <div class="list-group mt-3">

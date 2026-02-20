@@ -1,5 +1,6 @@
 from flask import (
     Flask,
+    Response,
     render_template,
     request,
     redirect,
@@ -24,7 +25,7 @@ from sqlalchemy import func, text, case
 from sqlalchemy.orm import aliased
 from functools import wraps
 
-from deck_import import DeckParserError, parse_deck_input
+from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
@@ -576,6 +577,112 @@ def _render_decklist_text(parsed: dict) -> str:
         lines.append("")
 
     return "\n".join(lines).strip()
+
+
+def _pretty_section_name(section: str) -> str:
+    labels = {
+        "commander": "Commander",
+        "mainboard": "Mainboard",
+        "sideboard": "Sideboard",
+        "maybeboard": "Maybeboard",
+    }
+    return labels.get(section, section.replace("_", " ").title())
+
+
+def _load_decklist_data(deck: Deck) -> dict:
+    raw_text = (deck.decklist_text or "").strip()
+    if not raw_text:
+        return {
+            "has_list": False,
+            "mode": "empty",
+            "sections": [],
+            "total_cards": 0,
+            "commander_count": 0,
+            "validation_hints": [],
+            "export_text": "",
+            "raw_text": "",
+        }
+
+    try:
+        parsed = parse_plaintext_decklist(raw_text).as_dict()
+    except DeckParserError:
+        return {
+            "has_list": True,
+            "mode": "raw",
+            "sections": [],
+            "total_cards": 0,
+            "commander_count": 0,
+            "validation_hints": [],
+            "export_text": raw_text,
+            "raw_text": raw_text,
+        }
+
+    section_order = ["commander", "mainboard", "sideboard", "maybeboard"]
+    parsed_sections = parsed.get("sections", {}) or {}
+
+    ordered_section_keys = [s for s in section_order if parsed_sections.get(s)]
+    ordered_section_keys.extend(
+        [s for s in parsed_sections.keys() if s not in ordered_section_keys and parsed_sections.get(s)]
+    )
+
+    sections = []
+    total_cards = 0
+    commander_count = 0
+
+    for section_key in ordered_section_keys:
+        entries = parsed_sections.get(section_key) or []
+        section_total = sum(int(e.get("quantity", 0) or 0) for e in entries)
+        total_cards += section_total
+        if section_key == "commander":
+            commander_count += section_total
+
+        sections.append(
+            {
+                "key": section_key,
+                "label": _pretty_section_name(section_key),
+                "entries": entries,
+                "total": section_total,
+            }
+        )
+
+    validation_hints = []
+    if commander_count == 0:
+        validation_hints.append({"status": "warning", "text": "No commander section found."})
+    elif commander_count == 1:
+        validation_hints.append({"status": "ok", "text": "Commander count looks valid (1)."})
+    elif commander_count == 2:
+        validation_hints.append(
+            {"status": "ok", "text": "Commander count is 2 (partner/background style deck)."}
+        )
+    else:
+        validation_hints.append(
+            {
+                "status": "warning",
+                "text": f"Commander section has {commander_count} cards; most Commander decks use 1-2.",
+            }
+        )
+
+    if total_cards == 100:
+        validation_hints.append({"status": "ok", "text": "Total card count is exactly 100."})
+    elif total_cards < 100:
+        validation_hints.append(
+            {"status": "warning", "text": f"Total card count is {total_cards}; Commander usually needs 100."}
+        )
+    else:
+        validation_hints.append(
+            {"status": "warning", "text": f"Total card count is {total_cards}; Commander usually needs 100."}
+        )
+
+    return {
+        "has_list": True,
+        "mode": "parsed",
+        "sections": sections,
+        "total_cards": total_cards,
+        "commander_count": commander_count,
+        "validation_hints": validation_hints,
+        "export_text": _render_decklist_text(parsed),
+        "raw_text": raw_text,
+    }
 
 
 def _count_imported_cards(parsed: dict) -> int:
@@ -1858,6 +1965,8 @@ def deck_detail(deck_id):
 
     matchups = dict(sorted(matchups.items(), key=lambda x: -x[1]["games"]))
 
+    decklist_data = _load_decklist_data(deck)
+
     return render_template(
         "deck_detail.html",
         deck=deck,
@@ -1867,9 +1976,28 @@ def deck_detail(deck_id):
         winrate=winrate,
         history=history,
         matchups=matchups,
+        decklist_data=decklist_data,
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
     )
+
+
+@app.route("/deck/<int:deck_id>/export")
+def deck_export(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        return "Deck not found", 404
+
+    decklist_data = _load_decklist_data(deck)
+    export_text = (decklist_data.get("export_text") or "").strip()
+    if not export_text:
+        export_text = (deck.decklist_text or "").strip()
+
+    filename = re.sub(r"[^A-Za-z0-9_-]+", "_", deck.name.strip()) or f"deck_{deck.id}"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}.txt"'
+    }
+    return Response(export_text + "\n", mimetype="text/plain; charset=utf-8", headers=headers)
 
 
 @app.route("/add_deck", methods=["POST"])
