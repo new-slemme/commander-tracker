@@ -36,6 +36,16 @@ DEFAULT_POD_SLUG = "der-keller-die-salzmine"
 ART_DIR = Path("/data/art")
 ART_DIR.mkdir(parents=True, exist_ok=True)
 
+# --- Dev/test bootstrap user (env-gated) ---
+BOOTSTRAP_TEST_USER = os.getenv("BOOTSTRAP_TEST_USER", "0") == "1"
+AUTO_LOGIN_TEST_USER = os.getenv("AUTO_LOGIN_TEST_USER", "0") == "1"
+
+TEST_USERNAME = os.getenv("TEST_USERNAME", "test")
+TEST_DISPLAY_NAME = os.getenv("TEST_DISPLAY_NAME", "Test User")
+TEST_PASSWORD = os.getenv("TEST_PASSWORD", "test")  # dev only
+TEST_IS_ADMIN = os.getenv("TEST_IS_ADMIN", "1") == "1"
+
+
 # -------------------------
 # Models
 # -------------------------
@@ -139,8 +149,6 @@ class PodMembership(db.Model):
     )
 
 
-
-
 class GameParticipant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
@@ -152,6 +160,81 @@ class GameParticipant(db.Model):
     game = db.relationship("Game", backref="participants", lazy=True)
 
     __table_args__ = (db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),)
+
+
+# -------------------------
+# Dev bootstrap helpers
+# -------------------------
+
+
+def bootstrap_test_user():
+    """
+    Dev-only (env-gated):
+      - Ensure a test user exists and is active.
+      - Ensure linked Player exists.
+      - Ensure membership in default pod (role podmaster if TEST_IS_ADMIN).
+    Returns the User or None.
+    """
+    if not BOOTSTRAP_TEST_USER:
+        return None
+
+    u = User.query.filter_by(username=TEST_USERNAME).first()
+    role = "podmaster" if TEST_IS_ADMIN else "member"
+
+    if u:
+        changed = False
+
+        if not u.is_active:
+            u.is_active = True
+            u.approved_at = datetime.utcnow()
+            changed = True
+
+        if TEST_IS_ADMIN and not u.is_admin:
+            u.is_admin = True
+            changed = True
+
+        if not u.player:
+            u.player = Player(name=u.display_name)
+            changed = True
+
+        default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+        if default_pod and u.player:
+            m = PodMembership.query.filter_by(pod_id=default_pod.id, player_id=u.player.id).first()
+            if not m:
+                db.session.add(PodMembership(pod_id=default_pod.id, player_id=u.player.id, role=role))
+                changed = True
+            elif role == "podmaster" and m.role != "podmaster":
+                m.role = "podmaster"
+                changed = True
+
+        if changed:
+            db.session.commit()
+        return u
+
+    # Create new user (avoid display_name collisions)
+    display = (TEST_DISPLAY_NAME or "").strip() or TEST_USERNAME
+    if User.query.filter_by(display_name=display).first() or Player.query.filter_by(name=display).first():
+        display = f"{display} ({TEST_USERNAME})"
+
+    u = User(
+        username=TEST_USERNAME,
+        display_name=display,
+        password_hash=generate_password_hash(TEST_PASSWORD),
+        is_active=True,
+        is_admin=bool(TEST_IS_ADMIN),
+        approved_at=datetime.utcnow(),
+    )
+    u.player = Player(name=u.display_name)
+
+    db.session.add(u)
+    db.session.flush()
+
+    default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+    if default_pod and u.player:
+        db.session.add(PodMembership(pod_id=default_pod.id, player_id=u.player.id, role=role))
+
+    db.session.commit()
+    return u
 
 
 # -------------------------
@@ -254,6 +337,9 @@ with app.app_context():
 
     if os.getenv("AUTO_CREATE_DB") == "1":
         db.create_all()
+
+    # Dev-only: create/ensure test user during bootstrap
+    bootstrap_test_user()
 
     # Bootstrap admin (env var BOOTSTRAP_ADMIN_USERNAME)
     admin_username = os.getenv("BOOTSTRAP_ADMIN_USERNAME")
@@ -430,8 +516,6 @@ def get_accessible_pods(user):
     )
 
 
-
-
 def can_manage_pod(user, pod_id):
     if not user:
         return False
@@ -455,6 +539,7 @@ def ensure_membership(pod_id, player_id, role="member"):
     db.session.add(membership)
     return membership
 
+
 def game_query_for_scope():
     scope = (request.args.get("scope") or "pod").strip().lower()
     q = Game.query
@@ -471,6 +556,22 @@ def game_query_for_scope():
 @app.before_request
 def require_login():
     if "user_id" not in session:
+        # Dev-only: auto-login test user (env-gated)
+        if AUTO_LOGIN_TEST_USER:
+            u = bootstrap_test_user()
+            if u:
+                # safety net: ensure player exists
+                if not u.player:
+                    u.player = Player(name=u.display_name)
+                    db.session.commit()
+
+                session["user_id"] = u.id
+                session["username"] = u.username
+                session["display_name"] = u.display_name
+                session["is_admin"] = u.is_admin
+                get_active_pod()
+                return None
+
         # Allow auth routes + static assets + art
         if request.endpoint not in ("login", "register", "static", "art"):
             return redirect(url_for("login") + "?next=" + quote(request.full_path))
