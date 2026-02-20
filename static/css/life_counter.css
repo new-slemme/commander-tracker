@@ -390,6 +390,41 @@ body.sigtaara-ui .h4 {
 }
 .turn-timer-pill.low-time{ color:#ff9d9d; border-color:rgba(255,114,114,.8); }
 
+.player-flag-flyout{
+  position:fixed;
+  z-index:320;
+  width:min(280px, calc(100vw - 20px));
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:14px;
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,0.2);
+  background:rgba(18,22,33,0.96);
+  box-shadow:0 14px 30px rgba(0,0,0,0.45);
+  backdrop-filter:blur(8px);
+  opacity:0;
+  transform:translateY(6px) scale(.98);
+  pointer-events:none;
+  transition:opacity .12s ease, transform .12s ease;
+}
+
+.player-flag-flyout.is-open{
+  opacity:1;
+  transform:translateY(0) scale(1);
+  pointer-events:auto;
+}
+
+.player-flag-flyout__header{
+  text-align:center;
+}
+
+.player-flag-flyout__subtitle{
+  color:rgba(226,231,240,0.75);
+  font-size:.88rem;
+  line-height:1.25;
+}
+
 .players-3 .life-card.p3-slot-3 .player-timer{ top:auto; bottom:12px; }
 .mode-2p .player-timer{ font-size:clamp(.78rem,1.7vw,.95rem); }
 
