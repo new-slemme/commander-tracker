@@ -545,6 +545,11 @@ function setActive(id){
   });
 }
 
+function isPlayerAlive(playerId){
+  const el = document.getElementById("life-" + playerId);
+  return !!el && parseInt(el.textContent, 10) > 0;
+}
+
 /* Put turn dmg on the OUTER edge */
 function positionTurnDamageBadges(){
   const screenCenterX = window.innerWidth / 2;
@@ -569,10 +574,16 @@ function positionTurnDamageBadges(){
 function nextPlayer(){
   const previousActive = String(active);
   const ids = getIdsClockwise();
-  const idx = ids.indexOf(String(active));
-  passed.add(String(active));
+  const aliveIds = ids.filter(isPlayerAlive);
 
-  if(passed.size === ids.length){
+  if(aliveIds.length <= 1) return;
+
+  passed = new Set([...passed].filter(id => aliveIds.includes(id)));
+  if(aliveIds.includes(previousActive)){
+    passed.add(previousActive);
+  }
+
+  if(passed.size === aliveIds.length){
     turn++;
     passed.clear();
     updateTurnPills();
@@ -585,7 +596,17 @@ function nextPlayer(){
     );
   }
 
-  setActive(ids[(idx+1) % ids.length]);
+  const activeIdx = ids.indexOf(previousActive);
+  let nextActive = aliveIds[0];
+  for(let offset = 1; offset <= ids.length; offset++){
+    const candidate = ids[(activeIdx + offset + ids.length) % ids.length];
+    if(aliveIds.includes(candidate)){
+      nextActive = candidate;
+      break;
+    }
+  }
+
+  setActive(nextActive);
   if(timerState.mode === "turn_timer"){
     timerState.ropeRemainingMs = timerState.ropeDurationMs;
   }
@@ -683,11 +704,7 @@ function queueLifeChange(playerId, delta){
 }
 
 function checkWinner(){
-  const alive = cards.filter(c=>{
-    const id = String(c.dataset.player);
-    const el = document.getElementById("life-" + id);
-    return el && parseInt(el.textContent, 10) > 0;
-  });
+  const alive = cards.filter(c=>isPlayerAlive(String(c.dataset.player)));
 
   if (alive.length === 1) {
     const winner = String(alive[0].dataset.player);
