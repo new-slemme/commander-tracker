@@ -184,9 +184,13 @@
                           <span class="game-submeta__dot">•</span>
                           <span class="game-submeta__item">{{ g.win_type.replace('_',' ')|title }}</span>
                         {% endif %}
-                        {% if g.salt_rating %}
+                        {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length}) %}
+                        {% if salt_stats.salted_players > 0 %}
                           <span class="game-submeta__dot">•</span>
-                          <span class="game-submeta__item">Salt {{ g.salt_rating }} 🧂</span>
+                          <span class="game-submeta__item">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}</span>
+                        {% elif g.salt_rating %}
+                          <span class="game-submeta__dot">•</span>
+                          <span class="game-submeta__item">Legacy salt {{ g.salt_rating }} 🧂</span>
                         {% endif %}
                       </div>
                     </div>
@@ -247,8 +251,10 @@
                     <span class="game-tag">
                       Decks in game: {{ game_parts[g.id]|length }}
                     </span>
-                    {% if g.salt_rating %}
-                      <span class="game-tag game-tag--salt">Salt {{ g.salt_rating }} 🧂</span>
+                    {% if salt_stats.salted_players > 0 %}
+                      <span class="game-tag game-tag--salt">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}</span>
+                    {% elif g.salt_rating %}
+                      <span class="game-tag game-tag--salt">Legacy salt {{ g.salt_rating }} 🧂</span>
                     {% endif %}
                     {% if g.win_type %}
                       <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
@@ -275,9 +281,12 @@
                         <span class="muted">·</span>
                         {{ g.win_type.replace('_',' ')|title }}
                       {% endif %}
-                      {% if g.salt_rating %}
+                      {% if salt_stats.salted_players > 0 %}
                         <span class="muted">·</span>
-                        Salt {{ g.salt_rating }} 🧂
+                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}
+                      {% elif g.salt_rating %}
+                        <span class="muted">·</span>
+                        Legacy salt {{ g.salt_rating }} 🧂
                       {% endif %}
                     </div>
                   </div>
@@ -295,11 +304,15 @@
                   </div>
                 </div>
                     
-                  {% if g.win_type or g.salt_rating %}
+                  {% if g.win_type or salt_stats.salted_players > 0 or g.salt_rating %}
                     <div class="game-meta game-meta--redundant">
                       {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
-                      {% if g.win_type and g.salt_rating %}<span class="muted">·</span>{% endif %}
-                      {% if g.salt_rating %}Salt {{ g.salt_rating }} 🧂{% endif %}
+                      {% if g.win_type and (salt_stats.salted_players > 0 or g.salt_rating) %}<span class="muted">·</span>{% endif %}
+                      {% if salt_stats.salted_players > 0 %}
+                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }}
+                      {% elif g.salt_rating %}
+                        Legacy salt {{ g.salt_rating }} 🧂
+                      {% endif %}
                     </div>
                   {% endif %}
 
@@ -316,6 +329,9 @@
                         </span>
 
                         <span class="deck">{{ gp.deck.name }}</span>
+                        {% if gp.parsed_flags.get('salted') %}
+                          <span class="badge rounded-pill text-bg-danger mt-1">Salted</span>
+                        {% endif %}
                         <span class="deck-meta">
                           {{ gp.deck.commander_name or gp.deck.commander }}
                           <span class="muted">·</span>

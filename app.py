@@ -65,6 +65,27 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
 }
 
 
+def parse_participant_flags(raw_flags: str | None) -> dict[str, bool]:
+    parsed_flags = {}
+    payload = (raw_flags or "").strip()
+    if not payload:
+        return parsed_flags
+
+    try:
+        loaded = json.loads(payload)
+    except json.JSONDecodeError:
+        return parsed_flags
+
+    if not isinstance(loaded, dict):
+        return parsed_flags
+
+    return {
+        k: bool(v)
+        for k, v in loaded.items()
+        if isinstance(k, str) and k in ALLOWED_PARTICIPANT_FLAG_KEYS
+    }
+
+
 def validate_password_rules(password: str) -> str | None:
     if len(password) < 8:
         return "Password must be at least 8 characters long."
@@ -1142,42 +1163,106 @@ def admin_approve_user(user_id):
 def saltmine():
     game_q, scope, active_pod = game_query_for_scope()
 
-    # Top salty games
-    salty_games = (
-        game_q
-        .filter(Game.salt_rating.isnot(None))
-        .order_by(Game.salt_rating.desc(), Game.date.desc())
-        .limit(10)
+    scoped_games = game_q.all()
+    scoped_game_ids = [g.id for g in scoped_games]
+
+    participants = (
+        GameParticipant.query
+        .filter(GameParticipant.game_id.in_(scoped_game_ids if scoped_game_ids else [-1]))
         .all()
     )
 
-    # Avg salt by player (by participation)
-    salty_players = (
-        db.session.query(Player, func.avg(Game.salt_rating).label("avg_salt"), func.count(Game.id).label("games"))
-        .join(GameParticipant, GameParticipant.player_id == Player.id)
-        .join(Game, Game.id == GameParticipant.game_id)
-        .filter(Game.id.in_(game_q.with_entities(Game.id)))
-        .filter(Game.salt_rating.isnot(None))
-        .group_by(Player.id)
-        .having(func.count(Game.id) >= 3)
-        .order_by(text("avg_salt DESC"), text("games DESC"))
-        .limit(10)
-        .all()
-    )
+    game_salt_stats: dict[int, dict[str, int | bool]] = {}
+    player_salt_stats: dict[int, dict[str, int]] = {}
+    deck_salt_stats: dict[int, dict[str, int]] = {}
 
-    # Avg salt by deck (by participation)
-    salty_decks = (
-        db.session.query(Deck, func.avg(Game.salt_rating).label("avg_salt"), func.count(Game.id).label("games"))
-        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-        .join(Game, Game.id == GameParticipant.game_id)
-        .filter(Game.id.in_(game_q.with_entities(Game.id)))
-        .filter(Game.salt_rating.isnot(None))
-        .group_by(Deck.id)
-        .having(func.count(Game.id) >= 3)
-        .order_by(text("avg_salt DESC"), text("games DESC"))
-        .limit(10)
-        .all()
+    for gp in participants:
+        parsed_flags = parse_participant_flags(gp.flags_json)
+        salted = bool(parsed_flags.get("salted"))
+
+        game_entry = game_salt_stats.setdefault(gp.game_id, {
+            "salted_players": 0,
+            "participants": 0,
+            "any_salted": False,
+        })
+        game_entry["participants"] += 1
+        if salted:
+            game_entry["salted_players"] += 1
+            game_entry["any_salted"] = True
+
+        player_entry = player_salt_stats.setdefault(gp.player_id, {
+            "salted_games": 0,
+            "games": 0,
+        })
+        player_entry["games"] += 1
+        if salted:
+            player_entry["salted_games"] += 1
+
+        deck_entry = deck_salt_stats.setdefault(gp.deck_id, {
+            "salted_games": 0,
+            "games": 0,
+        })
+        deck_entry["games"] += 1
+        if salted:
+            deck_entry["salted_games"] += 1
+
+    for g in scoped_games:
+        stats = game_salt_stats.setdefault(g.id, {
+            "salted_players": 0,
+            "participants": 0,
+            "any_salted": False,
+        })
+        legacy_salt = g.salt_rating is not None
+        stats["legacy_salt_rating"] = g.salt_rating
+        stats["has_legacy_salt"] = legacy_salt
+        stats["sort_salted_players"] = int(stats["salted_players"])
+        stats["sort_has_salt"] = int(stats["any_salted"] or legacy_salt)
+
+    # Top salty games by participant-level salted flags
+    salty_games = sorted(
+        scoped_games,
+        key=lambda g: (
+            int(game_salt_stats[g.id]["sort_salted_players"]),
+            int(game_salt_stats[g.id]["sort_has_salt"]),
+            g.date,
+        ),
+        reverse=True,
     )
+    salty_games = [g for g in salty_games if game_salt_stats[g.id]["sort_has_salt"]][:10]
+
+    # Saltiest players by salted participation rate (min 3 games)
+    player_ids = list(player_salt_stats.keys())
+    players_by_id = {
+        p.id: p
+        for p in Player.query.filter(Player.id.in_(player_ids if player_ids else [-1])).all()
+    }
+    salty_players = []
+    for player_id, stats in player_salt_stats.items():
+        games_played = int(stats["games"])
+        salted_games = int(stats["salted_games"])
+        if games_played < 3 or player_id not in players_by_id:
+            continue
+        salt_rate = (salted_games / games_played) * 100
+        salty_players.append((players_by_id[player_id], salt_rate, salted_games, games_played))
+    salty_players.sort(key=lambda row: (row[1], row[2], row[3], row[0].name.lower()), reverse=True)
+    salty_players = salty_players[:10]
+
+    # Saltiest decks by salted participation rate (min 3 games)
+    deck_ids = list(deck_salt_stats.keys())
+    decks_by_id = {
+        d.id: d
+        for d in Deck.query.filter(Deck.id.in_(deck_ids if deck_ids else [-1])).all()
+    }
+    salty_decks = []
+    for deck_id, stats in deck_salt_stats.items():
+        games_played = int(stats["games"])
+        salted_games = int(stats["salted_games"])
+        if games_played < 3 or deck_id not in decks_by_id:
+            continue
+        salt_rate = (salted_games / games_played) * 100
+        salty_decks.append((decks_by_id[deck_id], salt_rate, salted_games, games_played))
+    salty_decks.sort(key=lambda row: (row[1], row[2], row[3], row[0].name.lower()), reverse=True)
+    salty_decks = salty_decks[:10]
 
     # Starting player advantage
     sp = (
@@ -1201,6 +1286,7 @@ def saltmine():
     return render_template(
         "saltmine.html",
         salty_games=salty_games,
+        game_salt_stats=game_salt_stats,
         salty_players=salty_players,
         salty_decks=salty_decks,
         start_games=start_games,
@@ -1816,8 +1902,18 @@ def games():
     )
 
     game_parts = {}
+    game_salt_stats = {}
     for gp in parts:
+        gp.parsed_flags = parse_participant_flags(gp.flags_json)
         game_parts.setdefault(gp.game_id, []).append(gp)
+
+        stats = game_salt_stats.setdefault(gp.game_id, {"salted_players": 0, "participants": 0})
+        stats["participants"] += 1
+        if gp.parsed_flags.get("salted"):
+            stats["salted_players"] += 1
+
+    for g in games_page:
+        game_salt_stats.setdefault(g.id, {"salted_players": 0, "participants": 0})
 
     # Dropdown data
     players = Player.query.order_by(Player.name.asc()).all()
@@ -1837,6 +1933,7 @@ def games():
         games=games_page,
         game_parts=game_parts,
         player_counts=player_counts,
+        game_salt_stats=game_salt_stats,
         players=players,
         decks=decks,
         pagination=pagination,
@@ -1860,21 +1957,13 @@ def game_detail(game_id):
 
     parts = GameParticipant.query.filter_by(game_id=game_id).all()
 
+    salted_players = 0
     for gp in parts:
-        parsed_flags = {}
-        raw_flags = (gp.flags_json or "").strip()
-        if raw_flags:
-            try:
-                loaded = json.loads(raw_flags)
-            except json.JSONDecodeError:
-                loaded = {}
-            if isinstance(loaded, dict):
-                parsed_flags = {
-                    k: bool(v)
-                    for k, v in loaded.items()
-                    if isinstance(k, str) and k in ALLOWED_PARTICIPANT_FLAG_KEYS
-                }
-        gp.parsed_flags = parsed_flags
+        gp.parsed_flags = parse_participant_flags(gp.flags_json)
+        if gp.parsed_flags.get("salted"):
+            salted_players += 1
+
+    game.salted_players = salted_players
 
     # Nice for display: show winner first (optional)
     parts_sorted = sorted(parts, key=lambda p: (0 if p.player_id == g.winner_id else 1, p.player.name.lower()))
