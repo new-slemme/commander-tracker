@@ -38,35 +38,54 @@
       ← Go Back
     </a>
 
-    <div class="d-flex align-items-center gap-2 banner-actions">
-      <button type="button"
-              class="btn btn-light btn-sm"
-              data-bs-toggle="modal"
-              data-bs-target="#editDeckModal">
-        Edit
+    <div class="dropdown banner-actions">
+      <button class="btn menu-trigger"
+              type="button"
+              data-bs-toggle="dropdown"
+              data-bs-display="static"
+              aria-expanded="false"
+              aria-label="Deck actions menu">
+        <span></span><span></span><span></span>
       </button>
 
-      {% if deck.retired %}
-        <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
-          <button type="submit" class="btn btn-warning btn-sm">
-            Unretire
+      <ul class="dropdown-menu dropdown-menu-end banner-menu">
+        <li>
+          <button type="button"
+                  class="dropdown-item"
+                  data-bs-toggle="modal"
+                  data-bs-target="#editDeckModal">
+            Edit deck
           </button>
-        </form>
-      {% else %}
-        <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
-              onsubmit="return confirm('Retire {{ deck.name }}?');">
-          <button type="submit" class="btn btn-warning btn-sm">
-            Retire
-          </button>
-        </form>
-      {% endif %}
+        </li>
 
-      <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
-            onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
-        <button type="submit" class="btn btn-danger btn-sm">
-          Delete
-        </button>
-      </form>
+        <li><hr class="dropdown-divider"></li>
+
+        <li>
+          {% if deck.retired %}
+            <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
+              <button type="submit" class="dropdown-item">
+                Unretire deck
+              </button>
+            </form>
+          {% else %}
+            <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
+                  onsubmit="return confirm('Retire {{ deck.name }}?');">
+              <button type="submit" class="dropdown-item">
+                Retire deck
+              </button>
+            </form>
+          {% endif %}
+        </li>
+
+        <li>
+          <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
+                onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
+            <button type="submit" class="dropdown-item text-danger">
+              Delete deck
+            </button>
+          </form>
+        </li>
+      </ul>
     </div>
   </div>
 
