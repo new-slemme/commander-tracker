@@ -26,6 +26,15 @@
         {% if game.salt_rating %}
           <span class="pill">Salt: <b class="text-white">{{ game.salt_rating }}</b> 🧂</span>
         {% endif %}
+        {% if game.timed_mode and game.timed_mode != 'off' %}
+          <span class="pill">Timer: <b class="text-white">{{ game.timed_mode.replace('_', ' ') }}</b></span>
+        {% endif %}
+        {% if game.duration_seconds is not none %}
+          <span class="pill">Duration: <b class="text-white">{{ (game.duration_seconds // 60) }}m {{ (game.duration_seconds % 60) }}s</b></span>
+        {% endif %}
+        {% if game.ended_on_time is not none %}
+          <span class="pill">Ended on time: <b class="text-white">{{ 'Yes' if game.ended_on_time else 'No' }}</b></span>
+        {% endif %}
         <button class="btn btn-sm btn-outline-light" type="button" onclick="history.back()">
           ← Go Back
         </button>
@@ -41,6 +50,12 @@
       </div>
     </div>
   </div>
+
+  {% if game.time_control %}
+    <div class="mb-3 muted2">
+      Time control: <code>{{ game.time_control }}</code>
+    </div>
+  {% endif %}
 
   <h4 class="mb-3">Players</h4>
 

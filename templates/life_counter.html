@@ -120,7 +120,12 @@
     <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
       <div class="modal-content bg-dark text-light">
         <div class="modal-body text-center p-4 d-flex flex-column gap-3">
-          <form method="post" action="/end_game">
+          <form method="post" action="/end_game" id="endGameForm">
+            <input type="hidden" name="timed_mode" id="timed_mode_input" value="">
+            <input type="hidden" name="time_control" id="time_control_input" value="">
+            <input type="hidden" name="ended_on_time" id="ended_on_time_input" value="">
+            <input type="hidden" name="duration_seconds" id="duration_seconds_input" value="">
+
             <select name="winner" class="form-select form-select-lg" required>
               <option value="" disabled selected>Select Winner</option>
               {% for p in participants %}
@@ -270,6 +275,7 @@ const pendingTimers = {};
 const pendingHideTimers = {};
 const committedLife = {};
 const timerConfig = {{ timer_config|tojson }};
+const gameStartedAt = Number({{ game_started_at|tojson }} || 0);
 const playerNames = {};
 let longPressTimer = null;
 let longPressTriggered = false;
@@ -671,6 +677,31 @@ document.getElementById("quickMenuModal")?.addEventListener("shown.bs.modal", ()
 document.getElementById("quickMenuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("quick-menu"));
 document.getElementById("menuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("end-menu"));
 document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("end-menu"));
+
+document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
+  const timedModeInput = document.getElementById("timed_mode_input");
+  const timeControlInput = document.getElementById("time_control_input");
+  const endedOnTimeInput = document.getElementById("ended_on_time_input");
+  const durationSecondsInput = document.getElementById("duration_seconds_input");
+
+  const mode = timerState.mode || "off";
+  const timeControlPayload = {};
+  if(mode === "chess_clock"){
+    timeControlPayload.minutes_per_player = Math.max(0, Number(timerConfig?.minutes_per_player || 0));
+    timeControlPayload.increment_seconds = Math.max(0, Number(timerConfig?.increment_seconds || 0));
+  }else if(mode === "turn_timer"){
+    timeControlPayload.seconds_per_turn = Math.max(0, Number(timerConfig?.seconds_per_turn || 0));
+  }
+
+  if(timedModeInput) timedModeInput.value = mode;
+  if(timeControlInput) timeControlInput.value = JSON.stringify(timeControlPayload);
+  if(endedOnTimeInput) endedOnTimeInput.value = timerState.timeoutHandled ? "true" : "false";
+
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const startedAt = Number.isFinite(gameStartedAt) ? gameStartedAt : 0;
+  const durationSeconds = startedAt > 0 ? Math.max(0, nowSeconds - startedAt) : 0;
+  if(durationSecondsInput) durationSecondsInput.value = String(durationSeconds);
+});
 
 const centerPassBtn = document.getElementById("centerPassBtn");
 if(centerPassBtn){
