@@ -10,14 +10,6 @@
 </head>
 
 <body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">
-  <!-- Fullscreen overlay -->
-  <div id="fsOverlay" class="fs-overlay">
-    <div>
-      <button class="btn btn-primary btn-lg" id="fsBtn">Tap for Fullscreen</button>
-      <div style="opacity:.75;margin-top:10px;">Browsers require a tap to enter fullscreen.</div>
-    </div>
-  </div>
-
   {% set n = participants|length %}
 
   <div class="life-wrapper">
@@ -98,10 +90,6 @@
             <h2 class="h4 mb-1">Game Actions</h2>
             <div class="text-secondary">Choose what you want to do next.</div>
           </div>
-
-          <button class="btn btn-primary quick-menu-btn w-100" id="quickToggleFsBtn" type="button">
-            Toggle Fullscreen
-          </button>
 
           <button class="btn btn-success quick-menu-btn w-100" id="openEndGameBtn" type="button">
             End &amp; Record Game
@@ -188,55 +176,13 @@
   <div id="transientNoticeContainer" class="transient-notice-container" aria-live="polite" aria-atomic="true"></div>
 
 <script>
-/* ---------- FULLSCREEN + ORIENTATION (life_counter only) ---------- */
-function isFs(){ return !!document.fullscreenElement; }
-
+/* ---------- ORIENTATION (life_counter only) ---------- */
 async function lockLandscapeBestEffort(){
   try{
     if (screen.orientation && screen.orientation.lock) {
       await screen.orientation.lock("landscape");
     }
   }catch(e){}
-}
-
-async function unlockOrientationBestEffort(){
-  try{
-    if (screen.orientation && screen.orientation.unlock) {
-      screen.orientation.unlock();
-    }
-  }catch(e){}
-}
-
-async function goFullscreen(){
-  try{
-    if(!isFs() && document.documentElement.requestFullscreen){
-      await document.documentElement.requestFullscreen();
-    }
-  }catch(e){}
-  await lockLandscapeBestEffort();
-  hideFsOverlay();
-}
-
-async function exitFullscreen(){
-  try{
-    if(isFs() && document.exitFullscreen){
-      await document.exitFullscreen();
-    }
-  }catch(e){}
-  await unlockOrientationBestEffort();
-  showFsOverlayIfNeeded();
-}
-
-function showFsOverlayIfNeeded(){
-  const overlay = document.getElementById("fsOverlay");
-  if(!overlay) return;
-  const likelyMobile = matchMedia("(pointer: coarse)").matches;
-  overlay.style.display = (!isFs() && likelyMobile) ? "flex" : "none";
-}
-
-function hideFsOverlay(){
-  const overlay = document.getElementById("fsOverlay");
-  if(overlay) overlay.style.display = "none";
 }
 
 let transientNoticeTimeoutId = null;
@@ -258,19 +204,6 @@ function showTransientNotice(message){
     transientNoticeTimeoutId = null;
   }, 1500);
 }
-
-document.getElementById("fsBtn")?.addEventListener("click", goFullscreen);
-
-async function toggleFullscreenFromMenu(){
-  try{
-    const quickModalEl = document.getElementById("quickMenuModal");
-    bootstrap.Modal.getInstance(quickModalEl)?.hide();
-  }catch(e){}
-  if(isFs()) await exitFullscreen();
-  else await goFullscreen();
-}
-
-document.getElementById("quickToggleFsBtn")?.addEventListener("click", toggleFullscreenFromMenu);
 
 document.getElementById("openEndGameBtn")?.addEventListener("click", ()=>{
   pauseTimers("modal-transition");
@@ -296,11 +229,6 @@ document.getElementById("quickQuitBtn")?.addEventListener("click", ()=>{
     return;
   }
   document.getElementById("quickQuitForm")?.submit();
-});
-
-document.addEventListener("fullscreenchange", ()=>{
-  if(isFs()) lockLandscapeBestEffort();
-  showFsOverlayIfNeeded();
 });
 
 /* ---------- TURN SYSTEM + TURN DAMAGE ---------- */
@@ -1090,7 +1018,7 @@ if(cards.length){
 
 setInterval(tickTimers, 250);
 
-showFsOverlayIfNeeded();
+lockLandscapeBestEffort();
 positionTurnDamageBadges();
 window.addEventListener("resize", positionTurnDamageBadges);
 window.addEventListener("orientationchange", () => setTimeout(positionTurnDamageBadges, 250));
