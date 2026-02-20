@@ -45,6 +45,31 @@ TEST_DISPLAY_NAME = os.getenv("TEST_DISPLAY_NAME", "Test User")
 TEST_PASSWORD = os.getenv("TEST_PASSWORD", "test")  # dev only
 TEST_IS_ADMIN = os.getenv("TEST_IS_ADMIN", "1") == "1"
 
+COMMON_WEAK_PASSWORDS = {
+    "password",
+    "password123",
+    "12345678",
+    "123456789",
+    "qwerty123",
+    "letmein",
+    "admin123",
+}
+
+
+def validate_password_rules(password: str) -> str | None:
+    if len(password) < 8:
+        return "Password must be at least 8 characters long."
+
+    if password.lower() in COMMON_WEAK_PASSWORDS:
+        return "That password is too common. Please choose a stronger one."
+
+    has_letter = any(char.isalpha() for char in password)
+    has_number = any(char.isdigit() for char in password)
+    if not has_letter or not has_number:
+        return "Password must include at least one letter and one number."
+
+    return None
+
 
 # -------------------------
 # Models
@@ -653,6 +678,11 @@ def register():
         elif User.query.filter_by(display_name=display_name).first() or Player.query.filter_by(name=display_name).first():
             flash("Display name already taken")
         else:
+            password_error = validate_password_rules(password)
+            if password_error:
+                flash(password_error)
+                return render_template("register.html")
+
             hashed = generate_password_hash(password)
             user = User(
                 username=username,
@@ -738,8 +768,9 @@ def profile():
                 flash("Current password is incorrect.")
                 return redirect(url_for("profile"))
 
-            if len(new_password) < 8:
-                flash("New password must be at least 8 characters long.")
+            password_error = validate_password_rules(new_password)
+            if password_error:
+                flash(password_error)
                 return redirect(url_for("profile"))
 
             if new_password != confirm_new_password:
