@@ -1833,8 +1833,11 @@ def start_game():
         p_id = request.form.get(f"player{i}")
         d_id = request.form.get(f"deck{i}")
         if p_id and d_id:
-            p_id = int(p_id)
-            d_id = int(d_id)
+            try:
+                p_id = int(p_id)
+                d_id = int(d_id)
+            except (TypeError, ValueError):
+                return "Invalid player or deck id", 400
 
             if p_id in seen:
                 return "Duplicate players not allowed", 400
@@ -1862,9 +1865,81 @@ def start_game():
     if starting_player not in seen:
         return "Starting player must be a participant", 400
 
+    timer_mode = (request.form.get("timer_mode") or "off").strip().lower()
+    allowed_timer_modes = {"off", "chess_clock", "turn_timer"}
+    if timer_mode not in allowed_timer_modes:
+        return "Invalid timer mode", 400
+
+    timer_config = {"mode": timer_mode}
+
+    if timer_mode == "off":
+        if (
+            (request.form.get("timer_minutes_per_player") or "").strip()
+            or (request.form.get("timer_increment_seconds") or "").strip()
+            or (request.form.get("timer_seconds_per_turn") or "").strip()
+        ):
+            return "Timer inputs are not allowed when timer mode is off", 400
+
+    elif timer_mode == "chess_clock":
+        minutes_raw = (request.form.get("timer_minutes_per_player") or "").strip()
+        increment_raw = (request.form.get("timer_increment_seconds") or "").strip()
+        rope_raw = (request.form.get("timer_seconds_per_turn") or "").strip()
+
+        if rope_raw:
+            return "Turn timer value is not allowed in chess clock mode", 400
+        if not minutes_raw:
+            return "Minutes per player is required for chess clock mode", 400
+
+        try:
+            minutes_per_player = int(minutes_raw)
+        except ValueError:
+            return "Minutes per player must be an integer", 400
+
+        if minutes_per_player < 1 or minutes_per_player > 180:
+            return "Minutes per player must be between 1 and 180", 400
+
+        increment_seconds = 0
+        if increment_raw:
+            try:
+                increment_seconds = int(increment_raw)
+            except ValueError:
+                return "Increment seconds must be an integer", 400
+            if increment_seconds < 0 or increment_seconds > 300:
+                return "Increment seconds must be between 0 and 300", 400
+
+        timer_config = {
+            "mode": "chess_clock",
+            "minutes_per_player": minutes_per_player,
+            "increment_seconds": increment_seconds,
+        }
+
+    elif timer_mode == "turn_timer":
+        seconds_raw = (request.form.get("timer_seconds_per_turn") or "").strip()
+        minutes_raw = (request.form.get("timer_minutes_per_player") or "").strip()
+        increment_raw = (request.form.get("timer_increment_seconds") or "").strip()
+
+        if minutes_raw or increment_raw:
+            return "Chess clock values are not allowed in turn timer mode", 400
+        if not seconds_raw:
+            return "Seconds per turn is required for turn timer mode", 400
+
+        try:
+            seconds_per_turn = int(seconds_raw)
+        except ValueError:
+            return "Seconds per turn must be an integer", 400
+
+        if seconds_per_turn < 5 or seconds_per_turn > 3600:
+            return "Seconds per turn must be between 5 and 3600", 400
+
+        timer_config = {
+            "mode": "turn_timer",
+            "seconds_per_turn": seconds_per_turn,
+        }
+
     session["game_participants"] = participants
     session["active_player_id"] = starting_player
     session["turn_number"] = 1
+    session["timer_config"] = timer_config
     session.modified = True
 
     return redirect(url_for("life_counter"))
@@ -1877,6 +1952,7 @@ def cancel_game():
     # Just drop the active game from session
     session.pop("game_participants", None)
     session.pop("active_player_id", None)
+    session.pop("timer_config", None)
     flash("Game cancelled.")
     return redirect(url_for("play_game"))
 
@@ -1902,6 +1978,7 @@ def life_counter():
         "life_counter.html",
         participants=participants,
         starting_player_id=session.get("active_player_id"),
+        timer_config=session.get("timer_config", {"mode": "off"}),
     )
 
 
