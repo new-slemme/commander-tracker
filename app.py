@@ -1859,6 +1859,18 @@ def game_detail(game_id):
 
     parts = GameParticipant.query.filter_by(game_id=game_id).all()
 
+    for gp in parts:
+        parsed_flags = {}
+        raw_flags = (gp.flags_json or "").strip()
+        if raw_flags:
+            try:
+                loaded = json.loads(raw_flags)
+            except json.JSONDecodeError:
+                loaded = {}
+            if isinstance(loaded, dict):
+                parsed_flags = {k: bool(v) for k, v in loaded.items() if isinstance(k, str)}
+        gp.parsed_flags = parsed_flags
+
     # Nice for display: show winner first (optional)
     parts_sorted = sorted(parts, key=lambda p: (0 if p.player_id == g.winner_id else 1, p.player.name.lower()))
 
