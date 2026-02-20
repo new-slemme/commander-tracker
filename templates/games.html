@@ -192,12 +192,13 @@
             <div class="players-row">
               {% for gp in game_parts[g.id] %}
                 <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}">
-                  <span style="display:flex; align-items:center; gap:10px; min-width:0;">
+                  <span class="ppill-top">
                     {% if gp.player_id == g.winner_id %}
                       <span class="wmark">W</span>
                     {% endif %}
                     <span class="name">{{ gp.player.name }}</span>
                   </span>
+
                   <span class="deck">{{ gp.deck.name }}</span>
                 </span>
               {% endfor %}
