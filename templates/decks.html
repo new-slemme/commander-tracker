@@ -140,6 +140,11 @@
 
         <a class="deck-tile {% if art %}has-bg{% endif %}"
            href="{{ url_for('deck_detail', deck_id=d.id) }}"
+           data-deck-id="{{ d.id }}"
+           data-deck-name="{{ d.name|e }}"
+           data-deck-commander="{{ (d.commander_name or d.commander)|e }}"
+           data-deck-owner-id="{{ d.player_id }}"
+           data-deck-retired="{{ 1 if d.retired else 0 }}"
            {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
 
           <div class="deck-tile-inner">
@@ -178,6 +183,18 @@
             </div>
 
             <div class="deck-actions-row">
+              <button type="button"
+                      class="btn btn-sm btn-outline-light edit-deck-btn"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editDeckModal"
+                      data-deck-id="{{ d.id }}"
+                      data-deck-name="{{ d.name|e }}"
+                      data-deck-commander="{{ (d.commander_name or d.commander)|e }}"
+                      data-deck-owner-id="{{ d.player_id }}"
+                      data-deck-retired="{{ 1 if d.retired else 0 }}">
+                Edit
+              </button>
+
               {% if deck_can_delete.get(d.id) %}
                 <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
                       onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
@@ -197,6 +214,60 @@
       {% endfor %}
     </div>
   {% endif %}
+</div>
+
+<!-- Edit Deck Modal -->
+<div class="modal fade" id="editDeckModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-light">
+      <div class="modal-body p-4">
+        <h4 class="mb-3">Edit Deck</h4>
+
+        <form method="post" action="" id="editDeckForm">
+
+          {% if is_admin %}
+          <div class="mb-3">
+            <label class="form-label">Owner</label>
+            <select class="form-select" name="player_id" id="editOwnerInput" required>
+              {% for p in players %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
+          <div class="mb-3">
+            <label class="form-label">Deck name</label>
+            <input class="form-control" name="name" id="editNameInput" required />
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Commander</label>
+            <input class="form-control" id="editCommanderInput" name="commander" autocomplete="off" required />
+            <div class="form-text" style="color: var(--font-base-trans);">
+              Start typing a card name; suggestions come from Scryfall.
+            </div>
+          </div>
+
+          {% if is_admin %}
+            <div class="form-check form-switch mb-3">
+              <input class="form-check-input" type="checkbox" id="editRetiredInput" name="retired" value="1">
+              <label class="form-check-label" for="editRetiredInput">Retired deck</label>
+            </div>
+          {% endif %}
+
+          <div id="editCommanderPreview" class="mt-3" style="display:none;">
+            <img id="editCommanderImg" alt="Commander preview" style="max-width:100%; border-radius: 12px;" />
+          </div>
+
+          <div class="d-flex gap-2 mt-4">
+            <button class="btn btn-success w-100 btn-lg app-btn" type="submit">Save</button>
+            <button class="btn btn-secondary w-100 btn-lg app-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Mobile floating Add Deck button -->
@@ -306,8 +377,15 @@
 <script>
   // --- Commander autocomplete + preview via Scryfall (client-side) ---
   const commanderInput = document.getElementById('commanderInput');
+  const editCommanderInput = document.getElementById('editCommanderInput');
   const previewWrap = document.getElementById('commanderPreview');
   const previewImg = document.getElementById('commanderImg');
+  const editPreviewWrap = document.getElementById('editCommanderPreview');
+  const editPreviewImg = document.getElementById('editCommanderImg');
+  const editDeckForm = document.getElementById('editDeckForm');
+  const editNameInput = document.getElementById('editNameInput');
+  const editOwnerInput = document.getElementById('editOwnerInput');
+  const editRetiredInput = document.getElementById('editRetiredInput');
 
   let acTimer = null;
 
@@ -326,16 +404,16 @@
     return await res.json();
   }
 
-  function attachDropdown(items) {
-    let box = document.getElementById('commanderSuggest');
+  function attachDropdown(items, inputEl, menuId) {
+    let box = document.getElementById(`${menuId}Wrap`);
     if (!box) {
       box = document.createElement('div');
-      box.id = 'commanderSuggest';
+      box.id = `${menuId}Wrap`;
       box.style.position = 'relative';
-      commanderInput.parentNode.appendChild(box);
+      inputEl.parentNode.appendChild(box);
 
       const menu = document.createElement('div');
-      menu.id = 'commanderSuggestMenu';
+      menu.id = menuId;
       menu.className = 'list-group';
       menu.style.position = 'absolute';
       menu.style.zIndex = '2000';
@@ -345,7 +423,7 @@
       box.appendChild(menu);
     }
 
-    const menu = document.getElementById('commanderSuggestMenu');
+    const menu = document.getElementById(menuId);
     menu.innerHTML = '';
     if (!items.length) return;
 
@@ -355,14 +433,21 @@
       a.className = 'list-group-item list-group-item-action';
       a.textContent = name;
       a.addEventListener('click', async () => {
-        commanderInput.value = name;
+        inputEl.value = name;
         menu.innerHTML = '';
         const card = await scryfallCardByExactName(name);
-        if (card && card.image_uris && card.image_uris.normal) {
+        if (inputEl === editCommanderInput && card && card.image_uris && card.image_uris.normal) {
+          editPreviewImg.src = card.image_uris.normal;
+          editPreviewWrap.style.display = '';
+        } else if (card && card.image_uris && card.image_uris.normal) {
           previewImg.src = card.image_uris.normal;
           previewWrap.style.display = '';
         } else {
-          previewWrap.style.display = 'none';
+          if (inputEl === editCommanderInput) {
+            editPreviewWrap.style.display = 'none';
+          } else {
+            previewWrap.style.display = 'none';
+          }
         }
       });
       menu.appendChild(a);
@@ -375,12 +460,12 @@
       const q = commanderInput.value.trim();
       previewWrap.style.display = 'none';
       if (q.length < 3) {
-        attachDropdown([]);
+        attachDropdown([], commanderInput, 'commanderSuggestMenu');
         return;
       }
       acTimer = setTimeout(async () => {
         const items = await scryfallAutocomplete(q);
-        attachDropdown(items);
+        attachDropdown(items, commanderInput, 'commanderSuggestMenu');
       }, 200);
     });
 
@@ -391,6 +476,56 @@
       menu.innerHTML = '';
     });
   }
+
+  if (editCommanderInput) {
+    editCommanderInput.addEventListener('input', () => {
+      clearTimeout(acTimer);
+      const q = editCommanderInput.value.trim();
+      editPreviewWrap.style.display = 'none';
+      if (q.length < 3) {
+        attachDropdown([], editCommanderInput, 'editCommanderSuggestMenu');
+        return;
+      }
+      acTimer = setTimeout(async () => {
+        const items = await scryfallAutocomplete(q);
+        attachDropdown(items, editCommanderInput, 'editCommanderSuggestMenu');
+      }, 200);
+    });
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('editCommanderSuggestMenu');
+      if (!menu) return;
+      if (e.target === editCommanderInput || menu.contains(e.target)) return;
+      menu.innerHTML = '';
+    });
+  }
+
+  document.querySelectorAll('.edit-deck-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const id = btn.dataset.deckId;
+      const name = btn.dataset.deckName || '';
+      const commander = btn.dataset.deckCommander || '';
+      const ownerId = btn.dataset.deckOwnerId;
+      const retired = btn.dataset.deckRetired === '1';
+
+      editDeckForm.action = `/deck/${id}/update`;
+      editNameInput.value = name;
+      editCommanderInput.value = commander;
+      if (editOwnerInput && ownerId) editOwnerInput.value = ownerId;
+      if (editRetiredInput) editRetiredInput.checked = retired;
+
+      const card = await scryfallCardByExactName(commander);
+      if (card && card.image_uris && card.image_uris.normal) {
+        editPreviewImg.src = card.image_uris.normal;
+        editPreviewWrap.style.display = '';
+      } else {
+        editPreviewWrap.style.display = 'none';
+      }
+    });
+  });
 
   // Commander click -> open Scryfall
   document.querySelectorAll('.commander-link').forEach(el => {
