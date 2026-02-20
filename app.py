@@ -1869,7 +1869,11 @@ def game_detail(game_id):
             except json.JSONDecodeError:
                 loaded = {}
             if isinstance(loaded, dict):
-                parsed_flags = {k: bool(v) for k, v in loaded.items() if isinstance(k, str)}
+                parsed_flags = {
+                    k: bool(v)
+                    for k, v in loaded.items()
+                    if isinstance(k, str) and k in ALLOWED_PARTICIPANT_FLAG_KEYS
+                }
         gp.parsed_flags = parsed_flags
 
     # Nice for display: show winner first (optional)
