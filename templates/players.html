@@ -5,10 +5,10 @@
 <div class="container py-4">
 
   <!-- Header / controls -->
-  <div class="card p-4 mb-4 players-hero">
-    <div class="players-head">
+  <div class="app-hero mb-4">
+    <div class="app-hero__head">
       <div>
-        <h1 class="card-head-title";">Players</h1>
+        <h1 class="card-head-title">Players</h1>
         <div class="players-sub">
           {% if is_admin %}
             Manage all players <span style="opacity:0.6;">(admin view)</span>
@@ -26,7 +26,7 @@
                  placeholder="New guest name"
                  required
                  autocomplete="off">
-          <button class="btn btn-primary btn-hero" type="submit">
+          <button class="btn btn-primary app-btn" type="submit">
             + Add Guest
           </button>
         </form>

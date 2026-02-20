@@ -80,7 +80,7 @@
   .progress-bar {
       background-color: var(--blue);
   }
-  
+
   .stats-table thead th {
     font-size: 0.88rem;
     letter-spacing: 0.06em;
@@ -254,17 +254,6 @@
     .player-pill { width: 100%; }
     .player-pill .deck { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
-  .home-hero {
-    border-radius: 24px;
-    border: 1px solid rgba(143,153,197,0.25);
-    background:
-      radial-gradient(circle at 18% 20%, rgba(70,84,147,0.20), transparent 45%),
-      linear-gradient(135deg, rgba(22,45,61,0.50), rgba(23,26,38,0.92));
-    box-shadow: 0 0 28px rgba(0,0,0,0.55);
-    padding: 18px 18px;
-    overflow: hidden;
-    position: relative;
-  }
 
   .pod-selector {
     position: relative;
@@ -304,50 +293,4 @@
     margin-bottom: 8px;
     padding: 8px 10px;
     text-align: left;
-  }
-
-  .home-hero::before{
-    content:"";
-    position:absolute;
-    inset:-1px;
-    background:
-      radial-gradient(circle at 80% 10%, rgba(229,92,54,0.16), transparent 45%),
-      radial-gradient(circle at 10% 80%, rgba(143,153,197,0.14), transparent 55%);
-    pointer-events:none;
-  }
-
-  .home-hero > * { position: relative; z-index: 1; }
-
-  .keller-title {
-    margin: 0;
-    line-height: 1.0;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--font-base);
-  }
-
-  .salz-sub {
-    margin-top: 6px;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 7px 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(143,153,197,0.22);
-    background: rgba(255,255,255,0.03);
-    color: var(--font-highlight-trans);
-    font-weight: 800;
-    letter-spacing: 0.02em;
-  }
-
-  .salz-dot {
-    width: 10px; height: 10px;
-    border-radius: 999px;
-    background: rgba(229,92,54,0.95);
-    box-shadow: 0 0 12px rgba(229,92,54,0.45);
-  }
-
-  @media (max-width: 576px) {
-    .home-hero { padding: 14px 14px; border-radius: 20px; }
-    .keller-title { letter-spacing: 0.04em; }
   }
