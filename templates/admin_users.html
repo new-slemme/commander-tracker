@@ -1,25 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="d-flex align-items-center justify-content-between mb-4">
-  <div>
-    <h1 class="mb-1">Admin: Users</h1>
-    <div class="text-muted">Approve registrations, manage access, and assign roles.</div>
-  </div>
+<div class="app-hero mb-4">
+  <div class="app-hero__head">
+    <div>
+      <h1 class="card-head-title">Admin: Users</h1>
+      <div class="app-hero__sub">Approve registrations, manage access, and assign roles.</div>
+    </div>
 
-  <div class="d-flex gap-2">
-    <span class="badge rounded-pill text-bg-secondary">
-      Pending: {{ pending|length }}
-    </span>
-    <span class="badge rounded-pill text-bg-secondary">
-      Active: {{ active|length }}
-    </span>
+    <div class="app-badges mt-0">
+      <span class="app-badge mid">Pending: <b>{{ pending|length }}</b></span>
+      <span class="app-badge">Active: <b>{{ active|length }}</b></span>
+    </div>
   </div>
 </div>
 
-<!-- Pending -->
-<div class="card p-3 mb-4">
-  <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="card p-3 mb-4 admin-card">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <h3 class="mb-0">Pending approval</h3>
     <span class="text-muted small">New users awaiting activation</span>
   </div>
@@ -38,23 +35,19 @@
         <tbody>
           {% for u in pending %}
             <tr>
-              <td class="fw-semibold">{{ u.username }}</td>
+              <td class="fw-semibold text-white">{{ u.username }}</td>
               <td>{{ u.display_name }}</td>
-              <td class="text-muted text-nowrap">
-                {{ u.created_at }}
-              </td>
+              <td class="text-muted text-nowrap">{{ u.created_at }}</td>
               <td class="text-end">
-                <div class="d-inline-flex gap-2">
+                <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
                   <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-outline-success">
-                      Approve
-                    </button>
+                    <button type="submit" class="btn btn-sm btn-outline-success round-action-btn">Approve</button>
                   </form>
 
                   <form method="POST" action="{{ url_for('admin_deny_user', user_id=u.id) }}" class="d-inline">
                     <button
                       type="submit"
-                      class="btn btn-sm btn-outline-danger"
+                      class="btn btn-sm btn-outline-danger round-action-btn"
                       onclick="return confirm('Deny this registration and permanently delete the user?')">
                       Deny
                     </button>
@@ -71,9 +64,8 @@
   {% endif %}
 </div>
 
-<!-- Active -->
-<div class="card p-3">
-  <div class="d-flex align-items-center justify-content-between mb-3">
+<div class="card p-3 admin-card">
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
     <h3 class="mb-0">Active users</h3>
     <span class="text-muted small">Currently enabled accounts</span>
   </div>
@@ -93,29 +85,27 @@
         <tbody>
           {% for u in active %}
             <tr>
-              <td class="fw-semibold">{{ u.username }}</td>
+              <td class="fw-semibold text-white">{{ u.username }}</td>
               <td>{{ u.display_name }}</td>
               <td class="text-nowrap">
                 {% if u.is_admin %}
-                  <span class="badge rounded-pill text-bg-warning">Admin</span>
+                  <span class="app-badge alert">Admin</span>
                 {% else %}
-                  <span class="badge rounded-pill text-bg-secondary">User</span>
+                  <span class="app-badge mid">User</span>
                 {% endif %}
               </td>
-              <td class="text-muted text-nowrap">
-                {{ u.approved_at }}
-              </td>
+              <td class="text-muted text-nowrap">{{ u.approved_at }}</td>
               <td class="text-end">
-                <div class="d-inline-flex gap-2">
+                <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
                   <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                    <button type="submit" class="btn btn-sm btn-outline-danger round-action-btn"
                             onclick="return confirm('Deactivate {{ u.username }}? They will not be able to log in.')">
                       Deactivate
                     </button>
                   </form>
 
                   <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-outline-warning">
+                    <button type="submit" class="btn btn-sm btn-outline-warning round-action-btn">
                       {{ "Remove admin" if u.is_admin else "Make admin" }}
                     </button>
                   </form>
