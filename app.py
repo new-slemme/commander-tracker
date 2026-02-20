@@ -719,7 +719,11 @@ def profile():
         return redirect(url_for("login"))
 
     if request.method == "POST":
-        action = request.form.get("action", "update_profile")
+        action = request.form.get("action")
+
+        if not action:
+            flash("Missing profile action. Please submit the form again.")
+            return redirect(url_for("profile"))
 
         if action == "change_password":
             current_password = request.form.get("current_password", "")
