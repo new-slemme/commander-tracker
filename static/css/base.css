@@ -731,3 +731,48 @@
     }
 
     
+
+
+/* Shared visual language */
+.card {
+  border-radius: 22px;
+  border: 1px solid rgba(143,153,197,0.25);
+  background: rgba(23,26,38,0.55);
+  box-shadow: 0 0 24px rgba(0,0,0,0.45);
+}
+
+.form-control,
+.form-select {
+  border-radius: 14px;
+  border: 1px solid rgba(143,153,197,0.35);
+  min-height: 44px;
+}
+
+.btn {
+  border-radius: 14px;
+  font-weight: 800;
+}
+
+.btn-sm.round-action-btn {
+  border-radius: 999px;
+  padding-inline: 12px;
+}
+
+.auth-shell {
+  max-width: 520px;
+  margin: 24px auto 0;
+}
+
+.auth-card .form-text {
+  color: var(--font-base-trans);
+}
+
+.admin-card .table td,
+.admin-card .table th {
+  border-color: rgba(143,153,197,0.2);
+}
+
+.scope-toggle .btn {
+  border-radius: 999px;
+  padding: 8px 14px;
+}
