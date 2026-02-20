@@ -9,44 +9,15 @@
     Active Pod
   </div>
 
-  {% if session.get("user_id") %}
-  <div class="pod-selector" id="pod-selector">
-    <button class="pod-button" id="pod-toggle" type="button">
-      Switch pod ▾
-    </button>
-    <div class="pod-options" id="pod-options">
-      {% for pod in available_pods if active_pod %}
-        {% if pod.id != active_pod.id %}
-        <button class="pod-option" type="button" data-pod-id="{{ pod.id }}">{{ pod.name }}</button>
-        {% endif %}
-      {% endfor %}
-    </div>
+</div>
+
+<div class="scope-indicator d-flex align-items-center justify-content-between gap-3 mb-4">
+  <div class="scope-indicator__label">Scope: <strong>{{ "This Pod" if scope == "pod" else "All Pods" }}</strong></div>
+  <div class="d-flex gap-2 scope-toggle">
+    <a class="btn btn-sm {% if scope == 'pod' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='pod') }}">This Pod</a>
+    <a class="btn btn-sm {% if scope == 'all' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='all') }}">All Pods</a>
   </div>
-  {% endif %}
 </div>
-
-<div class="d-flex gap-2 mb-4 scope-toggle">
-  <a class="btn btn-sm {% if scope == 'pod' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='pod') }}">This Pod</a>
-  <a class="btn btn-sm {% if scope == 'all' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='all') }}">All Pods</a>
-</div>
-
-<script>
-  (() => {
-    const selector = document.getElementById('pod-selector');
-    const toggle = document.getElementById('pod-toggle');
-    if (!selector || !toggle) return;
-
-    toggle.addEventListener('click', () => selector.classList.toggle('pod-selector--open'));
-
-    selector.querySelectorAll('[data-pod-id]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const podId = btn.getAttribute('data-pod-id');
-        const res = await fetch(`/pods/switch/${podId}`, { method: 'POST' });
-        if (res.ok) window.location.reload();
-      });
-    });
-  })();
-</script>
 
   <!-- =========================
       TOP PLAYERS (PYRAMID)

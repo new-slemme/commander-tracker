@@ -540,6 +540,18 @@ def ensure_membership(pod_id, player_id, role="member"):
     return membership
 
 
+@app.context_processor
+def inject_pod_context():
+    user = get_current_user()
+    if not user:
+        return {"nav_active_pod": None, "nav_available_pods": []}
+
+    return {
+        "nav_active_pod": get_active_pod(),
+        "nav_available_pods": get_accessible_pods(user),
+    }
+
+
 def game_query_for_scope():
     scope = (request.args.get("scope") or "pod").strip().lower()
     q = Game.query
@@ -1064,7 +1076,12 @@ def switch_pod(pod_id):
 
     session["active_pod_id"] = pod.id
     session.modified = True
-    flash(f"Switched active pod to {pod.name}.")
+
+    msg = f"Switched to {pod.name}."
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "message": msg, "pod": {"id": pod.id, "name": pod.name}})
+
+    flash(msg)
     return redirect(url_for("pods", pod_id=pod.id))
 
 

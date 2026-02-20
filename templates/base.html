@@ -45,6 +45,33 @@
 
       <div class="navbar-nav ms-auto align-items-center">
         {% if session.get("user_id") %}
+          {% if nav_active_pod %}
+          <div class="nav-pod-switcher" id="nav-pod-switcher">
+            <button class="nav-pod-pill" id="nav-pod-toggle" type="button" aria-haspopup="true" aria-expanded="false">
+              <span class="nav-pod-pill__label">Pod</span>
+              <span class="nav-pod-pill__name">{{ nav_active_pod.name }}</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+            <div class="nav-pod-menu" id="nav-pod-menu" role="menu">
+              {% for pod in nav_available_pods %}
+                {% if pod.id == nav_active_pod.id %}
+                  <button class="nav-pod-option is-active" type="button" disabled>
+                    {{ pod.name }}
+                    <span class="nav-pod-option__meta">Active</span>
+                  </button>
+                {% elif pod.is_active %}
+                  <button class="nav-pod-option" type="button" data-pod-id="{{ pod.id }}">{{ pod.name }}</button>
+                {% else %}
+                  <button class="nav-pod-option is-disabled" type="button" disabled>
+                    {{ pod.name }}
+                    <span class="nav-pod-option__meta">Request access</span>
+                  </button>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+          {% endif %}
+
           <span class="navbar-text me-3">
             Welcome, {{ session.get("display_name") or session.get("username") }}
           </span>
@@ -73,6 +100,13 @@
         Welcome, <span class="text-white">{{ session.get("display_name") or session.get("username") }}</span>
       </div>
 
+      {% if nav_active_pod %}
+      <div class="drawer-pod">
+        <div class="muted small mb-2">Active pod</div>
+        <div class="drawer-pod-name">{{ nav_active_pod.name }}</div>
+      </div>
+      {% endif %}
+
       <div class="drawer-list">
         <a class="drawer-item" href="/">Home</a>
         <a class="drawer-item" href="/players">Players</a>
@@ -100,9 +134,14 @@
   {% if request.endpoint != 'life_counter' %}
   {% with messages = get_flashed_messages() %}
     {% if messages %}
-      <div class="alert alert-info mb-4">
+      <div class="toast-container position-fixed top-0 end-0 p-3 app-toast-container">
         {% for message in messages %}
-          {{ message }}<br>
+          <div class="toast align-items-center text-bg-dark border-0 app-toast" role="status" aria-live="polite" aria-atomic="true" data-bs-delay="2400">
+            <div class="d-flex">
+              <div class="toast-body">{{ message }}</div>
+              <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+          </div>
         {% endfor %}
       </div>
     {% endif %}
@@ -160,6 +199,65 @@
     if (e.key === 'Escape') closeMenu();
   });
 })();
+
+
+  const navPodSwitcher = document.getElementById('nav-pod-switcher');
+  const navPodToggle = document.getElementById('nav-pod-toggle');
+  const navPodMenu = document.getElementById('nav-pod-menu');
+
+  function showToast(message) {
+    const container = document.querySelector('.app-toast-container') || (() => {
+      const created = document.createElement('div');
+      created.className = 'toast-container position-fixed top-0 end-0 p-3 app-toast-container';
+      document.body.appendChild(created);
+      return created;
+    })();
+
+    const toast = document.createElement('div');
+    toast.className = 'toast align-items-center text-bg-dark border-0 app-toast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+    toast.setAttribute('aria-atomic', 'true');
+    toast.setAttribute('data-bs-delay', '2400');
+    toast.innerHTML = `<div class="d-flex"><div class="toast-body">${message}</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>`;
+    container.appendChild(toast);
+    const instance = bootstrap.Toast.getOrCreateInstance(toast);
+    toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    instance.show();
+  }
+
+  if (navPodSwitcher && navPodToggle && navPodMenu) {
+    navPodToggle.addEventListener('click', function () {
+      const open = navPodSwitcher.classList.toggle('is-open');
+      navPodToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', function (event) {
+      if (!navPodSwitcher.contains(event.target)) {
+        navPodSwitcher.classList.remove('is-open');
+        navPodToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    navPodMenu.querySelectorAll('[data-pod-id]').forEach((btn) => {
+      btn.addEventListener('click', async function () {
+        const podId = btn.getAttribute('data-pod-id');
+        const res = await fetch(`/pods/switch/${podId}`, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.message) showToast(data.message);
+        setTimeout(() => window.location.reload(), 400);
+      });
+    });
+  }
+
+  document.querySelectorAll('.app-toast').forEach((el) => {
+    bootstrap.Toast.getOrCreateInstance(el).show();
+  });
+
 </script>
 
 </body>
