@@ -67,11 +67,28 @@
                 Unretire deck
               </button>
             </form>
+          {% elif deck.planned %}
+            <form method="post" action="{{ url_for('unplan_deck', deck_id=deck.id) }}">
+              <button type="submit" class="dropdown-item">
+                Mark as active
+              </button>
+            </form>
           {% else %}
             <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
                   onsubmit="return confirm('Retire {{ deck.name }}?');">
               <button type="submit" class="dropdown-item">
                 Retire deck
+              </button>
+            </form>
+          {% endif %}
+        </li>
+
+        <li>
+          {% if not deck.planned %}
+            <form method="post" action="{{ url_for('plan_deck', deck_id=deck.id) }}"
+                  onsubmit="return confirm('Mark {{ deck.name }} as planned?');">
+              <button type="submit" class="dropdown-item">
+                Plan deck
               </button>
             </form>
           {% endif %}
@@ -95,6 +112,8 @@
       {{ deck.name }}
       {% if deck.retired %}
         <span class="badge bg-warning text-dark ms-2">Retired</span>
+      {% elif deck.planned %}
+        <span class="badge bg-info text-dark ms-2">Planned</span>
       {% endif %}
     </h1>
 
@@ -337,6 +356,10 @@
           <div class="form-check form-switch mb-3">
             <input class="form-check-input" type="checkbox" id="editRetiredInput" name="retired" value="1" {% if deck.retired %}checked{% endif %}>
             <label class="form-check-label" for="editRetiredInput">Retired deck</label>
+          </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="editPlannedInput" name="planned" value="1" {% if deck.planned %}checked{% endif %}>
+            <label class="form-check-label" for="editPlannedInput">Planned deck</label>
           </div>
           {% endif %}
 

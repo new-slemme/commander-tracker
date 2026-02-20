@@ -156,6 +156,7 @@ class Deck(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     retired = db.Column(db.Boolean, nullable=False, default=False)
+    planned = db.Column(db.Boolean, nullable=False, default=False)
 
     # legacy / user-entered fallback
     commander = db.Column(db.String(100), nullable=False)
@@ -440,6 +441,17 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('005_game_participant_flags')")
+            )
+
+        if "006_deck_planned_status" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "planned" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN planned BOOLEAN NOT NULL DEFAULT 0"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('006_deck_planned_status')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -1785,6 +1797,7 @@ def retire_deck(deck_id):
         return redirect(url_for("decks"))
 
     deck.retired = True
+    deck.planned = False
     db.session.commit()
     flash(f"Retired deck: {deck.name}")
     return redirect(url_for("decks"))
@@ -1800,6 +1813,33 @@ def unretire_deck(deck_id):
     deck.retired = False
     db.session.commit()
     flash(f"Unretired deck: {deck.name}")
+    return redirect(url_for("decks"))
+
+
+@app.route("/deck/<int:deck_id>/plan", methods=["POST"])
+def plan_deck(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    deck.planned = True
+    deck.retired = False
+    db.session.commit()
+    flash(f"Set deck as planned: {deck.name}")
+    return redirect(url_for("decks"))
+
+
+@app.route("/deck/<int:deck_id>/unplan", methods=["POST"])
+def unplan_deck(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    deck.planned = False
+    db.session.commit()
+    flash(f"Deck is now active: {deck.name}")
     return redirect(url_for("decks"))
 
 
@@ -2078,7 +2118,7 @@ def decks():
     q = Deck.query
 
     if not show_retired:
-        q = q.filter(Deck.retired == False)  # noqa: E712
+        q = q.filter(Deck.retired == False, Deck.planned == False)  # noqa: E712
 
     # Non-admins: force own decks (ignore player_id from query string)
     if u and not u.is_admin:
@@ -2092,7 +2132,7 @@ def decks():
     if u and u.is_admin and player_id:
         q = q.filter(Deck.player_id == player_id)
 
-    decks_list = q.order_by(Deck.retired.asc(), Deck.name.asc()).all()
+    decks_list = q.order_by(Deck.retired.asc(), Deck.planned.asc(), Deck.name.asc()).all()
 
     # Stats
     stats = {}
@@ -2301,6 +2341,7 @@ def add_deck():
         return redirect(url_for("decks"))
 
     deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
+    deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
 
@@ -2361,6 +2402,7 @@ def update_deck(deck_id):
     old_commander = deck.commander
     old_player_id = deck.player_id
     old_retired = deck.retired
+    old_planned = deck.planned
     old_decklist_text = deck.decklist_text
     old_commander_name = deck.commander_name
     old_commander_scryfall_id = deck.commander_scryfall_id
@@ -2396,6 +2438,9 @@ def update_deck(deck_id):
             if owner:
                 deck.player_id = owner.id
         deck.retired = bool(request.form.get("retired"))
+        deck.planned = bool(request.form.get("planned"))
+        if deck.retired:
+            deck.planned = False
 
     commander_meta = resolve_commander_metadata(commander_to_set)
     deck.commander = commander_meta["commander"] or commander_to_set
@@ -2414,6 +2459,7 @@ def update_deck(deck_id):
         deck.commander = old_commander
         deck.player_id = old_player_id
         deck.retired = old_retired
+        deck.planned = old_planned
         deck.decklist_text = old_decklist_text
         deck.commander_name = old_commander_name
         deck.commander_scryfall_id = old_commander_scryfall_id
@@ -2451,7 +2497,7 @@ def add_game():
     decks_by_player = {}
     for p in players:
         active_decks = (
-            Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+            Deck.query.filter_by(player_id=p.id, retired=False, planned=False).order_by(Deck.name.asc()).all()
         )
         decks_by_player[str(p.id)] = [
             {
@@ -2471,7 +2517,7 @@ def play_game():
     decks_by_player = {}
     for p in players:
         active_decks = (
-            Deck.query.filter_by(player_id=p.id, retired=False)
+            Deck.query.filter_by(player_id=p.id, retired=False, planned=False)
             .order_by(Deck.name.asc())
             .all()
         )
@@ -2509,7 +2555,7 @@ def start_game():
             seen.add(p_id)
 
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.player_id != p_id or deck.retired:
+            if not deck or deck.player_id != p_id or deck.retired or deck.planned:
                 return "Invalid deck for player", 400
 
             participants.append({
@@ -2823,7 +2869,7 @@ def manual_game():
     decks_by_player = {}
     for p in players:
         active_decks = (
-            Deck.query.filter_by(player_id=p.id, retired=False).order_by(Deck.name.asc()).all()
+            Deck.query.filter_by(player_id=p.id, retired=False, planned=False).order_by(Deck.name.asc()).all()
         )
         decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
     decks_json = json.dumps(decks_by_player)
@@ -2850,7 +2896,7 @@ def manual_record_game():
             seen.add(p_id)
 
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.player_id != p_id or deck.retired:
+            if not deck or deck.player_id != p_id or deck.retired or deck.planned:
                 return "Invalid deck for player", 400
 
             participants.append((p_id, d_id))
