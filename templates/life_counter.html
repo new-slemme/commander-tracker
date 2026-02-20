@@ -304,6 +304,19 @@ const PENDING_FADE_DELAY_MS = 1500;
 const nameLongPressState = {};
 let playerFlagTargetId = null;
 const participantFlagsByPlayer = {};
+const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
+const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
+
+function playSfx(audio){
+  if(!audio) return;
+  try{
+    audio.currentTime = 0;
+    const playPromise = audio.play();
+    if(playPromise && typeof playPromise.catch === "function"){
+      playPromise.catch(()=>{});
+    }
+  }catch(e){}
+}
 
 function getPlayerFlagState(playerId){
   const existing = participantFlagsByPlayer[playerId] || {};
@@ -579,6 +592,7 @@ function nextPlayer(){
   renderTimers();
   resetTurnDamage();
   positionTurnDamageBadges();
+  playSfx(turnChangeAudio);
 }
 
 /* ---------- LIFE TAP ---------- */
@@ -823,6 +837,9 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const actionText = nextValue ? "flagged as mana fucked" : "unflagged for mana fucked";
   alert(`${playerLabel} was ${actionText}.`);
+  if(nextValue){
+    playSfx(manaFuckedAudio);
+  }
   openPlayerFlagMenu(playerFlagTargetId);
 });
 
