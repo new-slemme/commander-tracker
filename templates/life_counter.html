@@ -47,12 +47,16 @@
         data-player="{{ p.player_id }}"
         style="
           {% if p.commander_art %}
+            --bg-image:url('{{ p.commander_art }}');
             --bg-layer:
               linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85)),
-              url('{{ p.commander_art }}');
+              var(--bg-image);
+            --bg-layer-active:var(--bg-image);
           {% else %}
+            --bg-image:none;
             --bg-layer:
               linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85));
+            --bg-layer-active:var(--bg-layer);
           {% endif %}
           {# CRITICAL: only set bg rotation inline for TOP cards.
              For others, leave it alone so CSS can control (2P needs this). #}
