@@ -1675,6 +1675,61 @@ def add_deck():
     return redirect(url_for("decks"))
 
 
+@app.route("/deck/<int:deck_id>/update", methods=["POST"])
+@login_required
+def update_deck(deck_id):
+    u = get_current_user()
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to edit this deck.")
+        return redirect(url_for("decks"))
+
+    name = request.form.get("name", "").strip()
+    commander_input = request.form.get("commander", "").strip()
+    if not name:
+        flash("Deck name is required.")
+        return redirect(url_for("decks"))
+    if not commander_input:
+        flash("Commander is required.")
+        return redirect(url_for("decks"))
+
+    deck.name = name
+    deck.commander = commander_input
+
+    if u.is_admin:
+        owner_id = request.form.get("player_id", type=int)
+        if owner_id:
+            owner = db.session.get(Player, owner_id)
+            if owner:
+                deck.player_id = owner.id
+        deck.retired = bool(request.form.get("retired"))
+
+    card = scryfall_named_exact(commander_input)
+    if card:
+        scry_id = card.get("id")
+        canonical_name = card.get("name") or commander_input
+        art_crop = extract_art_crop(card)
+        color_identity = "".join(card.get("color_identity") or [])
+
+        local_art = deck.commander_local_art
+        if art_crop and scry_id and scry_id != deck.commander_scryfall_id:
+            local_art = download_art_crop(art_crop, scry_id, canonical_name)
+
+        deck.commander_name = canonical_name
+        deck.commander_scryfall_id = scry_id
+        deck.commander_art_crop_url = art_crop
+        deck.commander_local_art = local_art
+        deck.color_identity = color_identity
+
+    db.session.commit()
+    flash(f"Updated deck: {deck.name}")
+    return redirect(url_for("decks"))
+
+
 @app.route("/add_game")
 def add_game():
     players = Player.query.all()
