@@ -22,12 +22,14 @@ class ParsedCardEntry:
 class ParsedDeck:
     source: str
     commander: str | None
+    commanders: list[str]
     sections: dict[str, list[ParsedCardEntry]]
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "source": self.source,
             "commander": self.commander,
+            "commanders": self.commanders,
             "sections": {
                 section: [{"name": e.name, "quantity": e.quantity} for e in entries]
                 for section, entries in self.sections.items()
@@ -68,6 +70,7 @@ def parse_deck_input(raw_input: str, *, timeout: int = 15) -> dict[str, Any]:
         {
             "source": "moxfield"|"archidekt"|"text",
             "commander": str | None,
+            "commanders": [str, ...],
             "sections": {
                 "mainboard": [{"name": str, "quantity": int}, ...],
                 "commander": [...],
@@ -121,12 +124,13 @@ def parse_moxfield_url(url: str, *, timeout: int = 15) -> ParsedDeck:
     _merge_mapping_cards(section_buckets, "commander", commanders_payload)
 
     sections = _finalize_sections(section_buckets)
-    commander = _detect_commander(sections)
+    commanders = _detect_commanders(sections)
+    commander = " + ".join(commanders) if commanders else None
 
     if not sections:
         raise DeckParserError("Moxfield deck did not contain any card entries.")
 
-    return ParsedDeck(source="moxfield", commander=commander, sections=sections)
+    return ParsedDeck(source="moxfield", commander=commander, commanders=commanders, sections=sections)
 
 
 def parse_archidekt_url(url: str, *, timeout: int = 15) -> ParsedDeck:
@@ -171,12 +175,13 @@ def parse_archidekt_url(url: str, *, timeout: int = 15) -> ParsedDeck:
         _add_card(section_buckets, section, name, quantity)
 
     sections = _finalize_sections(section_buckets)
-    commander = _detect_commander(sections)
+    commanders = _detect_commanders(sections)
+    commander = " + ".join(commanders) if commanders else None
 
     if not sections:
         raise DeckParserError("Archidekt deck did not contain any card entries.")
 
-    return ParsedDeck(source="archidekt", commander=commander, sections=sections)
+    return ParsedDeck(source="archidekt", commander=commander, commanders=commanders, sections=sections)
 
 
 def parse_plaintext_decklist(text: str) -> ParsedDeck:
@@ -207,7 +212,9 @@ def parse_plaintext_decklist(text: str) -> ParsedDeck:
     if not sections:
         raise DeckParserError("No valid card entries found in pasted deck list.")
 
-    return ParsedDeck(source="text", commander=_detect_commander(sections), sections=sections)
+    commanders = _detect_commanders(sections)
+    commander = " + ".join(commanders) if commanders else None
+    return ParsedDeck(source="text", commander=commander, commanders=commanders, sections=sections)
 
 
 def _safe_parse_url(value: str):
@@ -354,8 +361,6 @@ def _finalize_sections(
     return out
 
 
-def _detect_commander(sections: dict[str, list[ParsedCardEntry]]) -> str | None:
+def _detect_commanders(sections: dict[str, list[ParsedCardEntry]]) -> list[str]:
     commander_entries = sections.get("commander") or []
-    if commander_entries:
-        return commander_entries[0].name
-    return None
+    return [entry.name for entry in commander_entries if entry.name]
