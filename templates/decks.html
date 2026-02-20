@@ -219,7 +219,7 @@
       <div class="modal-body p-4">
         <h4 class="mb-3">Add Deck</h4>
 
-        <form method="post" action="{{ url_for('add_deck') }}" id="addDeckForm">
+        <form method="post" action="{{ url_for('add_deck') }}" id="addDeckForm" enctype="multipart/form-data">
 
           {% if is_admin %}
           <div class="mb-3">
@@ -250,6 +250,21 @@
 
           <div id="commanderPreview" class="mt-3" style="display:none;">
             <img id="commanderImg" alt="Commander preview" style="max-width:100%; border-radius: 12px;" />
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Decklist URL (optional)</label>
+            <input class="form-control" name="decklist_url" placeholder="https://www.moxfield.com/decks/... or https://archidekt.com/decks/..." />
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Decklist file (optional)</label>
+            <input class="form-control" type="file" name="decklist_file" accept=".txt,.dek,.csv" />
+          </div>
+
+          <div class="mt-3">
+            <label class="form-label">Paste decklist (optional fallback)</label>
+            <textarea class="form-control" name="decklist_text" rows="5" placeholder="Commander\n1 Sol Ring\n1 Arcane Signet"></textarea>
           </div>
 
           <div class="d-flex gap-2 mt-4">

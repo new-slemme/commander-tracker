@@ -24,6 +24,8 @@ from sqlalchemy import func, text, case
 from sqlalchemy.orm import aliased
 from functools import wraps
 
+from deck_import import DeckParserError, parse_deck_input
+
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
@@ -512,6 +514,76 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
     except Exception as e:
         print("download_art_crop unexpected error:", e, art_url)
         return None
+
+
+def _extract_deck_import_text() -> tuple[str | None, str | None]:
+    """Returns (raw_input, source_label) from URL/file/paste fallback fields."""
+    decklist_url = request.form.get("decklist_url", "").strip()
+    if decklist_url:
+        return decklist_url, "URL"
+
+    upload = request.files.get("decklist_file")
+    if upload and upload.filename:
+        filename = upload.filename.strip()
+        ext = Path(filename).suffix.lower()
+        allowed = {".txt", ".dek", ".csv"}
+        if ext not in allowed:
+            raise DeckParserError(
+                f"Unsupported decklist file '{filename}'. Allowed extensions: .txt, .dek, .csv."
+            )
+
+        raw_bytes = upload.read()
+        if not raw_bytes:
+            raise DeckParserError(f"Uploaded decklist file '{filename}' was empty.")
+
+        try:
+            text = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw_bytes.decode("latin-1")
+
+        return text, f"file ({filename})"
+
+    pasted = request.form.get("decklist_text", "").strip()
+    if pasted:
+        return pasted, "pasted text"
+
+    return None, None
+
+
+def _render_decklist_text(parsed: dict) -> str:
+    section_order = ["commander", "mainboard", "sideboard", "maybeboard"]
+    lines: list[str] = []
+
+    for section in section_order:
+        entries = parsed.get("sections", {}).get(section) or []
+        if not entries:
+            continue
+        lines.append(f"{section.title()}:")
+        for entry in entries:
+            qty = entry.get("quantity", 1)
+            name = entry.get("name", "")
+            lines.append(f"{qty} {name}")
+        lines.append("")
+
+    for section, entries in (parsed.get("sections", {}) or {}).items():
+        if section in section_order or not entries:
+            continue
+        lines.append(f"{section.title()}:")
+        for entry in entries:
+            qty = entry.get("quantity", 1)
+            name = entry.get("name", "")
+            lines.append(f"{qty} {name}")
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+
+def _count_imported_cards(parsed: dict) -> int:
+    total = 0
+    for entries in (parsed.get("sections", {}) or {}).values():
+        for entry in entries:
+            total += int(entry.get("quantity", 0) or 0)
+    return total
 
 
 # -------------------------
@@ -1824,12 +1896,31 @@ def add_deck():
             return redirect(url_for("decks"))
         player_id = u.player.id
 
-    deck = Deck(name=name, commander=commander_input, player_id=player_id)
+    parsed_import = None
+    imported_from = None
+    try:
+        raw_import, imported_from = _extract_deck_import_text()
+        if raw_import:
+            parsed_import = parse_deck_input(raw_import)
+    except DeckParserError as exc:
+        flash(f"Deck import failed: {exc}")
+        return redirect(url_for("decks"))
 
-    card = scryfall_named_exact(commander_input)
+    resolved_commander = parsed_import.get("commander") if parsed_import else None
+    commander_to_set = (resolved_commander or commander_input).strip()
+
+    if not commander_to_set:
+        flash("Commander is required, or include one in the imported list.")
+        return redirect(url_for("decks"))
+
+    deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
+    if parsed_import:
+        deck.decklist_text = _render_decklist_text(parsed_import)
+
+    card = scryfall_named_exact(commander_to_set)
     if card:
         scry_id = card.get("id")
-        canonical_name = card.get("name") or commander_input
+        canonical_name = card.get("name") or commander_to_set
         art_crop = extract_art_crop(card)
         color_identity = "".join(card.get("color_identity") or [])
 
@@ -1846,7 +1937,23 @@ def add_deck():
     db.session.add(deck)
     db.session.commit()
 
-    flash("Deck added.")
+    if parsed_import:
+        imported_cards = _count_imported_cards(parsed_import)
+        commander_msg = (
+            f"commander resolved: {resolved_commander}" if resolved_commander else "commander unresolved"
+        )
+        warnings = []
+        if resolved_commander and commander_input and resolved_commander.lower() != commander_input.lower():
+            warnings.append(f"manual commander '{commander_input}' overridden")
+        if not card:
+            warnings.append("Scryfall lookup failed")
+
+        warning_msg = f"; warnings: {', '.join(warnings)}" if warnings else ""
+        flash(
+            f"Deck added. {imported_cards} cards imported from {imported_from}; {commander_msg}{warning_msg}."
+        )
+    else:
+        flash("Deck added.")
     return redirect(url_for("decks"))
 
 
@@ -1872,8 +1979,37 @@ def update_deck(deck_id):
         flash("Commander is required.")
         return redirect(request.form.get("next") or url_for("decks"))
 
+    old_name = deck.name
+    old_commander = deck.commander
+    old_player_id = deck.player_id
+    old_retired = deck.retired
+    old_decklist_text = deck.decklist_text
+    old_commander_name = deck.commander_name
+    old_commander_scryfall_id = deck.commander_scryfall_id
+    old_commander_art_crop_url = deck.commander_art_crop_url
+    old_commander_local_art = deck.commander_local_art
+    old_color_identity = deck.color_identity
+
+    parsed_import = None
+    imported_from = None
+    try:
+        raw_import, imported_from = _extract_deck_import_text()
+        if raw_import:
+            parsed_import = parse_deck_input(raw_import)
+    except DeckParserError as exc:
+        flash(f"Deck import failed: {exc}")
+        return redirect(request.form.get("next") or url_for("decks"))
+
+    resolved_commander = parsed_import.get("commander") if parsed_import else None
+    commander_to_set = (resolved_commander or commander_input).strip()
+    if not commander_to_set:
+        flash("Commander is required, or include one in the imported list.")
+        return redirect(request.form.get("next") or url_for("decks"))
+
     deck.name = name
-    deck.commander = commander_input
+    deck.commander = commander_to_set
+    if parsed_import:
+        deck.decklist_text = _render_decklist_text(parsed_import)
 
     if u.is_admin:
         owner_id = request.form.get("player_id", type=int)
@@ -1883,10 +2019,10 @@ def update_deck(deck_id):
                 deck.player_id = owner.id
         deck.retired = bool(request.form.get("retired"))
 
-    card = scryfall_named_exact(commander_input)
+    card = scryfall_named_exact(commander_to_set)
     if card:
         scry_id = card.get("id")
-        canonical_name = card.get("name") or commander_input
+        canonical_name = card.get("name") or commander_to_set
         art_crop = extract_art_crop(card)
         color_identity = "".join(card.get("color_identity") or [])
 
@@ -1899,9 +2035,50 @@ def update_deck(deck_id):
         deck.commander_art_crop_url = art_crop
         deck.commander_local_art = local_art
         deck.color_identity = color_identity
+    else:
+        deck.commander_name = None
+        deck.commander_scryfall_id = None
+        deck.commander_art_crop_url = None
+        deck.commander_local_art = None
+        deck.color_identity = None
 
-    db.session.commit()
-    flash(f"Updated deck: {deck.name}")
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+
+        deck.name = old_name
+        deck.commander = old_commander
+        deck.player_id = old_player_id
+        deck.retired = old_retired
+        deck.decklist_text = old_decklist_text
+        deck.commander_name = old_commander_name
+        deck.commander_scryfall_id = old_commander_scryfall_id
+        deck.commander_art_crop_url = old_commander_art_crop_url
+        deck.commander_local_art = old_commander_local_art
+        deck.color_identity = old_color_identity
+
+        flash(f"Failed to update deck: {exc}")
+        return redirect(request.form.get("next") or url_for("decks"))
+
+    if parsed_import:
+        imported_cards = _count_imported_cards(parsed_import)
+        commander_msg = (
+            f"commander resolved: {resolved_commander}" if resolved_commander else "commander unresolved"
+        )
+        warnings = []
+        if resolved_commander and commander_input and resolved_commander.lower() != commander_input.lower():
+            warnings.append(f"manual commander '{commander_input}' overridden")
+        if not card:
+            warnings.append("Scryfall lookup failed")
+
+        warning_msg = f"; warnings: {', '.join(warnings)}" if warnings else ""
+        flash(
+            f"Updated deck: {deck.name}. {imported_cards} cards imported from {imported_from}; "
+            f"{commander_msg}{warning_msg}."
+        )
+    else:
+        flash(f"Updated deck: {deck.name}")
     return redirect(request.form.get("next") or url_for("decks"))
 
 
