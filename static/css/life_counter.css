@@ -340,6 +340,7 @@
   pointer-events:none;
 }
 .life-card.has-player-timer .player-timer{ display:block; }
+.life-card.rope-active .player-timer{ display:block; }
 .player-timer.active{ border-color:rgba(255,255,255,.65); box-shadow:0 0 12px rgba(255,255,255,.2); }
 .player-timer.low-time{ color:#ff8e8e; border-color:rgba(255,114,114,.7); }
 
