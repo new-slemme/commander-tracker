@@ -25,6 +25,7 @@
         
         {% if game.salted_players %}
           <span class="pill">Salted players: <b class="text-white">{{ game.salted_players }}/{{ parts|length }}</b> 🧂</span>
+          <span class="pill">Salt clicks: <b class="text-white">{{ game.total_salt_clicks }}</b></span>
         {% elif game.salt_rating %}
           <span class="pill">Legacy salt: <b class="text-white">{{ game.salt_rating }}</b> 🧂</span>
         {% endif %}
@@ -85,13 +86,14 @@
                   <span class="muted2"> · </span>
                   <span>{{ d.commander_name or d.commander }}</span>
                 </div>
-                {% if gp.parsed_flags and (gp.parsed_flags.get('mana_fucked') or gp.parsed_flags.get('salted')) %}
+                {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
+                {% if gp.parsed_flags and (gp.parsed_flags.get('mana_fucked') or gp_salt_count > 0) %}
                   <div class="mt-2 d-flex flex-wrap gap-2">
                     {% if gp.parsed_flags.get('mana_fucked') %}
                       <span class="badge rounded-pill text-bg-warning">Mana Fucked</span>
                     {% endif %}
-                    {% if gp.parsed_flags.get('salted') %}
-                      <span class="badge rounded-pill text-bg-danger">Salted</span>
+                    {% if gp_salt_count > 0 %}
+                      <span class="badge rounded-pill text-bg-danger">Salt x{{ gp_salt_count }}</span>
                     {% endif %}
                   </div>
                 {% endif %}

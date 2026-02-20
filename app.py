@@ -61,11 +61,11 @@ COMMON_WEAK_PASSWORDS = {
 MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 4096
 ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "mana_fucked",
-    "salted",
+    "salt_count",
 }
 
 
-def parse_participant_flags(raw_flags: str | None) -> dict[str, bool]:
+def parse_participant_flags(raw_flags: str | None) -> dict[str, bool | int]:
     parsed_flags = {}
     payload = (raw_flags or "").strip()
     if not payload:
@@ -79,11 +79,27 @@ def parse_participant_flags(raw_flags: str | None) -> dict[str, bool]:
     if not isinstance(loaded, dict):
         return parsed_flags
 
-    return {
-        k: bool(v)
-        for k, v in loaded.items()
-        if isinstance(k, str) and k in ALLOWED_PARTICIPANT_FLAG_KEYS
-    }
+    mana_flag = loaded.get("mana_fucked")
+    if isinstance(mana_flag, bool):
+        parsed_flags["mana_fucked"] = mana_flag
+
+    salt_count_raw = loaded.get("salt_count")
+    if isinstance(salt_count_raw, int) and not isinstance(salt_count_raw, bool) and salt_count_raw >= 0:
+        parsed_flags["salt_count"] = salt_count_raw
+    elif isinstance(loaded.get("salted"), bool):
+        # Backward compatibility for older records that used a boolean salted flag.
+        parsed_flags["salt_count"] = 1 if loaded["salted"] else 0
+
+    return parsed_flags
+
+
+def participant_salt_count(parsed_flags: dict[str, bool | int] | None) -> int:
+    if not parsed_flags:
+        return 0
+    salt_count_raw = parsed_flags.get("salt_count", 0)
+    if isinstance(salt_count_raw, int) and not isinstance(salt_count_raw, bool):
+        return max(0, salt_count_raw)
+    return 0
 
 
 def validate_password_rules(password: str) -> str | None:
@@ -1178,44 +1194,53 @@ def saltmine():
 
     for gp in participants:
         parsed_flags = parse_participant_flags(gp.flags_json)
-        salted = bool(parsed_flags.get("salted"))
+        salt_count = participant_salt_count(parsed_flags)
+        salted = salt_count > 0
 
         game_entry = game_salt_stats.setdefault(gp.game_id, {
             "salted_players": 0,
             "participants": 0,
             "any_salted": False,
+            "salt_clicks": 0,
         })
         game_entry["participants"] += 1
         if salted:
             game_entry["salted_players"] += 1
             game_entry["any_salted"] = True
+        game_entry["salt_clicks"] += salt_count
 
         player_entry = player_salt_stats.setdefault(gp.player_id, {
             "salted_games": 0,
             "games": 0,
+            "salt_clicks": 0,
         })
         player_entry["games"] += 1
         if salted:
             player_entry["salted_games"] += 1
+        player_entry["salt_clicks"] += salt_count
 
         deck_entry = deck_salt_stats.setdefault(gp.deck_id, {
             "salted_games": 0,
             "games": 0,
+            "salt_clicks": 0,
         })
         deck_entry["games"] += 1
         if salted:
             deck_entry["salted_games"] += 1
+        deck_entry["salt_clicks"] += salt_count
 
     for g in scoped_games:
         stats = game_salt_stats.setdefault(g.id, {
             "salted_players": 0,
             "participants": 0,
             "any_salted": False,
+            "salt_clicks": 0,
         })
         legacy_salt = g.salt_rating is not None
         stats["legacy_salt_rating"] = g.salt_rating
         stats["has_legacy_salt"] = legacy_salt
         stats["sort_salted_players"] = int(stats["salted_players"])
+        stats["sort_salt_clicks"] = int(stats["salt_clicks"])
         stats["sort_has_salt"] = int(stats["any_salted"] or legacy_salt)
 
     # Top salty games by participant-level salted flags
@@ -1223,6 +1248,7 @@ def saltmine():
         scoped_games,
         key=lambda g: (
             int(game_salt_stats[g.id]["sort_salted_players"]),
+            int(game_salt_stats[g.id]["sort_salt_clicks"]),
             int(game_salt_stats[g.id]["sort_has_salt"]),
             g.date,
         ),
@@ -1907,13 +1933,15 @@ def games():
         gp.parsed_flags = parse_participant_flags(gp.flags_json)
         game_parts.setdefault(gp.game_id, []).append(gp)
 
-        stats = game_salt_stats.setdefault(gp.game_id, {"salted_players": 0, "participants": 0})
+        stats = game_salt_stats.setdefault(gp.game_id, {"salted_players": 0, "participants": 0, "salt_clicks": 0})
         stats["participants"] += 1
-        if gp.parsed_flags.get("salted"):
+        salt_count = participant_salt_count(gp.parsed_flags)
+        if salt_count > 0:
             stats["salted_players"] += 1
+        stats["salt_clicks"] = int(stats.get("salt_clicks", 0)) + salt_count
 
     for g in games_page:
-        game_salt_stats.setdefault(g.id, {"salted_players": 0, "participants": 0})
+        game_salt_stats.setdefault(g.id, {"salted_players": 0, "participants": 0, "salt_clicks": 0})
 
     # Dropdown data
     players = Player.query.order_by(Player.name.asc()).all()
@@ -1958,12 +1986,17 @@ def game_detail(game_id):
     parts = GameParticipant.query.filter_by(game_id=game_id).all()
 
     salted_players = 0
+    total_salt_clicks = 0
     for gp in parts:
         gp.parsed_flags = parse_participant_flags(gp.flags_json)
-        if gp.parsed_flags.get("salted"):
+        salt_count = participant_salt_count(gp.parsed_flags)
+        gp.salt_count = salt_count
+        total_salt_clicks += salt_count
+        if salt_count > 0:
             salted_players += 1
 
-    game.salted_players = salted_players
+    g.salted_players = salted_players
+    g.total_salt_clicks = total_salt_clicks
 
     # Nice for display: show winner first (optional)
     parts_sorted = sorted(parts, key=lambda p: (0 if p.player_id == g.winner_id else 1, p.player.name.lower()))
@@ -2694,9 +2727,14 @@ def end_game():
             for flag_key, flag_value in player_flags_raw.items():
                 if flag_key not in ALLOWED_PARTICIPANT_FLAG_KEYS:
                     return "Unsupported participant flag key", 400
-                if not isinstance(flag_value, bool):
-                    return "Participant flag values must be boolean", 400
-                sanitized_player_flags[flag_key] = flag_value
+                if flag_key == "mana_fucked":
+                    if not isinstance(flag_value, bool):
+                        return "mana_fucked must be boolean", 400
+                    sanitized_player_flags[flag_key] = flag_value
+                elif flag_key == "salt_count":
+                    if not isinstance(flag_value, int) or isinstance(flag_value, bool) or flag_value < 0:
+                        return "salt_count must be a non-negative integer", 400
+                    sanitized_player_flags[flag_key] = flag_value
 
             if sanitized_player_flags:
                 participant_flags_by_player[player_id] = json.dumps(
