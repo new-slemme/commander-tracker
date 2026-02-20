@@ -1001,6 +1001,7 @@ def pods():
     me = get_current_user()
     pods_list = get_accessible_pods(me)
     active_pod = get_active_pod()
+    manageable_pod_ids = {pod.id for pod in pods_list if can_manage_pod(me, pod.id)}
 
     selected_pod_id = request.args.get("pod_id", type=int)
     selected_pod = db.session.get(Pod, selected_pod_id) if selected_pod_id else active_pod
@@ -1023,6 +1024,7 @@ def pods():
         "pods.html",
         pods=pods_list,
         active_pod=active_pod,
+        manageable_pod_ids=manageable_pod_ids,
         selected_pod=selected_pod,
         memberships=memberships,
         all_players=all_players,
@@ -1060,6 +1062,33 @@ def create_pod():
     db.session.commit()
     flash(f"Created pod '{name}'.")
     return redirect(url_for("pods", pod_id=pod.id))
+
+
+@app.route("/pods/<int:pod_id>/name", methods=["POST"])
+@login_required
+def update_pod_name(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        abort(404)
+
+    new_name = (request.form.get("name") or "").strip()
+    if not new_name:
+        flash("Pod name is required.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    duplicate = Pod.query.filter(Pod.id != pod_id, Pod.name == new_name).first()
+    if duplicate:
+        flash("A pod with that name already exists.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    pod.name = new_name
+    db.session.commit()
+    flash("Pod name updated.")
+    return redirect(url_for("pods", pod_id=pod_id))
 
 
 @app.route("/pods/switch/<int:pod_id>", methods=["POST"])
