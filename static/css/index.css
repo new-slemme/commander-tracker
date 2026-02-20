@@ -182,8 +182,16 @@
     font-weight: 900;
     color: #fff;
     letter-spacing: 0.01em;
-    font-size: 0.98rem;
+    font-size: 0.8rem;
     white-space: nowrap;
+    
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: var(--base-trans);
+    border: 1px solid var(--base);
   }
 
   .winner-pill {
