@@ -87,27 +87,27 @@
 
   <!-- Modal -->
   <div class="modal fade" id="quickMenuModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
-      <div class="modal-content bg-dark text-light">
-        <div class="modal-body p-4 d-flex flex-column gap-3">
+    <div class="modal-dialog quick-menu-sheet-dialog modal-dialog-scrollable">
+      <div class="modal-content quick-menu-sheet bg-dark text-light">
+        <div class="modal-body px-3 pt-3 pb-4 d-flex flex-column gap-2">
           <div class="text-center mb-2">
             <h2 class="h4 mb-1">Game Actions</h2>
             <div class="text-secondary">Choose what you want to do next.</div>
           </div>
 
-          <button class="btn btn-primary btn-lg w-100" id="quickToggleFsBtn" type="button">
+          <button class="btn btn-primary quick-menu-btn w-100" id="quickToggleFsBtn" type="button">
             Toggle Fullscreen
           </button>
 
-          <button class="btn btn-success btn-lg w-100" id="openEndGameBtn" type="button">
+          <button class="btn btn-success quick-menu-btn w-100" id="openEndGameBtn" type="button">
             End &amp; Record Game
           </button>
 
-          <button class="btn btn-outline-danger btn-lg w-100" id="quickQuitBtn" type="button">
+          <button class="btn btn-outline-danger quick-menu-btn w-100" id="quickQuitBtn" type="button">
             Quit without Saving
           </button>
 
-          <button class="btn btn-outline-light btn-lg w-100" data-bs-dismiss="modal" type="button">
+          <button class="btn btn-outline-light quick-menu-btn w-100" data-bs-dismiss="modal" type="button">
             Back to Game
           </button>
         </div>
