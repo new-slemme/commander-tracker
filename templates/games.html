@@ -41,15 +41,14 @@
       <div class="filter-card">
         <div class="filter-card-head">
           <div class="muted">Auto-applies on change</div>
+          <div class="filter-actions">
+            <a class="btn btn-sm btn-secondary"
+               href="{{ url_for('games') }}">Clear filters</a>
+          </div>
         </div>
-      <div class="filter-actions">
-        <a class="btn btn-sm btn-secondary"
-           href="{{ url_for('games') }}">Clear filters</a>
-      </div>
-    </div>
 
-    <form method="get" action="{{ url_for('games') }}" id="gamesFilterForm">
-      <div class="filter-grid">
+        <form method="get" action="{{ url_for('games') }}" id="gamesFilterForm">
+          <div class="filter-grid">
         <div class="fg-3">
           <div class="filter-label">Player</div>
           <select class="form-select" name="player_id" data-autosubmit>
@@ -124,18 +123,32 @@
             {% endfor %}
           </select>
         </div>
+          </div>
+        </form>
       </div>
-    </form>
   </div>
 </div>
-</div>
+
   <!-- Games -->
   {% if games|length == 0 %}
     <div class="card p-3">
       <div class="muted">No games match these filters.</div>
     </div>
   {% else %}
-    <div class="game-list">
+    <div class="recent-card mb-4">
+      <div class="recent-card-head">
+        <div class="muted">
+          Showing {{ games|length }} games on this page
+        </div>
+        <div class="muted" style="font-size:0.9rem;">
+          Page <span class="text-white fw-bold">{{ pagination.page }}</span>
+          of <span class="text-white fw-bold">{{ pagination.pages if pagination.pages else 1 }}</span>
+          — <span class="text-white fw-bold">{{ pagination.total }}</span> total
+        </div>
+      </div>
+
+      <div class="p-3">
+      <div class="game-list">
 
       {% for g in games %}
 
@@ -148,8 +161,8 @@
           {% endif %}
         {% endfor %}
 
-        <a href="{{ url_for('game_detail', game_id=g.id) }}" class="list-group-item">
-        <div class="game-tile">
+        <a href="{{ url_for('game_detail', game_id=g.id) }}" class="list-group-item p-0 game-tile-link">
+        <div class="game-tile recent-game-inner">
           <div class="game-bg">
             {% if ns.arts|length == 0 %}
               <div class="game-slice" style="background: rgba(255,255,255,0.04);"></div>
@@ -189,6 +202,18 @@
               </div>
             </div>
 
+            <div class="game-tags">
+              <span class="game-tag">
+                Decks in game: {{ game_parts[g.id]|length }}
+              </span>
+              {% if g.salt_rating %}
+                <span class="game-tag game-tag--salt">Salt {{ g.salt_rating }} 🧂</span>
+              {% endif %}
+              {% if g.win_type %}
+                <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
+              {% endif %}
+            </div>
+
             <div class="players-row">
               {% for gp in game_parts[g.id] %}
                 <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}">
@@ -200,15 +225,25 @@
                   </span>
 
                   <span class="deck">{{ gp.deck.name }}</span>
+                  <span class="deck-meta">
+                    {{ gp.deck.commander_name or gp.deck.commander }}
+                    <span class="muted">·</span>
+                    {{ gp.deck.owner.name }}
+                    {% if gp.deck.retired %}
+                      <span class="retired-pill">Retired</span>
+                    {% endif %}
+                  </span>
                 </span>
               {% endfor %}
             </div>
-          </a>
-            
+
           </div>
         </div>
+        </a>
 
       {% endfor %}
+    </div>
+    </div>
     </div>
 
     <!-- Pagination -->
