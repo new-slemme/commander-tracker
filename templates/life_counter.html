@@ -181,6 +181,8 @@
 
   <form id="quickQuitForm" method="post" action="/cancel_game" class="d-none"></form>
 
+  <div id="transientNoticeContainer" class="transient-notice-container" aria-live="polite" aria-atomic="true"></div>
+
 <script>
 /* ---------- FULLSCREEN + ORIENTATION (life_counter only) ---------- */
 function isFs(){ return !!document.fullscreenElement; }
@@ -231,6 +233,26 @@ function showFsOverlayIfNeeded(){
 function hideFsOverlay(){
   const overlay = document.getElementById("fsOverlay");
   if(overlay) overlay.style.display = "none";
+}
+
+let transientNoticeTimeoutId = null;
+
+function showTransientNotice(message){
+  const container = document.getElementById("transientNoticeContainer");
+  if(!container || !message) return;
+
+  if(transientNoticeTimeoutId){
+    clearTimeout(transientNoticeTimeoutId);
+    transientNoticeTimeoutId = null;
+  }
+
+  container.textContent = message;
+  container.classList.add("is-visible");
+
+  transientNoticeTimeoutId = setTimeout(()=>{
+    container.classList.remove("is-visible");
+    transientNoticeTimeoutId = null;
+  }, 1500);
 }
 
 document.getElementById("fsBtn")?.addEventListener("click", goFullscreen);
@@ -961,7 +983,7 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const actionText = nextValue ? "flagged as mana fucked" : "unflagged for mana fucked";
-  alert(`${playerLabel} was ${actionText}.`);
+  showTransientNotice(`${playerLabel} was ${actionText}.`);
   if(nextValue){
     playSfx(manaFuckedAudio);
   }
@@ -978,7 +1000,7 @@ document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
   });
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
-  alert(`${playerLabel} received salt #${nextCount}.`);
+  showTransientNotice(`${playerLabel} received salt #${nextCount}.`);
   openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorEl, playerFlagPointer);
 });
 

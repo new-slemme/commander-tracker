@@ -224,6 +224,40 @@ body.sigtaara-ui .h4 {
       font-weight:900;
     }
 
+
+.transient-notice-container{
+  position:fixed;
+  left:50%;
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 16px);
+  transform:translate(-50%, 14px);
+  z-index:230;
+  max-width:min(88vw, 420px);
+  padding:10px 14px;
+  border-radius:12px;
+  background:rgba(8, 10, 15, 0.92);
+  border:1px solid rgba(255,255,255,0.2);
+  color:#fff;
+  font-weight:700;
+  text-align:center;
+  box-shadow:0 10px 24px rgba(0,0,0,0.45);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease;
+}
+
+.transient-notice-container.is-visible{
+  opacity:1;
+  transform:translate(-50%, 0);
+}
+
+@media (max-height: 600px){
+  .transient-notice-container{
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 10px);
+    max-width:min(92vw, 360px);
+    font-size:.95rem;
+  }
+}
+
     /* ==================== TURN BADGE (DISABLED) ==================== */
     .turn-badge{ display:none !important; }
     /* ==================== END TURN BADGE ==================== */
