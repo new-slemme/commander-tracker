@@ -181,9 +181,9 @@ body.sigtaara-ui .h4 {
       z-index:25;
     }
 
-    .life-card.active-turn::before{
-      filter: brightness(1.18) contrast(1.06) saturate(1.08);
-    }
+.life-card.active-turn::before{
+  filter: brightness(1.42) contrast(1.1) saturate(1.15);
+}
 
     .life-card.active-turn .life-display{
       text-shadow:
