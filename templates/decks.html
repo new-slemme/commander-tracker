@@ -145,6 +145,7 @@
            data-deck-commander="{{ (d.commander_name or d.commander)|e }}"
            data-deck-owner-id="{{ d.player_id }}"
            data-deck-retired="{{ 1 if d.retired else 0 }}"
+           data-deck-planned="{{ 1 if d.planned else 0 }}"
            {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
 
           <div class="deck-tile-inner">
@@ -164,6 +165,8 @@
               <div class="deck-badges">
                 {% if d.retired %}
                   <span class="deck-retired-pill">Retired</span>
+                {% elif d.planned %}
+                  <span class="deck-planned-pill">Planned</span>
                 {% endif %}
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
               </div>
@@ -238,6 +241,11 @@
           <div class="mb-3">
             <label class="form-label">Deck name</label>
             <input class="form-control" name="name" required />
+          </div>
+
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="addPlannedInput" name="planned" value="1">
+            <label class="form-check-label" for="addPlannedInput">Planned deck</label>
           </div>
 
           <div class="mb-2">
