@@ -83,6 +83,11 @@
                   <span class="muted2"> · </span>
                   <span>{{ d.commander_name or d.commander }}</span>
                 </div>
+                {% if gp.parsed_flags and gp.parsed_flags.get('mana_fucked') %}
+                  <div class="mt-2">
+                    <span class="badge rounded-pill text-bg-warning">Mana Fucked</span>
+                  </div>
+                {% endif %}
               </div>
             </div>
           </div>

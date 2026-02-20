@@ -147,6 +147,7 @@
             <input type="hidden" name="time_control" id="time_control_input" value="">
             <input type="hidden" name="ended_on_time" id="ended_on_time_input" value="">
             <input type="hidden" name="duration_seconds" id="duration_seconds_input" value="">
+            <input type="hidden" name="participant_flags" id="participant_flags_input" value="{}">
 
             <select name="winner" class="form-select form-select-lg" required>
               <option value="" disabled selected>Select Winner</option>
@@ -307,6 +308,7 @@ const LIFE_COMMIT_MS = 650;
 const PENDING_FADE_DELAY_MS = 1500;
 const nameLongPressState = {};
 let playerFlagTargetId = null;
+const participantFlagsByPlayer = {};
 
 const cards = [...document.querySelectorAll(".life-card")];
 cards.forEach(card=>{
@@ -767,6 +769,14 @@ function openPlayerFlagMenu(playerId){
   if(titleEl) titleEl.textContent = `Player Flag: ${playerLabel}`;
   if(subtitleEl) subtitleEl.textContent = `Flag actions for ${playerLabel}.`;
 
+  const markBtn = document.getElementById("playerFlagMarkBtn");
+  if(markBtn){
+    const isFlagged = !!participantFlagsByPlayer[playerFlagTargetId]?.mana_fucked;
+    markBtn.textContent = isFlagged ? "Unmark Mana Fucked" : "Mark Mana Fucked";
+    markBtn.classList.toggle("btn-warning", !isFlagged);
+    markBtn.classList.toggle("btn-outline-warning", isFlagged);
+  }
+
   const modalEl = document.getElementById("playerFlagModal");
   if(!modalEl) return;
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -783,10 +793,17 @@ document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>re
 
 document.getElementById("playerFlagMarkBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
+  const playerFlags = participantFlagsByPlayer[playerFlagTargetId] || {};
+  const nextValue = !playerFlags.mana_fucked;
+  participantFlagsByPlayer[playerFlagTargetId] = {
+    ...playerFlags,
+    mana_fucked: nextValue,
+  };
+
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
-  alert(`${playerLabel} has been flagged.`);
-  const modalEl = document.getElementById("playerFlagModal");
-  bootstrap.Modal.getInstance(modalEl)?.hide();
+  const actionText = nextValue ? "flagged" : "unflagged";
+  alert(`${playerLabel} has been ${actionText}.`);
+  openPlayerFlagMenu(playerFlagTargetId);
 });
 
 document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
@@ -794,6 +811,7 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
   const timeControlInput = document.getElementById("time_control_input");
   const endedOnTimeInput = document.getElementById("ended_on_time_input");
   const durationSecondsInput = document.getElementById("duration_seconds_input");
+  const participantFlagsInput = document.getElementById("participant_flags_input");
 
   const mode = timerState.mode || "off";
   const timeControlPayload = {};
@@ -812,6 +830,16 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
   const startedAt = Number.isFinite(gameStartedAt) ? gameStartedAt : 0;
   const durationSeconds = startedAt > 0 ? Math.max(0, nowSeconds - startedAt) : 0;
   if(durationSecondsInput) durationSecondsInput.value = String(durationSeconds);
+
+  if(participantFlagsInput){
+    const payload = {};
+    Object.entries(participantFlagsByPlayer).forEach(([playerId, flags])=>{
+      if(!flags || typeof flags !== "object") return;
+      const hasTruthyFlag = Object.values(flags).some(Boolean);
+      if(hasTruthyFlag) payload[playerId] = flags;
+    });
+    participantFlagsInput.value = JSON.stringify(payload);
+  }
 });
 
 const centerPassBtn = document.getElementById("centerPassBtn");
