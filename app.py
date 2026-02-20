@@ -58,6 +58,11 @@ COMMON_WEAK_PASSWORDS = {
     "admin123",
 }
 
+MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 4096
+ALLOWED_PARTICIPANT_FLAG_KEYS = {
+    "mana_fucked",
+}
+
 
 def validate_password_rules(password: str) -> str | None:
     if len(password) < 8:
@@ -188,6 +193,7 @@ class GameParticipant(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False)
+    flags_json = db.Column(db.Text, nullable=True)
 
     player = db.relationship("Player", backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
@@ -385,6 +391,17 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('004_deck_decklist_text')")
+            )
+
+        if "005_game_participant_flags" not in applied:
+            participant_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
+            }
+            if "flags_json" not in participant_cols:
+                db.session.execute(text("ALTER TABLE game_participant ADD COLUMN flags_json TEXT"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('005_game_participant_flags')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -2546,6 +2563,47 @@ def end_game():
     if timed_mode is None and (time_control is not None or ended_on_time is not None):
         return "Timer metadata requires valid timed_mode", 400
 
+    participant_flags_raw = (request.form.get("participant_flags") or request.form.get("flags") or "").strip()
+    participant_flags_by_player = {}
+    if participant_flags_raw:
+        if len(participant_flags_raw.encode("utf-8")) > MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES:
+            return "Participant flags payload too large", 400
+
+        try:
+            parsed_participant_flags = json.loads(participant_flags_raw)
+        except json.JSONDecodeError:
+            return "Invalid participant flags JSON", 400
+
+        if not isinstance(parsed_participant_flags, dict):
+            return "Invalid participant flags payload", 400
+
+        valid_player_ids = {p["player_id"] for p in participants}
+        for player_id_raw, player_flags_raw in parsed_participant_flags.items():
+            try:
+                player_id = int(player_id_raw)
+            except (TypeError, ValueError):
+                return "Invalid participant flags payload", 400
+
+            if player_id not in valid_player_ids:
+                return "Participant flags include unknown player", 400
+            if not isinstance(player_flags_raw, dict):
+                return "Invalid participant flags payload", 400
+
+            sanitized_player_flags = {}
+            for flag_key, flag_value in player_flags_raw.items():
+                if flag_key not in ALLOWED_PARTICIPANT_FLAG_KEYS:
+                    return "Unsupported participant flag key", 400
+                if not isinstance(flag_value, bool):
+                    return "Participant flag values must be boolean", 400
+                sanitized_player_flags[flag_key] = flag_value
+
+            if sanitized_player_flags:
+                participant_flags_by_player[player_id] = json.dumps(
+                    sanitized_player_flags,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+
     active_pod = get_active_pod()
     if not active_pod:
         return "No active pod available", 400
@@ -2565,7 +2623,14 @@ def end_game():
     db.session.flush()
 
     for p in participants:
-        db.session.add(GameParticipant(game_id=game.id, player_id=p["player_id"], deck_id=p["deck_id"]))
+        db.session.add(
+            GameParticipant(
+                game_id=game.id,
+                player_id=p["player_id"],
+                deck_id=p["deck_id"],
+                flags_json=participant_flags_by_player.get(p["player_id"]),
+            )
+        )
 
     db.session.commit()
     session.pop("game_participants", None)
