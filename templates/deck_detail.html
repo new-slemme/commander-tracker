@@ -168,6 +168,11 @@
           </div>
         {% endfor %}
       </div>
+
+      <details class="mt-3 decklist-plaintext">
+        <summary>Show plain text decklist</summary>
+        <pre class="decklist-raw mt-2">{{ decklist_data.export_text }}</pre>
+      </details>
     {% else %}
       <p class="text-muted mt-3 mb-2">Stored decklist could not be normalized, showing raw text:</p>
       <pre class="decklist-raw mt-2">{{ decklist_data.raw_text }}</pre>
