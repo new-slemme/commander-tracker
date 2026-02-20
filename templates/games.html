@@ -177,10 +177,47 @@
                 </div>
               </div>
 
-              <div class="winner-pill">
-                <span class="dot"></span>
-                Winner: {{ g.winner.name }}
+              <div class="game-top-actions">
+                {% if scope == "all" and g.pod %}
+                  <span class="game-tag game-tag--pod" title="Pod">
+                    Pod · {{ g.pod.name }}
+                  </span>
+                {% endif %}
+
+                <button class="copy-link-btn" type="button" data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}" aria-label="Copy game link" title="Copy game link">
+                  🔗
+                </button>
+
+                <div class="winner-pill">
+                  <span class="dot"></span>
+                  Winner: {{ g.winner.name }}
+                </div>
               </div>
+            </div>
+
+            <div class="decks-compact" data-decks-compact>
+              {% for gp in game_parts[g.id][:3] %}
+                <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
+                  <span class="deck-mini__player">{{ gp.player.name }}</span>
+                  <span class="deck-mini__deck">{{ gp.deck.name }}</span>
+                </span>
+              {% endfor %}
+
+              {% if game_parts[g.id]|length > 3 %}
+                <button class="deck-more-toggle" type="button" data-decks-toggle aria-expanded="false">
+                  <span class="deck-more-label">+{{ game_parts[g.id]|length - 3 }} more</span>
+                  <span class="deck-chevron" aria-hidden="true">⌄</span>
+                </button>
+
+                <div class="deck-mini-extra" data-decks-extra hidden>
+                  {% for gp in game_parts[g.id][3:] %}
+                    <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
+                      <span class="deck-mini__player">{{ gp.player.name }}</span>
+                      <span class="deck-mini__deck">{{ gp.deck.name }}</span>
+                    </span>
+                  {% endfor %}
+                </div>
+              {% endif %}
             </div>
 
             <div class="game-tags">
@@ -297,6 +334,41 @@
           const page = form.querySelector('input[name="page"]');
           if (page) page.value = "1";
           form.submit();
+        }
+      });
+    });
+  })();
+
+  // Compact decks expansion and quick-copy links
+  (function() {
+    document.querySelectorAll('[data-decks-toggle]').forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const wrapper = btn.closest('[data-decks-compact]');
+        const extra = wrapper?.querySelector('[data-decks-extra]');
+        if (!extra) return;
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', String(!expanded));
+        extra.hidden = expanded;
+      });
+    });
+
+    document.querySelectorAll('[data-copy-url]').forEach((btn) => {
+      btn.addEventListener('click', async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const url = btn.getAttribute('data-copy-url');
+        if (!url) return;
+        try {
+          await navigator.clipboard.writeText(url);
+          const previous = btn.textContent;
+          btn.textContent = '✓';
+          setTimeout(() => {
+            btn.textContent = previous;
+          }, 1000);
+        } catch (_) {
+          window.prompt('Copy game link:', url);
         }
       });
     });

@@ -36,7 +36,7 @@
     display:flex;
     align-items:center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 8px;
     flex-wrap: wrap;
   }
 
@@ -122,7 +122,7 @@
 
   .game-content {
     position:relative;
-    padding: 14px;
+    padding: 12px 14px;
     display:flex;
     flex-direction:column;
     gap: 10px;
@@ -199,6 +199,107 @@
     border-radius: 999px;
     background: var(--green);
     box-shadow: 0 0 10px rgba(58,107,84,0.65);
+  }
+
+
+  .game-top-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .copy-link-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid rgba(143,153,197,0.35);
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .copy-link-btn:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: rgba(143,153,197,0.52);
+  }
+
+  .decks-compact {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .deck-mini {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.05);
+    font-size: 0.78rem;
+    color: #fff;
+    min-width: 0;
+  }
+
+  .deck-mini.win {
+    border-color: rgba(58,107,84,0.48);
+    background: rgba(58,107,84,0.18);
+  }
+
+  .deck-mini__player {
+    font-weight: 900;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .deck-mini__deck {
+    color: var(--font-base);
+    max-width: 170px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .deck-more-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px dashed rgba(143,153,197,0.45);
+    background: rgba(255,255,255,0.02);
+    color: var(--font-base);
+    font-size: 0.76rem;
+    font-weight: 800;
+  }
+
+  .deck-mini-extra {
+    display: contents;
+  }
+
+  .deck-chevron {
+    font-size: 0.86rem;
+    transition: transform .15s ease;
+  }
+
+  .deck-more-toggle[aria-expanded="true"] .deck-chevron {
+    transform: rotate(180deg);
+  }
+
+  .game-tag--pod {
+    border-color: rgba(120, 160, 255, 0.42);
+    background: rgba(120, 160, 255, 0.14);
+    color: #fff;
   }
 
   .game-tags {
@@ -405,6 +506,22 @@
     .game-tag {
       font-size: 0.74rem;
       padding: 5px 8px;
+    }
+
+
+    .game-top-actions {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .decks-compact {
+      gap: 5px;
+    }
+
+    .deck-mini,
+    .deck-more-toggle {
+      font-size: 0.72rem;
+      padding: 4px 7px;
     }
 
     .players-row {
