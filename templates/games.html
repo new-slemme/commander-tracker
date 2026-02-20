@@ -209,6 +209,7 @@
                     </div>
                   </div>
 
+                <div class="game-summary-extras">
                   <div class="decks-compact" data-decks-compact>
                     {% for gp in game_parts[g.id][:3] %}
                       <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
@@ -245,7 +246,7 @@
                       <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
                     {% endif %}
                   </div>
-
+                </div>
                 </summary>
 
                 <div class="game-content game-content--details">
