@@ -1,0 +1,353 @@
+  /* ===== Player Stats (index) ===== */
+  .stats-card {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .stats-card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(255,255,255,0.02);
+  }
+
+  .stats-chip {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 800;
+    font-size: 0.88rem;
+  }
+  .stats-chip b { color:#fff; }
+
+  .rank-pill {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(143,153,197,0.25);
+    color:#fff;
+    font-weight: 900;
+    font-size: 0.85rem;
+  }
+
+  .player-name {
+    color:#fff;
+    font-weight: 900;
+    letter-spacing: 0.01em;
+  }
+
+  .win-badge {
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 900;
+    border: 1px solid rgba(143,153,197,0.28);
+    background: rgba(255,255,255,0.06);
+    color:#fff;
+    white-space: nowrap;
+  }
+  .win-badge.good { border-color: var(--green); background: var(--green-trans); }
+  .win-badge.mid  { border-color: var(--blue);  background: var(--blue-trans); }
+  .win-badge.bad  { border-color: var(--red); background: var(--red-trans); }
+
+  .wr-progress {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    overflow:hidden;
+    min-width: 120px;
+  }
+  .wr-progress > div {
+    height:100%;
+    border-radius:999px;
+  }
+
+  .progress-bar {
+      background-color: var(--blue);
+  }
+  
+  .stats-table thead th {
+    font-size: 0.88rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.85);
+  }
+
+  .stats-table tbody tr {
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .stat-mini {
+    display:inline-flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--font-base-trans);
+    font-weight: 700;
+    font-size: 0.9rem;
+  }
+  .stat-mini b { color:#fff; }
+
+  /* Mobile: simplify columns */
+  @media (max-width: 576px) {
+    .stats-table thead th:nth-child(3),
+    .stats-table tbody td:nth-child(3) { display:none; } /* Wins column */
+    .stats-table thead th:nth-child(6),
+    .stats-table tbody td:nth-child(6) { display:none; } /* Progress column */
+
+    .stats-card-head { padding: 12px 12px; }
+    .stats-card { border-radius: 18px; }
+  }
+
+  /* ===== Recent Games (index) ===== */
+  .recent-card {
+    border-radius: 22px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background: rgba(23,26,38,0.55);
+    box-shadow: 0 0 28px rgba(0,0,0,0.45);
+    overflow: hidden;
+  }
+
+  .recent-card-head {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .recent-game-tile {
+    border-radius: 18px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: transparent;
+    overflow: hidden;
+  }
+
+  .recent-game-inner {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+    min-height: 104px;
+  }
+
+  .recent-game-bg { position:absolute; inset:0; display:flex; gap:0; }
+  .recent-game-slice {
+    flex: 1 1 0;
+    background-size: cover;
+    background-position: top;
+    background-repeat: no-repeat;
+    filter: saturate(1.08);
+  }
+
+  .recent-game-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgba(0,0,0,0.86), rgba(0,0,0,0.45)),
+      radial-gradient(circle at 18% 30%, rgba(0,0,0,0.55), transparent 55%);
+  }
+
+  .recent-game-content {
+    position: relative;
+    z-index: 1;
+    padding: 14px 14px;
+  }
+
+  .recent-topline {
+    display:flex;
+    align-items:flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .recent-date {
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: 0.01em;
+    font-size: 0.98rem;
+    white-space: nowrap;
+  }
+
+  .winner-pill {
+    display:inline-flex;
+    align-items:center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    background: rgba(58,107,84,0.22);
+    border: 1px solid rgba(58,107,84,0.55);
+    color: #fff;
+    font-weight: 900;
+    white-space: nowrap;
+  }
+  .winner-pill .dot {
+    width: 10px; height: 10px; border-radius: 999px;
+    background: rgba(58,107,84,0.95);
+    box-shadow: 0 0 10px rgba(58,107,84,0.55);
+  }
+
+  .recent-players {
+    margin-top: 10px;
+    display:flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .player-pill {
+    display:inline-flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.20);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-base);
+    font-weight: 800;
+    max-width: 100%;
+  }
+  .player-pill .name { color:#fff; font-weight: 900; }
+  .player-pill .deck { color: var(--font-base-trans); font-weight: 800; }
+
+  .player-pill.win {
+    border-color: rgba(58,107,84,0.55);
+    background: rgba(58,107,84,0.18);
+  }
+  .player-pill.win .wmark{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width: 22px; height: 22px;
+    border-radius: 999px;
+    background: rgba(58,107,84,0.95);
+    box-shadow: 0 0 10px rgba(58,107,84,0.55);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 1000;
+    flex: 0 0 auto;
+  }
+
+  @media (max-width: 576px) {
+    .recent-card { border-radius: 18px; }
+    .recent-card-head { padding: 12px 12px; }
+    .recent-game-content { padding: 12px 12px; }
+    .recent-date { font-size: 0.94rem; }
+    .winner-pill { padding: 7px 10px; }
+    .player-pill { width: 100%; }
+    .player-pill .deck { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
+  .home-hero {
+    border-radius: 24px;
+    border: 1px solid rgba(143,153,197,0.25);
+    background:
+      radial-gradient(circle at 18% 20%, rgba(70,84,147,0.20), transparent 45%),
+      linear-gradient(135deg, rgba(22,45,61,0.50), rgba(23,26,38,0.92));
+    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+    padding: 18px 18px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .pod-selector {
+    position: relative;
+  }
+
+  .pod-button {
+    width: 100%;
+    text-align: left;
+    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: 16px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.04);
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .pod-options {
+    margin-top: 8px;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+    opacity: 0;
+  }
+
+  .pod-selector.pod-selector--open .pod-options {
+    max-height: 280px;
+    opacity: 1;
+  }
+
+  .pod-option {
+    width: 100%;
+    border: 1px solid rgba(143,153,197,0.20);
+    border-radius: 12px;
+    background: rgba(0,0,0,0.25);
+    color: var(--font-base);
+    font-weight: 700;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    text-align: left;
+  }
+
+  .home-hero::before{
+    content:"";
+    position:absolute;
+    inset:-1px;
+    background:
+      radial-gradient(circle at 80% 10%, rgba(229,92,54,0.16), transparent 45%),
+      radial-gradient(circle at 10% 80%, rgba(143,153,197,0.14), transparent 55%);
+    pointer-events:none;
+  }
+
+  .home-hero > * { position: relative; z-index: 1; }
+
+  .keller-title {
+    margin: 0;
+    line-height: 1.0;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--font-base);
+  }
+
+  .salz-sub {
+    margin-top: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: rgba(255,255,255,0.03);
+    color: var(--font-highlight-trans);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+  }
+
+  .salz-dot {
+    width: 10px; height: 10px;
+    border-radius: 999px;
+    background: rgba(229,92,54,0.95);
+    box-shadow: 0 0 12px rgba(229,92,54,0.45);
+  }
+
+  @media (max-width: 576px) {
+    .home-hero { padding: 14px 14px; border-radius: 20px; }
+    .keller-title { letter-spacing: 0.04em; }
+  }

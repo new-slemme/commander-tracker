@@ -1,0 +1,320 @@
+    :root{
+      --darkest:#10121a;
+      --darker:#171a26;
+      /* default background transform unless overridden */
+      --bg-rotate:none;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      overflow:hidden;
+      background:var(--darkest);
+      font-family:Arial,sans-serif;
+      touch-action:manipulation;
+      overscroll-behavior:none;
+    }
+
+    /* -------- Fullscreen overlay (mobile requirement) -------- */
+    .fs-overlay{
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.85);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+      padding:24px;
+      text-align:center;
+    }
+
+    /* -------- Wrapper stays unrotated (so pills/menu stay correct) -------- */
+    .life-wrapper{
+      position:fixed;
+      inset:0;
+    }
+
+    /* -------- Grid -------- */
+    .life-grid{
+      position:absolute;
+      inset:0;
+      display:grid;
+    }
+
+    /* Portrait: rotate only the grid to mimic landscape layout (EXCEPT 2P) */
+    @media (orientation:portrait){
+      .life-grid{
+        width:100vh;
+        height:100vw;
+        top:50%;
+        left:50%;
+        transform:translate(-50%,-50%) rotate(90deg);
+        transform-origin:center;
+      }
+
+      /* 2-player mode should stay true left/right in portrait */
+      .life-grid.players-2{
+        width:100%;
+        height:100%;
+        top:0;
+        left:0;
+        transform:none;
+      }
+
+      /* 3-player custom split layout should also remain unrotated in portrait */
+      .life-grid.players-3{
+        width:100%;
+        height:100%;
+        top:0;
+        left:0;
+        transform:none;
+      }
+    }
+
+    .life-card{
+      position:relative;
+      overflow:hidden;
+      background:#000;
+      /* needed for the active frame layer */
+      isolation:isolate;
+    }
+
+    .life-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background-image:var(--bg-layer);
+      background-size:cover;
+      background-position:center;
+      transform:var(--bg-rotate);
+      transform-origin:center;
+    }
+
+    .card-inner{
+      position:relative;
+      z-index:2;
+      height:100%;
+      width:100%;
+    }
+
+    .life-display{
+      font-size:18vh;
+      font-weight:900;
+      color:#fff;
+      text-shadow:0 0 10px rgba(0,0,0,.9), 0 0 28px rgba(0,0,0,.7);
+      user-select:none;
+    }
+    .life-pending{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-170%);
+      font-size:clamp(1rem, 2.8vw, 2rem);
+      font-weight:900;
+      color:#fff;
+      text-shadow:0 0 8px rgba(0,0,0,.95);
+      opacity:0;
+      transition:opacity .15s ease;
+      pointer-events:none;
+      z-index:24;
+    }
+
+    .life-pending.visible{ opacity:1; }
+    .life-pending.loss{ color:#ff8686; }
+    .life-pending.gain{ color:#8dffad; }
+    .life-pending.anim-gain{ animation: pending-bump-up .22s ease-out; }
+    .life-pending.anim-loss{ animation: pending-bump-down .22s ease-out; }
+
+    @keyframes pending-bump-up{
+      0%{ transform:translate(-50%,-195%) scale(.92); }
+      55%{ transform:translate(-50%,-212%) scale(1.07); }
+      100%{ transform:translate(-50%,-205%) scale(1); }
+    }
+
+    @keyframes pending-bump-down{
+      0%{ transform:translate(-50%,-215%) scale(.92); }
+      55%{ transform:translate(-50%,-198%) scale(1.07); }
+      100%{ transform:translate(-50%,-205%) scale(1); }
+    }
+
+    /* ===== ACTIVE PLAYER: GLOW FRAME + BACKGROUND LIFT (NO BADGE) ===== */
+    .life-card.active-turn{
+      outline:none;
+    }
+
+    .life-card.active-turn::after{
+      content:"";
+      position:absolute;
+      inset:10px;
+      border-radius:18px;
+      border:2px solid rgba(255,255,255,0.28);
+      box-shadow:
+        0 0 0 4px rgba(255,255,255,0.08),
+        0 0 26px rgba(255,255,255,0.22),
+        0 0 60px rgba(255,235,59,0.18) inset;
+      pointer-events:none;
+      z-index:25;
+    }
+
+    .life-card.active-turn::before{
+      filter: brightness(1.18) contrast(1.06) saturate(1.08);
+    }
+
+    .life-card.active-turn .life-display{
+      text-shadow:
+        0 0 12px rgba(0,0,0,.95),
+        0 0 34px rgba(0,0,0,.75),
+        0 0 22px rgba(255,255,255,.22);
+    }
+    /* ===== END ACTIVE PLAYER ===== */
+
+    /* Combined pass/menu button in center */
+    .center-pass-btn{
+      position:fixed;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      z-index:240;
+      width:94px;
+      height:94px;
+      border-radius:999px;
+      display:grid;
+      place-items:center;
+      pointer-events:auto;
+      touch-action:manipulation;
+      border:1px solid rgba(255,255,255,0.35);
+      background:rgba(255,255,255,0.94);
+      color:#000;
+      box-shadow:0 10px 26px rgba(0,0,0,0.45);
+      user-select:none;
+    }
+
+    .center-pass-btn:active{
+      transform:translate(-50%,-50%) scale(0.97);
+    }
+
+    .center-pass-icon{
+      font-size:1.55rem;
+      line-height:1;
+      font-weight:900;
+    }
+
+    /* ==================== TURN BADGE (DISABLED) ==================== */
+    .turn-badge{ display:none !important; }
+    /* ==================== END TURN BADGE ==================== */
+
+    /* Turn damage badge */
+    .turn-dmg{
+      position:absolute;
+      top:14px;
+      z-index:20;
+      background:rgba(0,0,0,.55);
+      color:#fff;
+      border-radius:10px;
+      padding:6px 10px;
+      font-weight:700;
+      font-size:0.9rem;
+      border:1px solid rgba(255,255,255,0.18);
+      user-select:none;
+      pointer-events:none;
+      backdrop-filter: blur(6px);
+      max-width:70%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .turn-dmg.side-left { left:14px; right:auto; }
+    .turn-dmg.side-right{ right:14px; left:auto; }
+
+    .player-name{
+      position:absolute;
+      bottom:0;
+      left:50%;
+      transform:translateX(-50%);
+      padding:14px 14px;
+      color:#fff;
+      font-weight:800;
+      text-shadow:0 0 10px rgba(0,0,0,.8);
+      user-select:none;
+      white-space:nowrap;
+      max-width:92%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      z-index:10;
+    }
+
+    /* Turn pill (top center) */
+    .turn-pill{
+      position:fixed;
+      top:14px;
+      left:50%;
+      transform:translateX(-50%);
+      padding:10px 16px;
+      background:rgba(0,0,0,.55);
+      border-radius:999px;
+      color:#fff;
+      font-weight:900;
+      z-index:120;
+      border:1px solid rgba(255,255,255,0.18);
+      letter-spacing:0.08em;
+      text-transform:uppercase;
+      user-select:none;
+      pointer-events:none;
+      backdrop-filter: blur(6px);
+    }
+
+    .turn-pill.bottom{
+      top:auto;
+      bottom:14px;
+      transform:translateX(-50%) rotate(180deg);
+    }
+
+
+    /* Grid layouts */
+    .players-2{ grid-template-columns:1fr 1fr; grid-template-rows:1fr; }
+    .players-3{
+      grid-template-columns:49% 51%;
+      grid-template-rows:1fr 1fr;
+      grid-template-areas:
+        "p1 p3"
+        "p2 p3";
+    }
+    .players-3 .life-card.p3-slot-1{ grid-area:p1; }
+    .players-3 .life-card.p3-slot-2{ grid-area:p2; }
+    .players-3 .life-card.p3-slot-3{ grid-area:p3; }
+    .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
+    .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
+    .players-3 .life-card.p3-slot-3 .turn-dmg{
+      top:auto;
+      bottom:34px;
+      left:50%;
+      right:auto;
+      transform:translateX(-50%);
+      max-width:88%;
+    }
+    .players-3 .life-card.p3-slot-1,
+    .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
+    .players-3 .life-card.p3-slot-1{ border-bottom:1px solid rgba(255,255,255,0.18); }
+    .players-4{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
+
+    /* ==================== 2 PLAYER FIXES (NO :has, NO INLINE VAR FIGHTS) ==================== */
+
+    /* Hide the bottom turn pill in 2-player mode (reduces clutter & overlap) */
+    .mode-2p #turnPillBottom{ display:none; }
+
+    /* Rotate each player's UI to face them */
+    .players-2 .life-card.left-card  .card-inner{ transform:rotate(90deg);  transform-origin:center; }
+    .players-2 .life-card.right-card .card-inner{ transform:rotate(-90deg); transform-origin:center; }
+
+    /* Background rotation per side (must be CSS-controlled; inline only for top-cards) */
+    .players-2 .life-card.left-card  { --bg-rotate: rotate(90deg); }
+    .players-2 .life-card.right-card { --bg-rotate: rotate(-90deg); }
+
+    /* In 2P, pin turn dmg to OUTER edge after rotation */
+    .mode-2p .players-2 .turn-dmg{
+      top:auto;
+      bottom:14px;
+    }
+  
