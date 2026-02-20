@@ -19,6 +19,12 @@
             <div>
               <a href="{{ url_for('pods', pod_id=pod.id) }}" class="fw-semibold text-light">{{ pod.name }}</a>
               <div class="pods-muted small">/{{ pod.slug }}</div>
+              {% if pod.id in manageable_pod_ids %}
+              <form method="post" action="{{ url_for('update_pod_name', pod_id=pod.id) }}" class="d-flex gap-2 mt-2">
+                <input class="form-control form-control-sm" type="text" name="name" value="{{ pod.name }}" maxlength="100" required>
+                <button class="btn btn-sm btn-outline-light" type="submit">Save name</button>
+              </form>
+              {% endif %}
             </div>
 
             <div class="d-flex align-items-center gap-2 flex-wrap">
