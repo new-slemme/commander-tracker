@@ -318,3 +318,51 @@
       bottom:14px;
     }
   
+
+.player-timer{
+  position:absolute;
+  top:14px;
+  left:50%;
+  transform:translateX(-50%);
+  z-index:21;
+  display:none;
+  min-width:86px;
+  text-align:center;
+  background:rgba(0,0,0,.62);
+  border:1px solid rgba(255,255,255,0.24);
+  border-radius:999px;
+  padding:5px 10px;
+  font-weight:900;
+  letter-spacing:0.04em;
+  font-size:clamp(.8rem,2vw,1rem);
+  color:#fff;
+  text-shadow:0 0 6px rgba(0,0,0,.9);
+  pointer-events:none;
+}
+.life-card.has-player-timer .player-timer{ display:block; }
+.player-timer.active{ border-color:rgba(255,255,255,.65); box-shadow:0 0 12px rgba(255,255,255,.2); }
+.player-timer.low-time{ color:#ff8e8e; border-color:rgba(255,114,114,.7); }
+
+.turn-timer-pill{
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  z-index:150;
+  display:none;
+  padding:11px 18px;
+  min-width:112px;
+  text-align:center;
+  border-radius:999px;
+  background:rgba(0,0,0,.66);
+  border:1px solid rgba(255,255,255,0.24);
+  color:#fff;
+  font-weight:900;
+  letter-spacing:.07em;
+  text-shadow:0 0 8px rgba(0,0,0,.9);
+  pointer-events:none;
+}
+.turn-timer-pill.low-time{ color:#ff9d9d; border-color:rgba(255,114,114,.8); }
+
+.players-3 .life-card.p3-slot-3 .player-timer{ top:auto; bottom:12px; }
+.mode-2p .player-timer{ font-size:clamp(.78rem,1.7vw,.95rem); }

@@ -23,6 +23,7 @@
   <div class="life-wrapper">
     <div class="turn-pill" id="turnPillTop">TURN 1</div>
     <div class="turn-pill bottom" id="turnPillBottom">TURN 1</div>
+    <div class="turn-timer-pill" id="centralTurnTimer">--:--</div>
 
     <div class="life-grid players-{{ n }}" id="lifeGrid">
       {% for p in participants %}
@@ -60,6 +61,7 @@
       >
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
           <div class="turn-dmg side-left" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</div>
+          <div class="player-timer" id="timer-{{ p.player_id }}">--:--</div>
 
           <div class="life-display position-absolute top-50 start-50 translate-middle"
                id="life-{{ p.player_id }}">40</div>
@@ -227,19 +229,28 @@ async function toggleFullscreenFromMenu(){
 document.getElementById("quickToggleFsBtn")?.addEventListener("click", toggleFullscreenFromMenu);
 
 document.getElementById("openEndGameBtn")?.addEventListener("click", ()=>{
+  pauseTimers("modal-transition");
   const quickModalEl = document.getElementById("quickMenuModal");
   bootstrap.Modal.getInstance(quickModalEl)?.hide();
 
   setTimeout(()=>{
     const endModalEl = document.getElementById("menuModal");
-    if(!endModalEl) return;
+    if(!endModalEl){
+      resumeTimers("modal-transition");
+      return;
+    }
     bootstrap.Modal.getOrCreateInstance(endModalEl).show();
+    resumeTimers("modal-transition");
   }, 160);
 });
 
 document.getElementById("quickQuitBtn")?.addEventListener("click", ()=>{
+  pauseTimers("quit-confirm");
   const confirmed = confirm("Quit without saving?");
-  if(!confirmed) return;
+  if(!confirmed){
+    resumeTimers("quit-confirm");
+    return;
+  }
   document.getElementById("quickQuitForm")?.submit();
 });
 
@@ -258,6 +269,8 @@ const pendingLife = {};
 const pendingTimers = {};
 const pendingHideTimers = {};
 const committedLife = {};
+const timerConfig = {{ timer_config|tojson }};
+const playerNames = {};
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
@@ -265,6 +278,29 @@ const LIFE_COMMIT_MS = 650;
 const PENDING_FADE_DELAY_MS = 1500;
 
 const cards = [...document.querySelectorAll(".life-card")];
+cards.forEach(card=>{
+  const pid = String(card.dataset.player);
+  playerNames[pid] = card.querySelector(".player-name")?.textContent?.trim() || `Player ${pid}`;
+});
+
+const timerState = {
+  mode: timerConfig?.mode || "off",
+  chessIncrementMs: Math.max(0, Number(timerConfig?.increment_seconds || 0) * 1000),
+  ropeDurationMs: Math.max(0, Number(timerConfig?.seconds_per_turn || 0) * 1000),
+  chessClocksMs: {},
+  ropeRemainingMs: 0,
+  pausedReasons: new Set(),
+  timedOutPlayers: new Set(),
+  timeoutHandled: false,
+  lastTickMs: performance.now(),
+};
+
+function formatMs(ms){
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
 
 function getClockwiseOrder(ids){
   const mapByN = {
@@ -290,6 +326,114 @@ function updateTurnPills(){
   const bot = document.getElementById("turnPillBottom");
   if(top) top.textContent = t;
   if(bot) bot.textContent = t;
+}
+
+
+function initializeTimers(){
+  const center = document.getElementById("centralTurnTimer");
+  const ids = getIdsClockwise();
+
+  if(timerState.mode === "chess_clock"){
+    const startMs = Math.max(0, Number(timerConfig?.minutes_per_player || 0) * 60 * 1000);
+    ids.forEach(id=>{ timerState.chessClocksMs[id] = startMs; });
+    cards.forEach(card=> card.classList.add("has-player-timer"));
+    if(center) center.style.display = "none";
+  }else if(timerState.mode === "turn_timer"){
+    timerState.ropeRemainingMs = timerState.ropeDurationMs;
+    cards.forEach(card=> card.classList.remove("has-player-timer"));
+    if(center) center.style.display = "block";
+  }else{
+    cards.forEach(card=> card.classList.remove("has-player-timer"));
+    if(center) center.style.display = "none";
+  }
+
+  renderTimers();
+}
+
+function renderTimers(){
+  if(timerState.mode === "chess_clock"){
+    cards.forEach(card=>{
+      const pid = String(card.dataset.player);
+      const el = document.getElementById("timer-" + pid);
+      if(!el) return;
+      el.textContent = formatMs(timerState.chessClocksMs[pid] || 0);
+      el.classList.toggle("active", pid === String(active));
+      el.classList.toggle("low-time", (timerState.chessClocksMs[pid] || 0) <= 10000);
+    });
+  }
+
+  const center = document.getElementById("centralTurnTimer");
+  if(center && timerState.mode === "turn_timer"){
+    center.textContent = formatMs(timerState.ropeRemainingMs);
+    center.classList.toggle("low-time", timerState.ropeRemainingMs <= 10000);
+  }
+}
+
+function pauseTimers(reason){
+  if(!reason) return;
+  timerState.pausedReasons.add(reason);
+}
+
+function resumeTimers(reason){
+  if(!reason) return;
+  timerState.pausedReasons.delete(reason);
+  timerState.lastTickMs = performance.now();
+}
+
+function timersRunning(){
+  return timerState.mode !== "off" && !timerState.timeoutHandled && !timerState.pausedReasons.size && !!active;
+}
+
+function handleTimerTimeout(playerId){
+  if(timerState.timeoutHandled || timerState.timedOutPlayers.has(playerId)) return;
+
+  timerState.timeoutHandled = true;
+  timerState.timedOutPlayers.add(playerId);
+  pauseTimers("timeout");
+  renderTimers();
+
+  const loserName = playerNames[playerId] || "Player";
+  const winnerSelect = document.querySelector('form[action="/end_game"] select[name="winner"]');
+  const winTypeSelect = document.querySelector('form[action="/end_game"] select[name="win_type"]');
+  const survivors = cards
+    .map(c=>String(c.dataset.player))
+    .filter(id => id !== String(playerId));
+
+  if(survivors.length === 1 && winnerSelect){
+    winnerSelect.value = survivors[0];
+  }
+  if(winTypeSelect && !winTypeSelect.value){
+    winTypeSelect.value = "concede";
+  }
+
+  alert(`${loserName} ran out of time.`);
+  try{
+    const modalEl = document.getElementById("menuModal");
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  }catch(e){}
+}
+
+function tickTimers(){
+  const now = performance.now();
+  const elapsed = now - timerState.lastTickMs;
+  timerState.lastTickMs = now;
+
+  if(!timersRunning()) return;
+
+  if(timerState.mode === "chess_clock"){
+    const id = String(active);
+    timerState.chessClocksMs[id] = Math.max(0, (timerState.chessClocksMs[id] || 0) - elapsed);
+    if(timerState.chessClocksMs[id] <= 0){
+      handleTimerTimeout(id);
+    }
+  }else if(timerState.mode === "turn_timer"){
+    timerState.ropeRemainingMs = Math.max(0, timerState.ropeRemainingMs - elapsed);
+    if(timerState.ropeRemainingMs <= 0){
+      handleTimerTimeout(String(active));
+    }
+  }
+
+  renderTimers();
 }
 
 function resetTurnDamage(){
@@ -339,6 +483,7 @@ function positionTurnDamageBadges(){
 }
 
 function nextPlayer(){
+  const previousActive = String(active);
   const ids = getIdsClockwise();
   const idx = ids.indexOf(String(active));
   passed.add(String(active));
@@ -349,7 +494,18 @@ function nextPlayer(){
     updateTurnPills();
   }
 
+  if(timerState.mode === "chess_clock" && previousActive){
+    timerState.chessClocksMs[previousActive] = Math.max(
+      0,
+      (timerState.chessClocksMs[previousActive] || 0) + timerState.chessIncrementMs
+    );
+  }
+
   setActive(ids[(idx+1) % ids.length]);
+  if(timerState.mode === "turn_timer"){
+    timerState.ropeRemainingMs = timerState.ropeDurationMs;
+  }
+  renderTimers();
   resetTurnDamage();
   positionTurnDamageBadges();
 }
@@ -510,6 +666,12 @@ function openMenu(){
   modal.show();
 }
 
+
+document.getElementById("quickMenuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("quick-menu"));
+document.getElementById("quickMenuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("quick-menu"));
+document.getElementById("menuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("end-menu"));
+document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("end-menu"));
+
 const centerPassBtn = document.getElementById("centerPassBtn");
 if(centerPassBtn){
   centerPassBtn.addEventListener("pointerdown", (e)=>{
@@ -545,9 +707,12 @@ if(cards.length){
   const starting = "{{ starting_player_id|default('', true) }}";
   const initialActive = ids.includes(String(starting)) ? String(starting) : ids[0];
   setActive(initialActive);
+  initializeTimers();
   updateTurnPills();
   resetTurnDamage();
 }
+
+setInterval(tickTimers, 250);
 
 showFsOverlayIfNeeded();
 positionTurnDamageBadges();
