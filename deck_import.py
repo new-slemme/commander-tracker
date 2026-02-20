@@ -100,12 +100,47 @@ def parse_deck_input(raw_input: str, *, timeout: int = 15) -> dict[str, Any]:
 
 def parse_moxfield_url(url: str, *, timeout: int = 15) -> ParsedDeck:
     deck_id = _extract_moxfield_deck_id(url)
-    api_url = f"https://api2.moxfield.com/v3/decks/all/{deck_id}"
+    api_urls = [
+        f"https://api2.moxfield.com/v3/decks/all/{deck_id}",
+        f"https://api.moxfield.com/v2/decks/all/{deck_id}",
+        f"https://api2.moxfield.com/v2/decks/all/{deck_id}",
+    ]
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Origin": "https://www.moxfield.com",
+        "Referer": "https://www.moxfield.com/",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+    }
 
-    try:
-        response = requests.get(api_url, timeout=timeout)
-    except requests.RequestException as exc:
-        raise DeckParserError(f"Could not reach Moxfield: {exc}") from exc
+    response: requests.Response | None = None
+    last_error: requests.RequestException | None = None
+
+    for api_url in api_urls:
+        try:
+            candidate = requests.get(api_url, timeout=timeout, headers=headers)
+        except requests.RequestException as exc:
+            last_error = exc
+            continue
+
+        if candidate.status_code in {200, 404}:
+            response = candidate
+            break
+
+        if candidate.status_code == 403:
+            continue
+
+        response = candidate
+        break
+
+    if response is None:
+        if last_error:
+            raise DeckParserError(f"Could not reach Moxfield: {last_error}") from last_error
+        raise DeckParserError(
+            "Moxfield import failed (HTTP 403). This deck may be private or blocked by Moxfield."
+        )
 
     if response.status_code == 404:
         raise DeckParserError("Moxfield deck not found. Please verify the URL is correct and public.")
