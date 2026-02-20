@@ -390,21 +390,38 @@ body.sigtaara-ui .h4 {
 }
 .turn-timer-pill.low-time{ color:#ff9d9d; border-color:rgba(255,114,114,.8); }
 
+.player-flag-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:310;
+  background:rgba(8,11,18,0.32);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .12s ease;
+}
+
+.player-flag-backdrop.is-open{
+  opacity:1;
+  pointer-events:auto;
+}
+
 .player-flag-flyout{
   position:fixed;
   z-index:320;
-  width:min(280px, calc(100vw - 20px));
+  width:min(270px, calc(100vw - 24px));
   display:flex;
   flex-direction:column;
   gap:10px;
-  padding:14px;
-  border-radius:14px;
-  border:1px solid rgba(255,255,255,0.2);
-  background:rgba(18,22,33,0.96);
-  box-shadow:0 14px 30px rgba(0,0,0,0.45);
+  padding:12px;
+  border-radius:13px;
+  border:1px solid rgba(255,255,255,0.16);
+  background:rgba(18,22,33,0.95);
+  box-shadow:0 10px 22px rgba(0,0,0,0.36);
   backdrop-filter:blur(8px);
   opacity:0;
-  transform:translateY(6px) scale(.98);
+  transform:translateY(6px) scale(.985);
   pointer-events:none;
   transition:opacity .12s ease, transform .12s ease;
 }
@@ -470,6 +487,22 @@ body.sigtaara-ui .h4 {
   .quick-menu-btn{
     font-size:.95rem;
     padding:.58rem .8rem;
+  }
+
+  .player-flag-flyout,
+  .player-flag-flyout.is-mobile-layout{
+    left:50% !important;
+    right:auto;
+    top:auto !important;
+    bottom:calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
+    width:min(520px, calc(100vw - 20px));
+    border-radius:16px;
+    transform:translate(-50%, 8px) scale(.99);
+  }
+
+  .player-flag-flyout.is-open,
+  .player-flag-flyout.is-open.is-mobile-layout{
+    transform:translate(-50%, 0) scale(1);
   }
 }
 
