@@ -19,10 +19,68 @@
   .back-btn:hover { color: #fff; border-color: rgba(143,153,197,0.35); background: rgba(255,255,255,0.06); }
   .back-btn:active { transform: scale(0.99); }
 
-  .banner-actions .btn {
+  .menu-trigger {
+    width: 44px;
+    height: 44px;
     border-radius: 14px;
-    padding: 10px 14px;
-    font-weight: 800;
+    border: 1px solid rgba(143,153,197,0.35);
+    background: rgba(20,23,39,0.75);
+    box-shadow: 0 0 18px rgba(0,0,0,0.35);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 0;
+  }
+
+  .menu-trigger span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 99px;
+    background: #f5f6ff;
+    opacity: 0.95;
+  }
+
+  .menu-trigger:hover,
+  .menu-trigger:focus-visible,
+  .menu-trigger:active,
+  .menu-trigger.show {
+    border-color: rgba(255,255,255,0.5);
+    background: rgba(20,23,39,0.9);
+  }
+
+  .banner-menu {
+    border-radius: 14px;
+    border: 1px solid rgba(143,153,197,0.3);
+    background: rgba(20,23,39,0.96);
+    box-shadow: 0 20px 45px rgba(0,0,0,0.45);
+    overflow: hidden;
+    min-width: 190px;
+    padding: 6px;
+  }
+
+  .banner-menu .dropdown-item {
+    color: var(--font-base);
+    border-radius: 10px;
+    font-weight: 700;
+    padding: 10px 12px;
+    background: transparent;
+  }
+
+  .banner-menu .dropdown-item:hover,
+  .banner-menu .dropdown-item:focus-visible {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+  }
+
+  .banner-menu .dropdown-divider {
+    border-color: rgba(143,153,197,0.25);
+  }
+
+  .banner-menu form {
+    margin: 0;
   }
 
   /* Mana icons */
@@ -90,13 +148,12 @@
     }
 
     .banner-actions {
-      width: 100%;
-      justify-content: flex-end;
-      gap: 10px;
+      margin-left: auto;
     }
 
-    .banner-actions form { margin: 0; }
-    .banner-actions .btn { width: auto; padding: 10px 12px; }
+    .banner-menu {
+      min-width: 170px;
+    }
 
     /* Stats grid: 2 columns on mobile */
     .stats-row .col-md-3 {
