@@ -1555,6 +1555,8 @@ def decks():
 
 @app.route("/deck/<int:deck_id>")
 def deck_detail(deck_id):
+    u = get_current_user()
+
     deck = db.session.get(Deck, deck_id)
     if not deck:
         return "Deck not found", 404
@@ -1622,6 +1624,8 @@ def deck_detail(deck_id):
         winrate=winrate,
         history=history,
         matchups=matchups,
+        is_admin=bool(u and u.is_admin),
+        players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
     )
 
 
@@ -1682,20 +1686,20 @@ def update_deck(deck_id):
     deck = db.session.get(Deck, deck_id)
     if not deck:
         flash("Deck not found.")
-        return redirect(url_for("decks"))
+        return redirect(request.form.get("next") or url_for("decks"))
 
     if not u.is_admin and (not u.player or deck.player_id != u.player.id):
         flash("You don't have permission to edit this deck.")
-        return redirect(url_for("decks"))
+        return redirect(request.form.get("next") or url_for("decks"))
 
     name = request.form.get("name", "").strip()
     commander_input = request.form.get("commander", "").strip()
     if not name:
         flash("Deck name is required.")
-        return redirect(url_for("decks"))
+        return redirect(request.form.get("next") or url_for("decks"))
     if not commander_input:
         flash("Commander is required.")
-        return redirect(url_for("decks"))
+        return redirect(request.form.get("next") or url_for("decks"))
 
     deck.name = name
     deck.commander = commander_input
@@ -1727,7 +1731,7 @@ def update_deck(deck_id):
 
     db.session.commit()
     flash(f"Updated deck: {deck.name}")
-    return redirect(url_for("decks"))
+    return redirect(request.form.get("next") or url_for("decks"))
 
 
 @app.route("/add_game")
