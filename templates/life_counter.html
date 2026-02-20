@@ -116,6 +116,7 @@
   </div>
 
   <!-- Player flag fly-out -->
+  <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerFlagFlyout" class="player-flag-flyout" aria-hidden="true">
     <div class="player-flag-flyout__header">
       <h2 class="h5 mb-1" id="playerFlagTitle">Player Flag</h2>
@@ -812,6 +813,18 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   const flyoutEl = document.getElementById("playerFlagFlyout");
   if(!flyoutEl) return;
 
+  const isNarrowViewport = window.matchMedia("(max-width: 576px)").matches;
+  if(isNarrowViewport){
+    flyoutEl.classList.add("is-mobile-layout");
+    flyoutEl.style.left = "50%";
+    flyoutEl.style.top = "auto";
+    flyoutEl.style.bottom = "calc(env(safe-area-inset-bottom, 0px) + 10px)";
+    return;
+  }
+
+  flyoutEl.classList.remove("is-mobile-layout");
+  flyoutEl.style.bottom = "auto";
+
   const rect = anchorEl?.getBoundingClientRect?.();
   const pointerX = Number(pointerEvent?.clientX);
   const pointerY = Number(pointerEvent?.clientY);
@@ -860,10 +873,13 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
 
 function closePlayerFlagMenu(){
   const flyoutEl = document.getElementById("playerFlagFlyout");
+  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl || !playerFlagFlyoutOpen) return;
   playerFlagFlyoutOpen = false;
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
+  backdropEl?.classList.remove("is-open");
+  backdropEl?.setAttribute("aria-hidden", "true");
   resumeTimers("player-flag");
 }
 
@@ -891,11 +907,14 @@ function openPlayerFlagMenu(playerId, anchorEl = null, pointerEvent = null){
   }
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
+  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl) return;
 
   pauseTimers("player-flag");
   flyoutEl.classList.add("is-open");
   flyoutEl.setAttribute("aria-hidden", "false");
+  backdropEl?.classList.add("is-open");
+  backdropEl?.setAttribute("aria-hidden", "false");
   playerFlagFlyoutOpen = true;
   positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
 }
@@ -910,7 +929,12 @@ document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePl
 document.addEventListener("pointerdown", (e)=>{
   if(!playerFlagFlyoutOpen) return;
   const flyoutEl = document.getElementById("playerFlagFlyout");
+  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl || flyoutEl.contains(e.target)) return;
+  if(backdropEl && backdropEl.contains(e.target)){
+    closePlayerFlagMenu();
+    return;
+  }
   closePlayerFlagMenu();
 });
 
