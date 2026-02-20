@@ -115,30 +115,24 @@
     </div>
   </div>
 
-  <!-- Player flag modal -->
-  <div class="modal fade" id="playerFlagModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
-      <div class="modal-content bg-dark text-light">
-        <div class="modal-body p-4 d-flex flex-column gap-3">
-          <div class="text-center mb-2">
-            <h2 class="h4 mb-1" id="playerFlagTitle">Player Flag</h2>
-            <div class="text-secondary" id="playerFlagSubtitle">Flag actions for this player.</div>
-          </div>
-
-          <button class="btn btn-warning btn-lg w-100" id="playerFlagManaBtn" type="button">
-            Mark Mana Fucked
-          </button>
-
-          <button class="btn btn-danger btn-lg w-100" id="playerFlagSaltedBtn" type="button">
-            Mark Salted
-          </button>
-
-          <button class="btn btn-outline-light btn-lg w-100" data-bs-dismiss="modal" type="button">
-            Back to Game
-          </button>
-        </div>
-      </div>
+  <!-- Player flag fly-out -->
+  <div id="playerFlagFlyout" class="player-flag-flyout" aria-hidden="true">
+    <div class="player-flag-flyout__header">
+      <h2 class="h5 mb-1" id="playerFlagTitle">Player Flag</h2>
+      <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Flag actions for this player.</div>
     </div>
+
+    <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
+      Mark Mana Fucked
+    </button>
+
+    <button class="btn btn-danger w-100" id="playerFlagSaltedBtn" type="button">
+      Mark Salted
+    </button>
+
+    <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
+      Back to Game
+    </button>
   </div>
 
   <!-- End game modal -->
@@ -303,6 +297,9 @@ const LIFE_COMMIT_MS = 650;
 const PENDING_FADE_DELAY_MS = 1500;
 const nameLongPressState = {};
 let playerFlagTargetId = null;
+let playerFlagFlyoutOpen = false;
+let playerFlagAnchorEl = null;
+let playerFlagPointer = null;
 const participantFlagsByPlayer = {};
 const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
 const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
@@ -757,10 +754,12 @@ cards.forEach(card=>{
       const state = nameLongPressState[playerId];
       state.handled = false;
       state.pointerId = e.pointerId;
+      playerFlagAnchorEl = nameEl;
+      playerFlagPointer = { clientX: e.clientX, clientY: e.clientY };
       clearTimeout(state.timer);
       state.timer = setTimeout(()=>{
         state.handled = true;
-        openPlayerFlagMenu(playerId);
+        openPlayerFlagMenu(playerId, nameEl, playerFlagPointer);
       }, NAME_LONG_PRESS_MS);
     });
 
@@ -809,8 +808,69 @@ function openMenu(){
   modal.show();
 }
 
-function openPlayerFlagMenu(playerId){
+function positionPlayerFlagFlyout(anchorEl, pointerEvent){
+  const flyoutEl = document.getElementById("playerFlagFlyout");
+  if(!flyoutEl) return;
+
+  const rect = anchorEl?.getBoundingClientRect?.();
+  const pointerX = Number(pointerEvent?.clientX);
+  const pointerY = Number(pointerEvent?.clientY);
+
+  const fallbackX = Number.isFinite(pointerX)
+    ? pointerX
+    : rect
+      ? rect.left + (rect.width / 2)
+      : window.innerWidth / 2;
+  const fallbackY = Number.isFinite(pointerY)
+    ? pointerY
+    : rect
+      ? rect.top
+      : window.innerHeight / 2;
+
+  const padding = 10;
+  const prefOffset = 12;
+
+  flyoutEl.style.left = "0px";
+  flyoutEl.style.top = "0px";
+
+  const flyoutRect = flyoutEl.getBoundingClientRect();
+  const maxLeft = Math.max(padding, window.innerWidth - flyoutRect.width - padding);
+  const maxTop = Math.max(padding, window.innerHeight - flyoutRect.height - padding);
+
+  let left = fallbackX - (flyoutRect.width / 2);
+  let top = fallbackY + prefOffset;
+
+  if(rect){
+    top = rect.bottom + prefOffset;
+    if(top + flyoutRect.height + padding > window.innerHeight){
+      top = rect.top - flyoutRect.height - prefOffset;
+    }
+  }
+
+  if(top + flyoutRect.height + padding > window.innerHeight){
+    top = fallbackY - flyoutRect.height - prefOffset;
+  }
+
+  left = Math.min(Math.max(left, padding), maxLeft);
+  top = Math.min(Math.max(top, padding), maxTop);
+
+  flyoutEl.style.left = `${Math.round(left)}px`;
+  flyoutEl.style.top = `${Math.round(top)}px`;
+}
+
+function closePlayerFlagMenu(){
+  const flyoutEl = document.getElementById("playerFlagFlyout");
+  if(!flyoutEl || !playerFlagFlyoutOpen) return;
+  playerFlagFlyoutOpen = false;
+  flyoutEl.classList.remove("is-open");
+  flyoutEl.setAttribute("aria-hidden", "true");
+  resumeTimers("player-flag");
+}
+
+function openPlayerFlagMenu(playerId, anchorEl = null, pointerEvent = null){
   playerFlagTargetId = String(playerId);
+  playerFlagAnchorEl = anchorEl || playerFlagAnchorEl;
+  playerFlagPointer = pointerEvent || playerFlagPointer;
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
 
   const titleEl = document.getElementById("playerFlagTitle");
@@ -828,19 +888,41 @@ function openPlayerFlagMenu(playerId){
     unmark: "Unmark Salted",
   }, "btn-danger");
 
-  const modalEl = document.getElementById("playerFlagModal");
-  if(!modalEl) return;
-  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-  modal.show();
+  const flyoutEl = document.getElementById("playerFlagFlyout");
+  if(!flyoutEl) return;
+
+  pauseTimers("player-flag");
+  flyoutEl.classList.add("is-open");
+  flyoutEl.setAttribute("aria-hidden", "false");
+  playerFlagFlyoutOpen = true;
+  positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
 }
 
 
 document.getElementById("quickMenuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("quick-menu"));
 document.getElementById("quickMenuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("quick-menu"));
-document.getElementById("playerFlagModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("player-flag"));
-document.getElementById("playerFlagModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("player-flag"));
 document.getElementById("menuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("end-menu"));
 document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("end-menu"));
+document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePlayerFlagMenu);
+
+document.addEventListener("pointerdown", (e)=>{
+  if(!playerFlagFlyoutOpen) return;
+  const flyoutEl = document.getElementById("playerFlagFlyout");
+  if(!flyoutEl || flyoutEl.contains(e.target)) return;
+  closePlayerFlagMenu();
+});
+
+document.addEventListener("keydown", (e)=>{
+  if(e.key === "Escape"){
+    closePlayerFlagMenu();
+  }
+});
+
+window.addEventListener("resize", ()=>{
+  if(playerFlagFlyoutOpen){
+    positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
+  }
+});
 
 document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
@@ -857,7 +939,7 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(nextValue){
     playSfx(manaFuckedAudio);
   }
-  openPlayerFlagMenu(playerFlagTargetId);
+  openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorEl, playerFlagPointer);
 });
 
 document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
@@ -872,7 +954,7 @@ document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const actionText = nextValue ? "flagged as salted" : "unflagged for salted";
   alert(`${playerLabel} was ${actionText}.`);
-  openPlayerFlagMenu(playerFlagTargetId);
+  openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorEl, playerFlagPointer);
 });
 
 document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
