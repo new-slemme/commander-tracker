@@ -63,6 +63,62 @@
       <div class="hint mt-2">Choose who takes turn 1.</div>
     </div>
 
+    <div class="starting-card">
+      <label class="form-label mb-1" for="timerMode">Timer</label>
+      <select name="timer_mode" id="timerMode" class="form-select">
+        <option value="off" selected>Off</option>
+        <option value="chess_clock">Chess Clock</option>
+        <option value="turn_timer">Turn Timer / Rope</option>
+      </select>
+
+      <div id="chessClockConfig" class="row g-2 mt-1 d-none">
+        <div class="col-sm-6">
+          <label class="form-label mb-1" for="timerMinutesPerPlayer">Minutes per player</label>
+          <input
+            type="number"
+            class="form-control"
+            id="timerMinutesPerPlayer"
+            name="timer_minutes_per_player"
+            min="1"
+            max="180"
+            step="1"
+            inputmode="numeric"
+          >
+        </div>
+        <div class="col-sm-6">
+          <label class="form-label mb-1" for="timerIncrementSeconds">Increment (seconds, optional)</label>
+          <input
+            type="number"
+            class="form-control"
+            id="timerIncrementSeconds"
+            name="timer_increment_seconds"
+            min="0"
+            max="300"
+            step="1"
+            inputmode="numeric"
+          >
+        </div>
+      </div>
+
+      <div id="turnTimerConfig" class="row g-2 mt-1 d-none">
+        <div class="col-sm-6">
+          <label class="form-label mb-1" for="timerSecondsPerTurn">Seconds per turn</label>
+          <input
+            type="number"
+            class="form-control"
+            id="timerSecondsPerTurn"
+            name="timer_seconds_per_turn"
+            min="5"
+            max="3600"
+            step="1"
+            inputmode="numeric"
+          >
+        </div>
+      </div>
+
+      <div class="hint mt-2">Choose a clock style, or leave timer off.</div>
+    </div>
+
     <div class="sticky-actions">
       <div class="hint">
         Tip: You can leave unused slots as “- None -”.
@@ -346,6 +402,38 @@
   document.getElementById('playerCountSelect').addEventListener('change', function() {
     applyPlayerCount(Number(this.value));
   });
+
+  function refreshTimerFields() {
+    const modeSelect = document.getElementById("timerMode");
+    const chessCfg = document.getElementById("chessClockConfig");
+    const turnCfg = document.getElementById("turnTimerConfig");
+    const minutesInput = document.getElementById("timerMinutesPerPlayer");
+    const incrementInput = document.getElementById("timerIncrementSeconds");
+    const secondsInput = document.getElementById("timerSecondsPerTurn");
+    if (!modeSelect || !chessCfg || !turnCfg || !minutesInput || !incrementInput || !secondsInput) return;
+
+    const mode = modeSelect.value;
+    const isChess = mode === "chess_clock";
+    const isTurn = mode === "turn_timer";
+
+    chessCfg.classList.toggle("d-none", !isChess);
+    turnCfg.classList.toggle("d-none", !isTurn);
+
+    minutesInput.required = isChess;
+    secondsInput.required = isTurn;
+
+    if (!isChess) {
+      minutesInput.value = "";
+      incrementInput.value = "";
+    }
+
+    if (!isTurn) {
+      secondsInput.value = "";
+    }
+  }
+
+  document.getElementById("timerMode")?.addEventListener("change", refreshTimerFields);
+  refreshTimerFields();
 
   // ---- Fullscreen + Landscape on Start Game (user gesture) ----
   async function requestLifeCounterImmersive() {
