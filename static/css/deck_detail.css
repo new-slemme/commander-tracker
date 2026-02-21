@@ -217,6 +217,16 @@
     background: rgba(255,255,255,0.02);
   }
 
+  @media (min-width: 992px) {
+    .decklist-wide-desktop {
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+      padding-left: clamp(16px, 3vw, 52px);
+      padding-right: clamp(16px, 3vw, 52px);
+      box-sizing: border-box;
+    }
+  }
+
 
   .matchup-link {
     color: inherit;
@@ -247,12 +257,12 @@
 
   @media (min-width: 1200px) {
     .deck-card-grid {
-      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
     }
 
     .commander-grid {
-      grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     }
 
     .deck-card-meta {
