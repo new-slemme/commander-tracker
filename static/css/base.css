@@ -186,6 +186,10 @@
     background-color: var(--base)!important;
   }
 
+  .modal-content {
+    border-radius: 25px;
+  }
+
   .list-group-item { 
     background-color: var(--darker); 
     border-color: var(--font-base); 
