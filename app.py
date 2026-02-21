@@ -198,6 +198,7 @@ class Game(db.Model):
     time_control = db.Column(db.Text, nullable=True)
     ended_on_time = db.Column(db.Boolean, nullable=True)
     duration_seconds = db.Column(db.Integer, nullable=True)
+    ending_turn = db.Column(db.Integer, nullable=True)
 
     note = db.Column(db.Text, nullable=True)
 
@@ -453,6 +454,17 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('006_deck_planned_status')")
+            )
+
+        if "007_game_ending_turn" not in applied:
+            game_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game)")).fetchall()
+            }
+            if "ending_turn" not in game_cols:
+                db.session.execute(text("ALTER TABLE game ADD COLUMN ending_turn INTEGER"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('007_game_ending_turn')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -2693,6 +2705,7 @@ def cancel_game():
     session.pop("game_participants", None)
     session.pop("active_player_id", None)
     session.pop("timer_config", None)
+    session.pop("turn_number", None)
     flash("Game cancelled.")
     return redirect(url_for("play_game"))
 
@@ -2720,6 +2733,7 @@ def life_counter():
         starting_player_id=session.get("active_player_id"),
         timer_config=session.get("timer_config", {"mode": "off"}),
         game_started_at=session.get("game_started_at"),
+        turn_number=session.get("turn_number", 1),
     )
 
 
@@ -2806,6 +2820,16 @@ def end_game():
         if duration_seconds < 0 or duration_seconds > 172800:
             return "Invalid duration_seconds", 400
 
+    ending_turn_raw = (request.form.get("ending_turn") or "").strip()
+    ending_turn = None
+    if ending_turn_raw:
+        try:
+            ending_turn = int(ending_turn_raw)
+        except ValueError:
+            return "Invalid ending_turn", 400
+        if ending_turn < 1 or ending_turn > 500:
+            return "Invalid ending_turn", 400
+
     if timed_mode is None and (time_control is not None or ended_on_time is not None):
         return "Timer metadata requires valid timed_mode", 400
 
@@ -2867,6 +2891,7 @@ def end_game():
         time_control=time_control,
         ended_on_time=ended_on_time,
         duration_seconds=duration_seconds,
+        ending_turn=ending_turn,
         pod_id=active_pod.id,
     )
     db.session.add(game)
@@ -2887,6 +2912,7 @@ def end_game():
     session.pop("active_player_id", None)
     session.pop("timer_config", None)
     session.pop("game_started_at", None)
+    session.pop("turn_number", None)
     return redirect(url_for("index"))
 
 

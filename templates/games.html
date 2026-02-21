@@ -184,6 +184,10 @@
                           <span class="game-submeta__dot">•</span>
                           <span class="game-submeta__item">{{ g.win_type.replace('_',' ')|title }}</span>
                         {% endif %}
+                        {% if g.ending_turn is not none %}
+                          <span class="game-submeta__dot">•</span>
+                          <span class="game-submeta__item">Turn {{ g.ending_turn }}</span>
+                        {% endif %}
                         {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length, 'salt_clicks': 0}) %}
                         {% if salt_stats.salted_players > 0 %}
                           <span class="game-submeta__dot">•</span>
