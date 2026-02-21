@@ -35,6 +35,9 @@
         {% if game.duration_seconds is not none %}
           <span class="pill">Duration: <b class="text-white">{{ (game.duration_seconds // 60) }}m {{ (game.duration_seconds % 60) }}s</b></span>
         {% endif %}
+        {% if game.ending_turn is not none %}
+          <span class="pill">Ending turn: <b class="text-white">{{ game.ending_turn }}</b></span>
+        {% endif %}
         {% if game.ended_on_time is not none %}
           <span class="pill">Ended on time: <b class="text-white">{{ 'Yes' if game.ended_on_time else 'No' }}</b></span>
         {% endif %}

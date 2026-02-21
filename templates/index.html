@@ -251,7 +251,7 @@
 
                     <div class="winner-pill">
                       <span class="dot"></span>
-                      Winner: {{ g.winner.name }}
+                      Winner: {{ g.winner.name }}{% if g.ending_turn is not none %} · Turn {{ g.ending_turn }}{% endif %}
                     </div>
                   </div>
 

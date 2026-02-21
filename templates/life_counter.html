@@ -138,6 +138,7 @@
             <input type="hidden" name="time_control" id="time_control_input" value="">
             <input type="hidden" name="ended_on_time" id="ended_on_time_input" value="">
             <input type="hidden" name="duration_seconds" id="duration_seconds_input" value="">
+            <input type="hidden" name="ending_turn" id="ending_turn_input" value="">
             <input type="hidden" name="participant_flags" id="participant_flags_input" value="{}">
 
             <select name="winner" class="form-select form-select-lg" required>
@@ -233,7 +234,7 @@ document.getElementById("quickQuitBtn")?.addEventListener("click", ()=>{
 
 /* ---------- TURN SYSTEM + TURN DAMAGE ---------- */
 
-let turn = 1;
+let turn = Number({{ turn_number|tojson }} || 1);
 let active = null;
 let passed = new Set();
 let turnDamage = {};
@@ -941,6 +942,7 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
   const timeControlInput = document.getElementById("time_control_input");
   const endedOnTimeInput = document.getElementById("ended_on_time_input");
   const durationSecondsInput = document.getElementById("duration_seconds_input");
+  const endingTurnInput = document.getElementById("ending_turn_input");
   const participantFlagsInput = document.getElementById("participant_flags_input");
 
   const mode = timerState.mode || "off";
@@ -960,6 +962,7 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
   const startedAt = Number.isFinite(gameStartedAt) ? gameStartedAt : 0;
   const durationSeconds = startedAt > 0 ? Math.max(0, nowSeconds - startedAt) : 0;
   if(durationSecondsInput) durationSecondsInput.value = String(durationSeconds);
+  if(endingTurnInput) endingTurnInput.value = String(Math.max(1, Number(turn) || 1));
 
   if(participantFlagsInput){
     const payload = {};
