@@ -1,6 +1,7 @@
 from flask import (
     Flask,
     Response,
+    jsonify,
     render_template,
     request,
     redirect,
@@ -2374,6 +2375,33 @@ def add_deck():
     else:
         flash("Deck added.")
     return redirect(url_for("decks"))
+
+
+@app.route("/api/deck-import-preview", methods=["POST"])
+@login_required
+def deck_import_preview():
+    payload = request.get_json(silent=True) or {}
+    raw_import = (payload.get("raw_import") or "").strip()
+    if not raw_import:
+        return jsonify({"commanders": [], "commander": None})
+
+    try:
+        parsed = parse_deck_input(raw_import)
+    except DeckParserError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    commanders = [name for name in (parsed.get("commanders") or []) if isinstance(name, str) and name.strip()]
+    commander = parsed.get("commander") if isinstance(parsed.get("commander"), str) else None
+    primary = commanders[0] if commanders else None
+    partner = commanders[1] if len(commanders) > 1 else None
+    return jsonify(
+        {
+            "commander": commander,
+            "commanders": commanders,
+            "primary_commander": primary,
+            "partner_commander": partner,
+        }
+    )
 
 
 @app.route("/deck/<int:deck_id>/update", methods=["POST"])
