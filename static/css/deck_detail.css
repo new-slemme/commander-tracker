@@ -219,11 +219,11 @@
 
   @media (min-width: 992px) {
     .decklist-wide-desktop {
+      width: 100vw;
       margin-left: calc(50% - 50vw);
       margin-right: calc(50% - 50vw);
-      padding-left: clamp(16px, 3vw, 52px);
-      padding-right: clamp(16px, 3vw, 52px);
-      box-sizing: border-box;
+      padding-left: calc((100vw - min(100vw - 32px, 1320px)) / 2);
+      padding-right: calc((100vw - min(100vw - 32px, 1320px)) / 2);
     }
   }
 
