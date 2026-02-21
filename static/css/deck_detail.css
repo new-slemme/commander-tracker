@@ -217,6 +217,16 @@
     background: rgba(255,255,255,0.02);
   }
 
+  @media (min-width: 992px) {
+    .decklist-wide-desktop {
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      margin-right: calc(50% - 50vw);
+      padding-left: calc((100vw - min(100vw - 32px, 1320px)) / 2);
+      padding-right: calc((100vw - min(100vw - 32px, 1320px)) / 2);
+    }
+  }
+
 
   .matchup-link {
     color: inherit;
