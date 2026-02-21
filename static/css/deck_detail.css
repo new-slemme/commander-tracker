@@ -257,12 +257,12 @@
 
   @media (min-width: 1200px) {
     .deck-card-grid {
-      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
-      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 14px;
     }
 
     .commander-grid {
-      grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     }
 
     .deck-card-meta {
