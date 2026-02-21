@@ -237,12 +237,12 @@
 
   .deck-card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 12px;
   }
 
   .commander-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
 
   .deck-card-entry {
@@ -256,7 +256,7 @@
     position: relative;
     width: 100%;
     background: rgba(20,23,39,0.85);
-    min-height: 265px;
+    aspect-ratio: 63 / 88;
   }
 
   .deck-card-image {
@@ -276,6 +276,31 @@
   .deck-card-name {
     font-weight: 600;
     line-height: 1.25;
+  }
+
+  @media (max-width: 768px) {
+    .deck-card-grid {
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+    }
+
+    .commander-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+
+    .deck-card-meta {
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .deck-card-name {
+      font-size: 0.95rem;
+      line-height: 1.2;
+    }
+
+    .decklist-qty {
+      min-width: 1.8rem;
+    }
   }
 
   .deck-card-missing-image .deck-card-image-wrap::before {
