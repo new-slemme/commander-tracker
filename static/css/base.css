@@ -182,6 +182,10 @@
       box-shadow: inset 0 0 0 9999px var(--bs-table-accent-bg);
   }
 
+  .bg-dark {
+    background-color: var(--base)!important;
+  }
+
   .list-group-item { 
     background-color: var(--darker); 
     border-color: var(--font-base); 
