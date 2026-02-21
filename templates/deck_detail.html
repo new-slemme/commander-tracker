@@ -178,6 +178,9 @@
 
   {% if decklist_data.has_list %}
     {% if decklist_data.mode == 'parsed' %}
+      {% set commander_sections = decklist_data.sections | selectattr('key', 'equalto', 'commander') | list %}
+      {% set commander_section = commander_sections[0] if commander_sections else None %}
+
       <div class="decklist-summary mt-3">
         <span class="badge rounded-pill text-bg-dark">Total cards: {{ decklist_data.total_cards }}</span>
         <span class="badge rounded-pill text-bg-dark">Commander cards: {{ decklist_data.commander_count }}</span>
@@ -189,21 +192,53 @@
         {% endfor %}
       </ul>
 
+      {% if commander_section %}
+        <div class="card p-3 mt-3 decklist-card commander-showcase">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0">Commander</h5>
+            <small class="text-muted">{{ commander_section.total }} cards</small>
+          </div>
+          <div class="deck-card-grid commander-grid">
+            {% for entry in commander_section.entries %}
+              <article class="deck-card-entry" data-card-name="{{ entry.name }}">
+                <div class="deck-card-image-wrap">
+                  <img class="deck-card-image" alt="{{ entry.name }}" loading="lazy">
+                </div>
+                <div class="deck-card-meta">
+                  <span class="decklist-qty">{{ entry.quantity }}×</span>
+                  <span class="deck-card-name">{{ entry.name }}</span>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
       <div class="row g-3 mt-1">
         {% for section in decklist_data.sections %}
+          {% if section.key != 'commander' %}
           <div class="col-lg-6">
             <div class="card p-3 h-100 decklist-card">
               <div class="d-flex justify-content-between align-items-center mb-2">
                 <h5 class="mb-0">{{ section.label }}</h5>
                 <small class="text-muted">{{ section.total }} cards</small>
               </div>
-              <ul class="list-unstyled mb-0 decklist-entries">
+              <div class="deck-card-grid">
                 {% for entry in section.entries %}
-                  <li><span class="decklist-qty">{{ entry.quantity }}×</span> {{ entry.name }}</li>
+                  <article class="deck-card-entry" data-card-name="{{ entry.name }}">
+                    <div class="deck-card-image-wrap">
+                      <img class="deck-card-image" alt="{{ entry.name }}" loading="lazy">
+                    </div>
+                    <div class="deck-card-meta">
+                      <span class="decklist-qty">{{ entry.quantity }}×</span>
+                      <span class="deck-card-name">{{ entry.name }}</span>
+                    </div>
+                  </article>
                 {% endfor %}
-              </ul>
+              </div>
             </div>
           </div>
+          {% endif %}
         {% endfor %}
       </div>
 
@@ -517,6 +552,46 @@
     });
   }
 
+
+
+  async function scryfallCardImageByName(name) {
+    const url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const card = await res.json();
+
+    if (card?.image_uris?.normal) return card.image_uris.normal;
+    if (Array.isArray(card?.card_faces)) {
+      for (const face of card.card_faces) {
+        if (face?.image_uris?.normal) return face.image_uris.normal;
+      }
+    }
+    return null;
+  }
+
+  async function hydrateDeckCardImages() {
+    const entries = Array.from(document.querySelectorAll('.deck-card-entry[data-card-name]'));
+    if (!entries.length) return;
+
+    const cache = new Map();
+    await Promise.all(entries.map(async (entry) => {
+      const name = (entry.getAttribute('data-card-name') || '').trim();
+      const img = entry.querySelector('.deck-card-image');
+      if (!name || !img) return;
+
+      if (!cache.has(name)) {
+        cache.set(name, scryfallCardImageByName(name).catch(() => null));
+      }
+
+      const src = await cache.get(name);
+      if (src) {
+        img.src = src;
+      } else {
+        entry.classList.add('deck-card-missing-image');
+      }
+    }));
+  }
+
   async function fetchImportPreview(rawImport) {
     const res = await fetch('/api/deck-import-preview', {
       method: 'POST',
@@ -576,6 +651,7 @@
 
   initCommanderAutocomplete(editCommanderInput, 'editCommanderSuggestMenu', (name) => setCommanderPreview(name, editPreviewWrap, editPreviewImg));
   initCommanderAutocomplete(editPartnerInput, 'editPartnerCommanderSuggestMenu', (name) => setCommanderPreview(name, editPartnerPreviewWrap, editPartnerPreviewImg));
+  hydrateDeckCardImages();
 </script>
 
 {% endblock %}
