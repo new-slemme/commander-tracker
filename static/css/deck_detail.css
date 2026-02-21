@@ -237,12 +237,32 @@
 
   .deck-card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
     gap: 12px;
   }
 
   .commander-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+
+  @media (min-width: 1200px) {
+    .deck-card-grid {
+      grid-template-columns: repeat(auto-fill, minmax(115px, 1fr));
+      gap: 10px;
+    }
+
+    .commander-grid {
+      grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
+    }
+
+    .deck-card-meta {
+      gap: 6px;
+      padding: 8px;
+    }
+
+    .deck-card-name {
+      font-size: 0.9rem;
+    }
   }
 
   .deck-card-entry {
