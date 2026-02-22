@@ -733,101 +733,6 @@ function openMenu(){
   modal.show();
 }
 
-function getPlayerFacingDirection(cardEl){
-  if(!cardEl?.classList) return "up";
-
-  if(cardEl.classList.contains("left-card")) return "right";
-  if(cardEl.classList.contains("right-card") || cardEl.classList.contains("p3-slot-3")) return "left";
-  if(cardEl.classList.contains("top-card")) return "down";
-  return "up";
-}
-
-function positionPlayerFlagFlyout(anchorEl, pointerEvent){
-  const flyoutEl = document.getElementById("playerFlagFlyout");
-  if(!flyoutEl) return;
-
-  const isNarrowViewport = window.matchMedia("(max-width: 576px)").matches;
-  flyoutEl.classList.toggle("is-mobile-layout", isNarrowViewport);
-  flyoutEl.style.bottom = "auto";
-
-  const cardEl = anchorEl?.closest?.(".life-card") || null;
-  const playerFacingDirection = getPlayerFacingDirection(cardEl);
-  const opensDownward = playerFacingDirection === "down";
-  flyoutEl.classList.toggle("face-top", opensDownward);
-  flyoutEl.classList.toggle("face-bottom", !opensDownward);
-  flyoutEl.classList.remove("face-up", "face-right", "face-down", "face-left");
-  flyoutEl.classList.add(`face-${playerFacingDirection}`);
-
-  const rect = anchorEl?.getBoundingClientRect?.() || cardEl?.getBoundingClientRect?.() || null;
-  const cardRect = cardEl?.getBoundingClientRect?.() || rect;
-  const pointerX = Number(pointerEvent?.clientX);
-  const pointerY = Number(pointerEvent?.clientY);
-  const viewportMidX = window.innerWidth / 2;
-
-  const fallbackX = Number.isFinite(pointerX)
-    ? pointerX
-    : cardRect
-      ? cardRect.left + (cardRect.width / 2)
-      : window.innerWidth / 2;
-  const fallbackY = Number.isFinite(pointerY)
-    ? pointerY
-    : rect
-      ? rect.top
-      : window.innerHeight / 2;
-
-  const padding = 10;
-  const sideInset = isNarrowViewport ? 10 : 14;
-  const verticalOffset = 12;
-  const anchorOnLeftHalf = (cardRect ? (cardRect.left + (cardRect.width / 2)) : fallbackX) < viewportMidX;
-
-  flyoutEl.style.left = "0px";
-  flyoutEl.style.top = "0px";
-
-  const flyoutRect = flyoutEl.getBoundingClientRect();
-  const maxLeft = Math.max(padding, window.innerWidth - flyoutRect.width - padding);
-  const maxTop = Math.max(padding, window.innerHeight - flyoutRect.height - padding);
-
-  let left = anchorOnLeftHalf
-    ? sideInset
-    : window.innerWidth - flyoutRect.width - sideInset;
-
-  if(playerFacingDirection === "left"){
-    if(rect){
-      left = rect.left - flyoutRect.width - verticalOffset;
-    }else{
-      left = fallbackX - flyoutRect.width - verticalOffset;
-    }
-  }else if(playerFacingDirection === "right"){
-    if(rect){
-      left = rect.right + verticalOffset;
-    }else{
-      left = fallbackX + verticalOffset;
-    }
-  }
-
-  let top;
-  if(playerFacingDirection === "left" || playerFacingDirection === "right"){
-    const verticalAnchor = rect
-      ? (rect.top + (rect.height / 2))
-      : fallbackY;
-    top = verticalAnchor - (flyoutRect.height / 2);
-  }else if(rect){
-    top = opensDownward
-      ? rect.bottom + verticalOffset
-      : rect.top - flyoutRect.height - verticalOffset;
-  }else{
-    top = opensDownward
-      ? fallbackY + verticalOffset
-      : fallbackY - flyoutRect.height - verticalOffset;
-  }
-
-  left = Math.min(Math.max(left, padding), maxLeft);
-  top = Math.min(Math.max(top, padding), maxTop);
-
-  flyoutEl.style.left = `${Math.round(left)}px`;
-  flyoutEl.style.top = `${Math.round(top)}px`;
-}
-
 function closePlayerFlagMenu(){
   const flyoutEl = document.getElementById("playerFlagFlyout");
   const backdropEl = document.getElementById("playerFlagBackdrop");
@@ -873,7 +778,6 @@ function openPlayerFlagMenu(playerId, anchorEl = null, pointerEvent = null){
   backdropEl?.classList.add("is-open");
   backdropEl?.setAttribute("aria-hidden", "false");
   playerFlagFlyoutOpen = true;
-  positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
 }
 
 
@@ -893,12 +797,6 @@ document.addEventListener("pointerdown", (e)=>{
 document.addEventListener("keydown", (e)=>{
   if(e.key === "Escape"){
     closePlayerFlagMenu();
-  }
-});
-
-window.addEventListener("resize", ()=>{
-  if(playerFlagFlyoutOpen){
-    positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
   }
 });
 
