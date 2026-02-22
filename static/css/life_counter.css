@@ -416,34 +416,35 @@ body.sigtaara-ui .h4 {
   position:fixed;
   inset:0;
   z-index:310;
-  background:rgba(8,11,18,0.32);
-  backdrop-filter:blur(3px);
-  -webkit-backdrop-filter:blur(3px);
+  background:rgba(8,11,18,0.03);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
   opacity:0;
   pointer-events:none;
   transition:opacity .12s ease;
 }
 
 .player-flag-backdrop.is-open{
-  opacity:1;
-  pointer-events:auto;
+  opacity:.01;
+  pointer-events:none;
 }
 
 .player-flag-flyout{
   position:fixed;
   z-index:320;
-  width:min(270px, calc(100vw - 24px));
+  width:min(260px, calc(100vw - 24px));
   display:flex;
   flex-direction:column;
-  gap:10px;
-  padding:12px;
-  border-radius:13px;
-  border:1px solid rgba(255,255,255,0.16);
-  background:rgba(18,22,33,0.95);
-  box-shadow:0 10px 22px rgba(0,0,0,0.36);
-  backdrop-filter:blur(8px);
+  gap:8px;
+  padding:10px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.10);
+  background:rgba(17,22,34,0.90);
+  box-shadow:0 6px 14px rgba(0,0,0,0.26);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
   opacity:0;
-  transform:translateY(6px) scale(.985);
+  transform:translateY(4px) scale(.992);
   pointer-events:none;
   transition:opacity .12s ease, transform .12s ease;
 }
@@ -459,9 +460,9 @@ body.sigtaara-ui .h4 {
 }
 
 .player-flag-flyout__subtitle{
-  color:rgba(226,231,240,0.75);
-  font-size:.88rem;
-  line-height:1.25;
+  color:rgba(226,231,240,0.68);
+  font-size:.84rem;
+  line-height:1.2;
 }
 
 .players-3 .life-card.p3-slot-3 .player-timer{ top:auto; bottom:12px; }
@@ -496,6 +497,12 @@ body.sigtaara-ui .h4 {
   font-weight:700;
 }
 
+.player-flag-flyout .btn{
+  padding:.42rem .62rem;
+  font-size:.92rem;
+  border-radius:.56rem;
+}
+
 @media (max-width:576px){
   #quickMenuModal .modal-dialog.quick-menu-sheet-dialog{
     margin:.35rem;
@@ -518,8 +525,8 @@ body.sigtaara-ui .h4 {
     top:auto !important;
     bottom:calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
     width:min(520px, calc(100vw - 20px));
-    border-radius:16px;
-    transform:translate(-50%, 8px) scale(.99);
+    border-radius:14px;
+    transform:translate(-50%, 6px) scale(.995);
   }
 
   .player-flag-flyout.is-open,
