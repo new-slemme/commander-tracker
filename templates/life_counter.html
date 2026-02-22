@@ -260,6 +260,7 @@ const PENDING_FADE_DELAY_MS = 1500;
 const saltButtonPressState = {};
 let playerFlagTargetId = null;
 let playerFlagFlyoutOpen = false;
+let playerFlagAnchorButton = null;
 const participantFlagsByPlayer = {};
 const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
 const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
@@ -727,20 +728,66 @@ function openMenu(){
   modal.show();
 }
 
+function getPlayerCardOrientation(playerCard){
+  if(!playerCard) return "0deg";
+  if(playerCard.classList.contains("top-card")) return "180deg";
+
+  const lifeGrid = document.getElementById("lifeGrid");
+  if(lifeGrid?.classList.contains("players-2")){
+    if(playerCard.classList.contains("left-card")) return "90deg";
+    if(playerCard.classList.contains("right-card")) return "-90deg";
+  }
+
+  if(lifeGrid?.classList.contains("players-3") && playerCard.classList.contains("p3-slot-3")) return "-90deg";
+
+  return "0deg";
+}
+
+function positionPlayerFlagMenu(anchorButton, playerCard){
+  const flyoutEl = document.getElementById("playerFlagFlyout");
+  if(!flyoutEl || !anchorButton || !playerCard) return;
+
+  const viewportPadding = 10;
+  const cardPadding = 8;
+  const anchorRect = anchorButton.getBoundingClientRect();
+  const cardRect = playerCard.getBoundingClientRect();
+
+  const flyoutWidth = Math.min(320, Math.max(250, window.innerWidth - (viewportPadding * 2)));
+  flyoutEl.style.width = `${flyoutWidth}px`;
+
+  const availableRightInCard = cardRect.right - anchorRect.right;
+  const openToRight = availableRightInCard >= flyoutWidth + cardPadding;
+  let left = openToRight ? (anchorRect.right + 10) : (anchorRect.left - flyoutWidth - 10);
+
+  const cardLeftBound = cardRect.left + cardPadding;
+  const cardRightBound = cardRect.right - flyoutWidth - cardPadding;
+  left = Math.min(Math.max(left, cardLeftBound), cardRightBound);
+  left = Math.min(Math.max(left, viewportPadding), window.innerWidth - flyoutWidth - viewportPadding);
+
+  const anchorCenterY = anchorRect.top + (anchorRect.height / 2);
+  const minTop = Math.max(viewportPadding + 110, cardRect.top + 110);
+  const maxTop = Math.min(window.innerHeight - viewportPadding - 110, cardRect.bottom - 110);
+  const top = Math.min(Math.max(anchorCenterY, minTop), maxTop);
+
+  flyoutEl.style.setProperty("--flyout-left", `${left}px`);
+  flyoutEl.style.setProperty("--flyout-top", `${top}px`);
+}
+
 function closePlayerFlagMenu(){
   const flyoutEl = document.getElementById("playerFlagFlyout");
-  const backdropEl = document.getElementById("playerFlagBackdrop");
+  const activeCard = document.querySelector(".life-card.flag-menu-open");
   if(!flyoutEl || !playerFlagFlyoutOpen) return;
   playerFlagFlyoutOpen = false;
+  playerFlagAnchorButton = null;
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
-  backdropEl?.classList.remove("is-open");
-  backdropEl?.setAttribute("aria-hidden", "true");
+  activeCard?.classList.remove("flag-menu-open");
   resumeTimers("player-flag");
 }
 
-function openPlayerFlagMenu(playerId){
+function openPlayerFlagMenu(playerId, anchorButton){
   playerFlagTargetId = String(playerId);
+  playerFlagAnchorButton = anchorButton || null;
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
 
   const titleEl = document.getElementById("playerFlagTitle");
@@ -755,14 +802,18 @@ function openPlayerFlagMenu(playerId){
   }, "btn-warning");
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
-  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl) return;
+
+  const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
+  document.querySelectorAll(".life-card.flag-menu-open").forEach((card)=>card.classList.remove("flag-menu-open"));
+  playerCard?.classList.add("flag-menu-open");
+
+  flyoutEl.style.setProperty("--flyout-rotation", getPlayerCardOrientation(playerCard));
+  positionPlayerFlagMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 
   pauseTimers("player-flag");
   flyoutEl.classList.add("is-open");
   flyoutEl.setAttribute("aria-hidden", "false");
-  backdropEl?.classList.add("is-open");
-  backdropEl?.setAttribute("aria-hidden", "false");
   playerFlagFlyoutOpen = true;
 }
 
@@ -776,8 +827,14 @@ document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePl
 document.addEventListener("pointerdown", (e)=>{
   if(!playerFlagFlyoutOpen) return;
   const flyoutEl = document.getElementById("playerFlagFlyout");
-  if(!flyoutEl || flyoutEl.contains(e.target)) return;
+  if(!flyoutEl || flyoutEl.contains(e.target) || playerFlagAnchorButton?.contains?.(e.target)) return;
   closePlayerFlagMenu();
+});
+
+window.addEventListener("resize", ()=>{
+  if(!playerFlagFlyoutOpen || !playerFlagTargetId) return;
+  const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
+  positionPlayerFlagMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 });
 
 document.addEventListener("keydown", (e)=>{
@@ -801,7 +858,7 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(nextValue){
     playSfx(manaFuckedAudio);
   }
-  openPlayerFlagMenu(playerFlagTargetId);
+  openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorButton);
 });
 
 function incrementSaltForPlayer(playerId){
@@ -840,7 +897,7 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
     clearTimeout(state.timer);
     state.timer = setTimeout(()=>{
       state.handled = true;
-      openPlayerFlagMenu(playerId);
+      openPlayerFlagMenu(playerId, saltBtn);
     }, SALT_BUTTON_LONG_PRESS_MS);
   });
 
