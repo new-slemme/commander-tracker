@@ -640,11 +640,6 @@
   }
 }
 
-/* When expanded: hide redundant meta lines in details */
-.game-tile.is-open .game-meta--redundant {
-  display: none !important;
-}
-
 /* When expanded: make summary a tight header only */
 .game-tile.is-open .game-content--summary {
   padding: 10px 12px 8px;
@@ -653,12 +648,6 @@
 /* Keep summary extras hidden when open */
 .game-tile.is-open .game-summary-extras {
   display: none !important;
-}
-
-/* Pull details up immediately */
-.game-tile.is-open .game-content--details {
-  padding-top: 0;
-  margin-top: 0;
 }
 
 /* Open header inside details */
@@ -735,16 +724,20 @@
     padding: 8px 10px 6px;
   }
 
-  /* ------------------ HARD FIX: when open on mobile, hide summary entirely ------------------ */
+  /* Expanded tile mobile layout: hide summary, compact details, remove redundant meta */
   .game-tile.is-open > summary.game-content--summary {
     display: none !important;
   }
 
-  /* Remove any top padding that came from the shared .game-content class */
   .game-tile.is-open .game-content--details {
-    padding: 10px 11px 12px;   /* tight */
-    transform: none;           /* avoid the translateY visual gap */
+    padding: 10px 11px 12px;
+    margin-top: 0;
+    transform: none;
     opacity: 1;
+  }
+
+  .game-tile.is-open .game-meta--redundant {
+    display: none !important;
   }
 
   /* Open header inside details (mobile sizing/spacing only) */
@@ -768,8 +761,4 @@
     height: 34px;
   }
 
-  /* Keep your redundant meta hidden when open (desktop too) */
-  .game-tile.is-open .game-meta--redundant {
-    display: none !important;
-  }
 }
