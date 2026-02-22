@@ -140,28 +140,6 @@ body.sigtaara-ui .h4 {
       box-shadow:0 0 0 4px rgba(53,120,255,0.6), 0 6px 16px rgba(0,0,0,0.42);
     }
 
-    .life-card.top-card .salt-dispenser-btn{
-      left:auto;
-      right:10px;
-      transform:translateY(-50%) rotate(180deg);
-    }
-
-    .players-2 .life-card.left-card .salt-dispenser-btn{
-      top:10px;
-      left:50%;
-      right:auto;
-      transform:translateX(-50%) rotate(90deg);
-    }
-
-    .players-2 .life-card.right-card .salt-dispenser-btn,
-    .players-3 .life-card.p3-slot-3 .salt-dispenser-btn{
-      top:auto;
-      bottom:10px;
-      left:50%;
-      right:auto;
-      transform:translateX(-50%) rotate(-90deg);
-    }
-
     .life-display{
       font-size:clamp(3.25rem, 18vh, 11rem);
       font-weight:900;
@@ -584,11 +562,6 @@ body.sigtaara-ui .h4 {
   color:#f6d35f;
   background:rgba(255,195,37,0.14);
   border:1px solid rgba(247,212,111,0.36);
-}
-
-.player-flag-flyout #playerFlagSaltedBtn{
-  color:#f7f8fb;
-  background:#de3246;
 }
 
 .player-flag-flyout #playerFlagCloseBtn{

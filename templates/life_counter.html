@@ -128,10 +128,6 @@
         Mark Mana Fucked
       </button>
 
-      <button class="btn btn-danger w-100" id="playerFlagSaltedBtn" type="button">
-        Add Salt (+1)
-      </button>
-
       <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
         Back to Game
       </button>
@@ -757,12 +753,6 @@ function openPlayerFlagMenu(playerId){
     mark: "Mark Mana Fucked",
     unmark: "Unmark Mana Fucked",
   }, "btn-warning");
-  const saltBtn = document.getElementById("playerFlagSaltedBtn");
-  if(saltBtn){
-    saltBtn.textContent = `Add Salt (+1) · Salt: ${playerFlags.salt_count}`;
-    saltBtn.classList.add("btn-danger");
-    saltBtn.classList.remove("btn-outline-danger");
-  }
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
   const backdropEl = document.getElementById("playerFlagBackdrop");
@@ -829,12 +819,6 @@ function incrementSaltForPlayer(playerId){
   return nextCount;
 }
 
-document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
-  if(!playerFlagTargetId) return;
-  incrementSaltForPlayer(playerFlagTargetId);
-  openPlayerFlagMenu(playerFlagTargetId);
-});
-
 document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
   const playerId = String(saltBtn.dataset.player);
 
@@ -877,7 +861,7 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
       return;
     }
 
-    openPlayerFlagMenu(playerId);
+    incrementSaltForPlayer(playerId);
   };
 
   const cancelSaltButtonPress = (event)=>{
