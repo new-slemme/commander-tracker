@@ -385,7 +385,11 @@
 
 /* ---------- Details section + animation ---------- */
 .game-content--details {
-  padding-top: 0;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(143,153,197,0.24);
+  background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015));
+  gap: 14px;
   display: none;
   opacity: 0;
   transform: translateY(-4px);
@@ -421,7 +425,9 @@
 .players-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  gap: 10px;
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
 
 .ppill {
@@ -655,12 +661,12 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   padding: 10px 12px;
   border: 1px solid rgba(143,153,197,0.22);
   background: rgba(255,255,255,0.05);
   border-radius: 14px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .open-head__left {
@@ -714,8 +720,8 @@
 /* The “big dark slab” effect is mostly overlay; soften it when open */
 .game-tile.is-open .game-overlay {
   background:
-    linear-gradient(90deg, rgba(0,0,0,0.60), rgba(0,0,0,0.40)),
-    radial-gradient(circle at 18% 30%, rgba(0,0,0,0.30), transparent 55%);
+    linear-gradient(90deg, rgba(0,0,0,0.50), rgba(0,0,0,0.30)),
+    radial-gradient(circle at 18% 30%, rgba(0,0,0,0.20), transparent 55%);
 }
 
 /* Mobile: even tighter */
@@ -731,9 +737,11 @@
 
   .game-tile.is-open .game-content--details {
     padding: 10px 11px 12px;
+    border-top-color: rgba(143,153,197,0.20);
     margin-top: 0;
     transform: none;
     opacity: 1;
+    gap: 12px;
   }
 
   .game-tile.is-open .game-meta--redundant {
@@ -744,7 +752,7 @@
   .open-head {
     gap: 10px;
     padding: 8px 10px;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
   }
 
   .open-head__meta {
