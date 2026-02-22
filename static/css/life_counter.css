@@ -618,19 +618,12 @@ body.sigtaara-ui .h4 {
   border-radius:18px;
 }
 
-.player-flag-flyout.face-right .player-flag-flyout__content,
-.player-flag-flyout.face-left .player-flag-flyout__content{
+.player-flag-flyout.face-left .player-flag-flyout__content,
+.player-flag-flyout.face-right .player-flag-flyout__content{
+  flex-direction:row;
   align-items:stretch;
   justify-content:space-between;
   gap:12px;
-}
-
-.player-flag-flyout.face-right .player-flag-flyout__content{
-  flex-direction:row;
-}
-
-.player-flag-flyout.face-left .player-flag-flyout__content{
-  flex-direction:row-reverse;
 }
 
 .player-flag-flyout.face-left .player-flag-flyout__header,
@@ -646,22 +639,11 @@ body.sigtaara-ui .h4 {
 .player-flag-flyout.face-right .btn{
   flex:1;
   min-height:220px;
+  writing-mode:vertical-rl;
   text-orientation:mixed;
   font-size:2.05rem;
   letter-spacing:.02em;
   text-transform:uppercase;
-}
-
-.player-flag-flyout.face-right .btn{
-  writing-mode:vertical-rl;
-}
-
-.player-flag-flyout.face-left .btn{
-  writing-mode:vertical-lr;
-}
-
-.player-flag-flyout.face-down .player-flag-flyout__content{
-  transform:rotate(180deg);
 }
 
 @media (max-width:576px){
