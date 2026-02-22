@@ -110,22 +110,24 @@
   <!-- Player flag fly-out -->
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerFlagFlyout" class="player-flag-flyout" aria-hidden="true">
-    <div class="player-flag-flyout__header">
-      <h2 class="h5 mb-1" id="playerFlagTitle">Player Flag</h2>
-      <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Flag actions for this player.</div>
+    <div class="player-flag-flyout__content">
+      <div class="player-flag-flyout__header">
+        <h2 class="h5 mb-1" id="playerFlagTitle">Player Flag</h2>
+        <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Flag actions for this player.</div>
+      </div>
+
+      <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
+        Mark Mana Fucked
+      </button>
+
+      <button class="btn btn-danger w-100" id="playerFlagSaltedBtn" type="button">
+        Add Salt (+1)
+      </button>
+
+      <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
+        Back to Game
+      </button>
     </div>
-
-    <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
-      Mark Mana Fucked
-    </button>
-
-    <button class="btn btn-danger w-100" id="playerFlagSaltedBtn" type="button">
-      Add Salt (+1)
-    </button>
-
-    <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
-      Back to Game
-    </button>
   </div>
 
   <!-- End game modal -->
@@ -773,6 +775,10 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   flyoutEl.style.bottom = "auto";
 
   const cardEl = anchorEl?.closest?.(".life-card") || null;
+  const isTopOrientedCard = !!cardEl?.classList?.contains("top-card");
+  flyoutEl.classList.toggle("face-top", isTopOrientedCard);
+  flyoutEl.classList.toggle("face-bottom", !isTopOrientedCard);
+
   const rect = anchorEl?.getBoundingClientRect?.() || cardEl?.getBoundingClientRect?.() || null;
   const cardRect = cardEl?.getBoundingClientRect?.() || rect;
   const pointerX = Number(pointerEvent?.clientX);
@@ -794,7 +800,6 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   const sideInset = isNarrowViewport ? 10 : 14;
   const verticalOffset = 12;
   const anchorOnLeftHalf = (cardRect ? (cardRect.left + (cardRect.width / 2)) : fallbackX) < viewportMidX;
-  const isTopOrientedCard = !!cardEl?.classList?.contains("top-card");
 
   flyoutEl.style.left = "0px";
   flyoutEl.style.top = "0px";
