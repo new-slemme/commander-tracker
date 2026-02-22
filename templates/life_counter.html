@@ -120,8 +120,8 @@
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true">
     <div class="player-salt-flyout__content">
-      <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
-        Mana-Fucked
+      <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
+        <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
       </button>
 
       <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
@@ -287,12 +287,18 @@ function setPlayerFlagState(playerId, nextFlags){
   };
 }
 
-function updatePlayerFlagButton(buttonId, enabled, labels, baseClass){
+function updatePlayerFlagButtonState(buttonId, enabled, inactiveClass, activeClass, ariaLabels){
   const btn = document.getElementById(buttonId);
   if(!btn) return;
-  btn.textContent = enabled ? labels.unmark : labels.mark;
-  btn.classList.toggle(baseClass, !enabled);
-  btn.classList.toggle(`btn-outline-${baseClass.replace("btn-", "")}`, enabled);
+
+  btn.classList.toggle(inactiveClass, !enabled);
+  btn.classList.toggle(activeClass, enabled);
+  btn.classList.toggle("is-active", enabled);
+  btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+
+  if(ariaLabels){
+    btn.setAttribute("aria-label", enabled ? ariaLabels.active : ariaLabels.inactive);
+  }
 }
 
 const cards = [...document.querySelectorAll(".life-card")];
@@ -750,10 +756,16 @@ function openPlayerSaltMenu(playerId, anchorButton){
   if(subtitleEl) subtitleEl.textContent = `Salt actions for ${playerLabel}.`;
 
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
-  updatePlayerFlagButton("playerFlagManaBtn", playerFlags.mana_fucked, {
-    mark: `Mark Mana Fucked (+${manaFuckedSaltValue} Salt)`,
-    unmark: `Unmark Mana Fucked (-${manaFuckedSaltValue} Salt)`,
-  }, "btn-warning");
+  updatePlayerFlagButtonState(
+    "playerFlagManaBtn",
+    playerFlags.mana_fucked,
+    "btn-warning",
+    "btn-outline-warning",
+    {
+      inactive: `Mark ${playerLabel} as mana-fucked (+${manaFuckedSaltValue} salt)`,
+      active: `Unmark ${playerLabel} as mana-fucked (-${manaFuckedSaltValue} salt)`,
+    }
+  );
 
   const flyoutEl = document.getElementById("playerSaltFlyout");
   if(!flyoutEl) return;
