@@ -465,14 +465,14 @@ body.sigtaara-ui .h4 {
   top:50%;
   left:50%;
   z-index:320;
-  width:min(520px, calc(100vw - 28px));
-  min-height:220px;
-  max-height:min(76vh, 560px);
-  padding:14px;
-  border-radius:22px;
-  border:2px solid rgba(162,177,211,0.32);
-  background:linear-gradient(160deg, rgba(8,16,45,0.95), rgba(8,19,56,0.94));
-  box-shadow:0 30px 84px rgba(0,0,0,0.68), 0 0 0 1px rgba(255,255,255,0.05);
+  width:min(640px, calc(100vw - 24px));
+  min-height:300px;
+  max-height:min(82vh, 640px);
+  padding:20px;
+  border-radius:28px;
+  border:3px solid rgba(234,243,255,0.68);
+  background:linear-gradient(162deg, rgba(8,17,47,0.97), rgba(10,21,58,0.96));
+  box-shadow:0 34px 90px rgba(0,0,0,0.72), 0 0 0 2px rgba(255,255,255,0.12);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
   opacity:0;
@@ -484,7 +484,7 @@ body.sigtaara-ui .h4 {
 .player-flag-flyout__content{
   display:flex;
   flex-direction:column;
-  gap:10px;
+  gap:14px;
 }
 
 .player-flag-flyout.is-open{
@@ -543,41 +543,40 @@ body.sigtaara-ui .h4 {
   font-weight:700;
 }
 
-.player-flag-flyout .btn{
-  min-height:66px;
-  padding:.7rem 1rem;
+.player-flag-flyout__action{
+  width:100%;
+  min-height:84px;
+  padding:1rem 1.2rem;
   border-radius:18px;
-  font-size:clamp(1rem,2vw,1.08rem);
-  font-weight:800;
-  border-width:0;
+  font-size:clamp(1.35rem, 3.3vw, 2rem);
+  font-weight:900;
+  letter-spacing:-0.015em;
+  line-height:1.03;
+  text-transform:uppercase;
+  border:3px solid transparent;
   box-shadow:none;
 }
 
-.player-flag-flyout #playerFlagManaBtn{
-  color:#15100a;
-  background:#ffcb0f;
+.player-flag-flyout__action--mana{
+  color:#161004;
+  background:#ffd41f;
+  border-color:#ffe27a;
 }
 
-.player-flag-flyout #playerFlagManaBtn.btn-outline-warning{
-  color:#f6d35f;
-  background:rgba(255,195,37,0.14);
-  border:1px solid rgba(247,212,111,0.36);
+.player-flag-flyout__action--close{
+  color:#f2f6ff;
+  background:#0d1737;
+  border-color:rgba(234,241,255,0.88);
 }
 
-.player-flag-flyout #playerFlagCloseBtn{
-  color:#eaf0ff;
-  background:rgba(8,22,55,0.66);
-  border:2px solid rgba(232,238,251,0.85);
-}
-
-.player-flag-flyout #playerFlagCloseBtn:hover,
-.player-flag-flyout #playerFlagCloseBtn:focus-visible{
+.player-flag-flyout__action--close:hover,
+.player-flag-flyout__action--close:focus-visible{
   color:#fff;
-  background:rgba(21,38,82,0.85);
+  background:#1a2751;
 }
 
-.player-flag-flyout .btn:focus-visible{
-  outline:3px solid rgba(255,255,255,0.85);
+.player-flag-flyout__action:focus-visible{
+  outline:3px solid rgba(255,255,255,0.9);
   outline-offset:2px;
 }
 
@@ -598,9 +597,17 @@ body.sigtaara-ui .h4 {
   }
 
   .player-flag-flyout{
-    width:min(560px, calc(100vw - 18px));
-    max-height:min(80vh, 620px);
-    border-radius:20px;
+    width:min(560px, calc(100vw - 12px));
+    min-height:270px;
+    max-height:min(86vh, 620px);
+    padding:16px;
+    border-radius:22px;
+  }
+
+  .player-flag-flyout__action{
+    min-height:78px;
+    font-size:clamp(1.2rem, 5.5vw, 1.65rem);
+    letter-spacing:-0.01em;
   }
 }
 
