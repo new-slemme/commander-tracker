@@ -319,28 +319,6 @@ body.sigtaara-ui .h4 {
     .turn-badge{ display:none !important; }
     /* ==================== END TURN BADGE ==================== */
 
-    /* Turn damage badge */
-    .turn-dmg{
-      position:absolute;
-      top:14px;
-      z-index:20;
-      background:rgba(0,0,0,.55);
-      color:#fff;
-      border-radius:10px;
-      padding:6px 10px;
-      font-weight:700;
-      font-size:0.9rem;
-      border:1px solid rgba(255,255,255,0.18);
-      user-select:none;
-      pointer-events:none;
-      backdrop-filter: blur(6px);
-      max-width:70%;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
-    }
-    .turn-dmg.side-left { left:14px; right:auto; }
-    .turn-dmg.side-right{ right:14px; left:auto; }
 
     .player-name{
       position:absolute;
@@ -400,15 +378,6 @@ body.sigtaara-ui .h4 {
     .players-3 .life-card.p3-slot-3{ grid-area:p3; }
     .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
     .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
-    .players-3 .life-card.p3-slot-3 .turn-dmg{
-      top:14px;
-      bottom:auto;
-      left:auto;
-      right:14px;
-      transform:none;
-      transform-origin:center;
-      max-width:70%;
-    }
 .players-3 .life-card.p3-slot-3 .player-name{
   top:auto;
   bottom:0;
@@ -437,12 +406,7 @@ body.sigtaara-ui .h4 {
     .players-2 .life-card.left-card  { --bg-rotate: rotate(90deg); }
     .players-2 .life-card.right-card { --bg-rotate: rotate(-90deg); }
 
-    /* In 2P, pin turn dmg to OUTER edge after rotation */
-    .mode-2p .players-2 .turn-dmg{
-      top:auto;
-      bottom:14px;
-    }
-  
+
 
 .player-timer{
   position:absolute;
@@ -650,6 +614,5 @@ body.sigtaara-ui .h4 {
       .center-pass-btn{ width:78px; height:78px; }
       .turn-pill{ padding:8px 12px; font-size:.8rem; }
       .turn-timer-pill{ padding:9px 14px; min-width:96px; }
-      .turn-dmg{ font-size:.8rem; padding:5px 8px; }
       .player-name{ padding:10px 10px; font-size:.9rem; }
     }
