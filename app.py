@@ -134,6 +134,7 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     use_sigtaara = db.Column(db.Boolean, default=False, nullable=False)
+    mana_fucked_salt_value = db.Column(db.Integer, nullable=False, default=1)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     approved_at = db.Column(db.DateTime, nullable=True)
@@ -465,6 +466,19 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('007_game_ending_turn')")
+            )
+
+        if "008_user_salt_action_values" not in applied:
+            user_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(user)")).fetchall()
+            }
+            if "mana_fucked_salt_value" not in user_cols:
+                db.session.execute(
+                    text("ALTER TABLE user ADD COLUMN mana_fucked_salt_value INTEGER NOT NULL DEFAULT 1")
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('008_user_salt_action_values')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -1121,9 +1135,24 @@ def profile():
         if action == "update_profile":
             new_display = request.form.get("display_name", "").strip()
             use_sigtaara = request.form.get("use_sigtaara") == "on"
+            mana_fucked_salt_value_raw = (request.form.get("mana_fucked_salt_value") or "").strip()
 
             if not new_display:
                 flash("Display name cannot be empty.")
+                return redirect(url_for("profile"))
+
+            if not mana_fucked_salt_value_raw:
+                flash("Mana Fucked salt value is required.")
+                return redirect(url_for("profile"))
+
+            try:
+                mana_fucked_salt_value = int(mana_fucked_salt_value_raw)
+            except ValueError:
+                flash("Mana Fucked salt value must be a whole number.")
+                return redirect(url_for("profile"))
+
+            if mana_fucked_salt_value < 0 or mana_fucked_salt_value > 50:
+                flash("Mana Fucked salt value must be between 0 and 50.")
                 return redirect(url_for("profile"))
 
             existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
@@ -1135,6 +1164,7 @@ def profile():
 
             u.display_name = new_display
             u.use_sigtaara = use_sigtaara
+            u.mana_fucked_salt_value = mana_fucked_salt_value
             if u.player:
                 u.player.name = new_display  # keep in sync with game tracking
 
@@ -2727,6 +2757,11 @@ def life_counter():
         deck = db.session.get(Deck, p["deck_id"])
         p["commander_art"] = (deck.commander_local_art or deck.commander_art_crop_url) if deck else None
 
+    current_user = get_current_user()
+    salt_action_values = {
+        "mana_fucked": max(0, int(getattr(current_user, "mana_fucked_salt_value", 1) or 0)),
+    }
+
     return render_template(
         "life_counter.html",
         participants=participants,
@@ -2734,6 +2769,7 @@ def life_counter():
         timer_config=session.get("timer_config", {"mode": "off"}),
         game_started_at=session.get("game_started_at"),
         turn_number=session.get("turn_number", 1),
+        salt_action_values=salt_action_values,
     )
 
 

@@ -120,11 +120,11 @@
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerFlagFlyout" class="player-flag-flyout" aria-hidden="true">
     <div class="player-flag-flyout__content">
-      <div class="player-flag-flyout__header" id="playerFlagTitle">Player Flag</div>
-      <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Flag actions for this player.</div>
+      <div class="player-flag-flyout__header" id="playerFlagTitle">Player Salt Action</div>
+      <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Salt actions for this player.</div>
 
       <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
-        Mark Mana Fucked
+        Mana Fucked (+1 Salt)
       </button>
 
       <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
@@ -247,6 +247,7 @@ const pendingTimers = {};
 const pendingHideTimers = {};
 const committedLife = {};
 const timerConfig = {{ timer_config|tojson }};
+const saltActionValues = {{ salt_action_values|default({}, true)|tojson }};
 const gameStartedAt = Number({{ game_started_at|tojson }} || 0);
 const playerNames = {};
 let longPressTimer = null;
@@ -744,16 +745,17 @@ function openPlayerFlagMenu(playerId, anchorButton){
   playerFlagTargetId = String(playerId);
   playerFlagAnchorButton = anchorButton || null;
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
+  const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
 
   const titleEl = document.getElementById("playerFlagTitle");
   const subtitleEl = document.getElementById("playerFlagSubtitle");
-  if(titleEl) titleEl.textContent = `Player Flag: ${playerLabel}`;
-  if(subtitleEl) subtitleEl.textContent = `Flag actions for ${playerLabel}.`;
+  if(titleEl) titleEl.textContent = `Player Salt Actions: ${playerLabel}`;
+  if(subtitleEl) subtitleEl.textContent = `Salt actions for ${playerLabel}.`;
 
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   updatePlayerFlagButton("playerFlagManaBtn", playerFlags.mana_fucked, {
-    mark: "Mark Mana Fucked",
-    unmark: "Unmark Mana Fucked",
+    mark: `Mark Mana Fucked (+${manaFuckedSaltValue} Salt)`,
+    unmark: `Unmark Mana Fucked (-${manaFuckedSaltValue} Salt)`,
   }, "btn-warning");
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
@@ -802,14 +804,20 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   const nextValue = !playerFlags.mana_fucked;
+  const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
+  const nextSaltCount = nextValue
+    ? playerFlags.salt_count + manaFuckedSaltValue
+    : Math.max(0, playerFlags.salt_count - manaFuckedSaltValue);
+
   setPlayerFlagState(playerFlagTargetId, {
     ...playerFlags,
     mana_fucked: nextValue,
+    salt_count: nextSaltCount,
   });
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const actionText = nextValue ? "flagged as mana fucked" : "unflagged for mana fucked";
-  showTransientNotice(`${playerLabel} was ${actionText}.`);
+  showTransientNotice(`${playerLabel} was ${actionText} (${nextValue ? "+" : "-"}${manaFuckedSaltValue} salt).`);
   if(nextValue){
     playSfx(manaFuckedAudio);
   }

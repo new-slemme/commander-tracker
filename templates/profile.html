@@ -84,6 +84,19 @@
                    maxlength="100"
                    required>
           </div>
+          <div>
+            <label class="form-label mb-1" for="mana_fucked_salt_value">Mana Fucked salt value</label>
+            <input class="form-control"
+                   type="number"
+                   id="mana_fucked_salt_value"
+                   name="mana_fucked_salt_value"
+                   min="0"
+                   max="50"
+                   step="1"
+                   value="{{ user.mana_fucked_salt_value }}"
+                   required>
+            <div class="help-text mt-1">How much salt gets added when using the Mana Fucked salt action.</div>
+          </div>
         </div>
 
         <div class="form-check form-switch profile-switch mb-3">
