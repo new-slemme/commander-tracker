@@ -776,6 +776,15 @@ function openMenu(){
   modal.show();
 }
 
+function getPlayerFacingDirection(cardEl){
+  if(!cardEl?.classList) return "up";
+
+  if(cardEl.classList.contains("left-card")) return "right";
+  if(cardEl.classList.contains("right-card") || cardEl.classList.contains("p3-slot-3")) return "left";
+  if(cardEl.classList.contains("top-card")) return "down";
+  return "up";
+}
+
 function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   const flyoutEl = document.getElementById("playerFlagFlyout");
   if(!flyoutEl) return;
@@ -785,9 +794,10 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   flyoutEl.style.bottom = "auto";
 
   const cardEl = anchorEl?.closest?.(".life-card") || null;
-  const isTopOrientedCard = !!cardEl?.classList?.contains("top-card");
-  flyoutEl.classList.toggle("face-top", isTopOrientedCard);
-  flyoutEl.classList.toggle("face-bottom", !isTopOrientedCard);
+  const playerFacingDirection = getPlayerFacingDirection(cardEl);
+  const opensDownward = playerFacingDirection === "down";
+  flyoutEl.classList.toggle("face-top", opensDownward);
+  flyoutEl.classList.toggle("face-bottom", !opensDownward);
 
   const rect = anchorEl?.getBoundingClientRect?.() || cardEl?.getBoundingClientRect?.() || null;
   const cardRect = cardEl?.getBoundingClientRect?.() || rect;
@@ -822,13 +832,32 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
     ? sideInset
     : window.innerWidth - flyoutRect.width - sideInset;
 
+  if(playerFacingDirection === "left"){
+    if(rect){
+      left = rect.left - flyoutRect.width - verticalOffset;
+    }else{
+      left = fallbackX - flyoutRect.width - verticalOffset;
+    }
+  }else if(playerFacingDirection === "right"){
+    if(rect){
+      left = rect.right + verticalOffset;
+    }else{
+      left = fallbackX + verticalOffset;
+    }
+  }
+
   let top;
-  if(rect){
-    top = isTopOrientedCard
+  if(playerFacingDirection === "left" || playerFacingDirection === "right"){
+    const verticalAnchor = rect
+      ? (rect.top + (rect.height / 2))
+      : fallbackY;
+    top = verticalAnchor - (flyoutRect.height / 2);
+  }else if(rect){
+    top = opensDownward
       ? rect.bottom + verticalOffset
       : rect.top - flyoutRect.height - verticalOffset;
   }else{
-    top = isTopOrientedCard
+    top = opensDownward
       ? fallbackY + verticalOffset
       : fallbackY - flyoutRect.height - verticalOffset;
   }

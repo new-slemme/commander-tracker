@@ -513,12 +513,12 @@ body.sigtaara-ui .h4 {
 }
 
 .player-flag-flyout.face-top{
-  transform:translateY(-4px) scale(.992) rotate(180deg);
+  transform:translateY(-4px) scale(.992);
   transform-origin:center;
 }
 
 .player-flag-flyout.face-top .player-flag-flyout__content{
-  transform:rotate(180deg);
+  transform:none;
 }
 
 .player-flag-flyout.is-open{
@@ -528,7 +528,7 @@ body.sigtaara-ui .h4 {
 }
 
 .player-flag-flyout.face-top.is-open{
-  transform:translateY(0) scale(1) rotate(180deg);
+  transform:translateY(0) scale(1);
 }
 
 .player-flag-flyout__header{
@@ -608,7 +608,7 @@ body.sigtaara-ui .h4 {
 
   .player-flag-flyout.face-top,
   .player-flag-flyout.face-top.is-mobile-layout{
-    transform:translateY(-6px) scale(.995) rotate(180deg);
+    transform:translateY(-6px) scale(.995);
   }
 
   .player-flag-flyout.is-open,
@@ -618,7 +618,7 @@ body.sigtaara-ui .h4 {
 
   .player-flag-flyout.face-top.is-open,
   .player-flag-flyout.face-top.is-open.is-mobile-layout{
-    transform:translateY(0) scale(1) rotate(180deg);
+    transform:translateY(0) scale(1);
   }
 }
 
