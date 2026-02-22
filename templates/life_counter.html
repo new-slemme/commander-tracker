@@ -260,10 +260,10 @@ const playerNames = {};
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
-const NAME_LONG_PRESS_MS = LONG_PRESS_MS;
+const SALT_BUTTON_LONG_PRESS_MS = LONG_PRESS_MS;
 const LIFE_COMMIT_MS = 650;
 const PENDING_FADE_DELAY_MS = 1500;
-const nameLongPressState = {};
+const saltButtonPressState = {};
 let playerFlagTargetId = null;
 let playerFlagFlyoutOpen = false;
 let playerFlagAnchorEl = null;
@@ -702,50 +702,9 @@ function checkWinner(){
 cards.forEach(card=>{
   const playerId = String(card.dataset.player);
   committedLife[playerId] = parseInt(document.getElementById("life-" + playerId)?.textContent || "40", 10);
-  nameLongPressState[playerId] = { timer: null, handled: false, pointerId: null };
+  saltButtonPressState[playerId] = { timer: null, handled: false, pointerId: null };
 
   const isTop = card.classList.contains("top-card");
-  const nameEl = card.querySelector(".player-name");
-
-  if(nameEl){
-    const clearNameLongPress = ()=>{
-      const state = nameLongPressState[playerId];
-      clearTimeout(state.timer);
-      state.timer = null;
-      state.pointerId = null;
-    };
-
-    nameEl.addEventListener("pointerdown", (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-
-      const state = nameLongPressState[playerId];
-      state.handled = false;
-      state.pointerId = e.pointerId;
-      playerFlagAnchorEl = nameEl;
-      playerFlagPointer = { clientX: e.clientX, clientY: e.clientY };
-      clearTimeout(state.timer);
-      state.timer = setTimeout(()=>{
-        state.handled = true;
-        openPlayerFlagMenu(playerId, nameEl, playerFlagPointer);
-      }, NAME_LONG_PRESS_MS);
-    });
-
-    const finishNamePress = (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      clearNameLongPress();
-      nameLongPressState[playerId].handled = false;
-    };
-
-    nameEl.addEventListener("pointerup", finishNamePress);
-    nameEl.addEventListener("pointercancel", finishNamePress);
-    nameEl.addEventListener("pointerleave", finishNamePress);
-    nameEl.addEventListener("contextmenu", (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-    });
-  }
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
@@ -977,15 +936,62 @@ document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
 });
 
 document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
+  const playerId = String(saltBtn.dataset.player);
+
+  const clearSaltButtonLongPress = ()=>{
+    const state = saltButtonPressState[playerId];
+    if(!state) return;
+    clearTimeout(state.timer);
+    state.timer = null;
+    state.pointerId = null;
+  };
+
   saltBtn.addEventListener("pointerdown", (event)=>{
     event.preventDefault();
     event.stopPropagation();
+
+    const state = saltButtonPressState[playerId];
+    state.handled = false;
+    state.pointerId = event.pointerId;
+    playerFlagAnchorEl = saltBtn;
+    playerFlagPointer = { clientX: event.clientX, clientY: event.clientY };
+
+    clearTimeout(state.timer);
+    state.timer = setTimeout(()=>{
+      state.handled = true;
+      openPlayerFlagMenu(playerId, saltBtn, playerFlagPointer);
+    }, SALT_BUTTON_LONG_PRESS_MS);
   });
 
-  saltBtn.addEventListener("click", (event)=>{
+  const finishSaltButtonPress = (event)=>{
     event.preventDefault();
     event.stopPropagation();
-    incrementSaltForPlayer(saltBtn.dataset.player);
+
+    const state = saltButtonPressState[playerId];
+    const matchesPointer = state.pointerId === null || event.pointerId === undefined || state.pointerId === event.pointerId;
+    const wasHandled = state.handled;
+
+    clearSaltButtonLongPress();
+    state.handled = false;
+
+    if(!matchesPointer || wasHandled) return;
+    incrementSaltForPlayer(playerId);
+  };
+
+  const cancelSaltButtonPress = (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    const state = saltButtonPressState[playerId];
+    clearSaltButtonLongPress();
+    state.handled = false;
+  };
+
+  saltBtn.addEventListener("pointerup", finishSaltButtonPress);
+  saltBtn.addEventListener("pointercancel", cancelSaltButtonPress);
+  saltBtn.addEventListener("pointerleave", cancelSaltButtonPress);
+  saltBtn.addEventListener("contextmenu", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
   });
 });
 
