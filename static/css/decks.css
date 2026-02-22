@@ -146,7 +146,7 @@
     font-weight: 900;
     letter-spacing: 0.02em;
     line-height: 1.05;
-    background: linear-gradient(90deg,#ffffff,#8f99c5);
+    background: linear-gradient(90deg,#ffffff,var(--font-base));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
