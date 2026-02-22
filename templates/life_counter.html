@@ -121,10 +121,8 @@
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerFlagFlyout" class="player-flag-flyout" aria-hidden="true">
     <div class="player-flag-flyout__content">
-      <div class="player-flag-flyout__header">
-        <h2 class="h5 mb-1" id="playerFlagTitle">Player Flag</h2>
-        <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Flag actions for this player.</div>
-      </div>
+      <div class="player-flag-flyout__header" id="playerFlagTitle">Player Flag</div>
+      <div class="player-flag-flyout__subtitle" id="playerFlagSubtitle">Flag actions for this player.</div>
 
       <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
         Mark Mana Fucked
@@ -757,6 +755,8 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   const opensDownward = playerFacingDirection === "down";
   flyoutEl.classList.toggle("face-top", opensDownward);
   flyoutEl.classList.toggle("face-bottom", !opensDownward);
+  flyoutEl.classList.remove("face-up", "face-right", "face-down", "face-left");
+  flyoutEl.classList.add(`face-${playerFacingDirection}`);
 
   const rect = anchorEl?.getBoundingClientRect?.() || cardEl?.getBoundingClientRect?.() || null;
   const cardRect = cardEl?.getBoundingClientRect?.() || rect;
@@ -830,10 +830,13 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
 
 function closePlayerFlagMenu(){
   const flyoutEl = document.getElementById("playerFlagFlyout");
+  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl || !playerFlagFlyoutOpen) return;
   playerFlagFlyoutOpen = false;
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
+  backdropEl?.classList.remove("is-open");
+  backdropEl?.setAttribute("aria-hidden", "true");
   resumeTimers("player-flag");
 }
 
@@ -861,11 +864,14 @@ function openPlayerFlagMenu(playerId, anchorEl = null, pointerEvent = null){
   }
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
+  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl) return;
 
   pauseTimers("player-flag");
   flyoutEl.classList.add("is-open");
   flyoutEl.setAttribute("aria-hidden", "false");
+  backdropEl?.classList.add("is-open");
+  backdropEl?.setAttribute("aria-hidden", "false");
   playerFlagFlyoutOpen = true;
   positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
 }
@@ -974,8 +980,16 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
     clearSaltButtonLongPress();
     state.handled = false;
 
-    if(!matchesPointer || wasHandled) return;
-    incrementSaltForPlayer(playerId);
+    if(!matchesPointer) return;
+
+    if(wasHandled){
+      return;
+    }
+
+    openPlayerFlagMenu(playerId, saltBtn, {
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
   };
 
   const cancelSaltButtonPress = (event)=>{
