@@ -401,22 +401,22 @@ body.sigtaara-ui .h4 {
     .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
     .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
     .players-3 .life-card.p3-slot-3 .turn-dmg{
-      top:14px;
-      bottom:auto;
+      top:auto;
+      bottom:14px;
+      left:14px;
+      right:auto;
+      transform:none;
+      transform-origin:center;
+      max-width:70%;
+    }
+    .players-3 .life-card.p3-slot-3 .player-name{
+      top:auto;
+      bottom:0;
       left:50%;
       right:auto;
       transform:translateX(-50%);
       transform-origin:center;
-      max-width:88%;
-    }
-    .players-3 .life-card.p3-slot-3 .player-name{
-      top:50%;
-      bottom:auto;
-      left:auto;
-      right:10px;
-      transform:translateY(-50%) rotate(90deg);
-      transform-origin:center;
-      max-width:none;
+      max-width:92%;
     }
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
