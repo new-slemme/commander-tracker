@@ -90,10 +90,13 @@
                   <span>{{ d.commander_name or d.commander }}</span>
                 </div>
                 {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
-                {% if gp.parsed_flags and (gp.parsed_flags.get('mana_fucked') or gp_salt_count > 0) %}
+                {% if gp.parsed_flags and (gp.parsed_flags.get('mana_fucked') or gp.parsed_flags.get('misplayed') or gp_salt_count > 0) %}
                   <div class="mt-2 d-flex flex-wrap gap-2">
                     {% if gp.parsed_flags.get('mana_fucked') %}
                       <span class="badge rounded-pill text-bg-warning">Mana Fucked</span>
+                    {% endif %}
+                    {% if gp.parsed_flags.get('misplayed') %}
+                      <span class="badge rounded-pill text-bg-danger">Misplayed</span>
                     {% endif %}
                     {% if gp_salt_count > 0 %}
                       <span class="badge rounded-pill text-bg-danger">Salt x{{ gp_salt_count }}</span>
