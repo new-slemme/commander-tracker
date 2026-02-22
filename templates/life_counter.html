@@ -828,13 +828,10 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
 
 function closePlayerFlagMenu(){
   const flyoutEl = document.getElementById("playerFlagFlyout");
-  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl || !playerFlagFlyoutOpen) return;
   playerFlagFlyoutOpen = false;
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
-  backdropEl?.classList.remove("is-open");
-  backdropEl?.setAttribute("aria-hidden", "true");
   resumeTimers("player-flag");
 }
 
@@ -862,14 +859,11 @@ function openPlayerFlagMenu(playerId, anchorEl = null, pointerEvent = null){
   }
 
   const flyoutEl = document.getElementById("playerFlagFlyout");
-  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl) return;
 
   pauseTimers("player-flag");
   flyoutEl.classList.add("is-open");
   flyoutEl.setAttribute("aria-hidden", "false");
-  backdropEl?.classList.add("is-open");
-  backdropEl?.setAttribute("aria-hidden", "false");
   playerFlagFlyoutOpen = true;
   positionPlayerFlagFlyout(playerFlagAnchorEl, playerFlagPointer);
 }
@@ -884,12 +878,7 @@ document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePl
 document.addEventListener("pointerdown", (e)=>{
   if(!playerFlagFlyoutOpen) return;
   const flyoutEl = document.getElementById("playerFlagFlyout");
-  const backdropEl = document.getElementById("playerFlagBackdrop");
   if(!flyoutEl || flyoutEl.contains(e.target)) return;
-  if(backdropEl && backdropEl.contains(e.target)){
-    closePlayerFlagMenu();
-    return;
-  }
   closePlayerFlagMenu();
 });
 
