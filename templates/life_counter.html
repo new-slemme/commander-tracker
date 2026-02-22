@@ -108,8 +108,8 @@
             Quit without Saving
           </button>
 
-          <button class="btn btn-outline-light quick-menu-btn w-100" data-bs-dismiss="modal" type="button">
-            Back to Game
+          <button class="btn btn-outline-light quick-menu-btn quick-menu-btn--icon" data-bs-dismiss="modal" type="button" aria-label="Back to game">
+            <img src="/static/icons/back.png" alt="Back to game" />
           </button>
         </div>
       </div>
@@ -120,12 +120,16 @@
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true">
     <div class="player-salt-flyout__content">
-      <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
+      <button class="btn btn-warning" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
         <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
       </button>
 
-      <button class="btn btn-outline-light w-100" id="playerFlagCloseBtn" type="button">
-        Back to Game
+      <button class="btn btn-danger" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
+        <img src="/static/icons/misplayed.png" alt="Misplayed status" />
+      </button>
+
+      <button class="btn btn-outline-light" id="playerFlagCloseBtn" type="button" aria-label="Back to game">
+        <img src="/static/icons/back.png" alt="Back to game" />
       </button>
     </div>
   </div>
@@ -276,6 +280,7 @@ function getPlayerFlagState(playerId){
   const existing = participantFlagsByPlayer[playerId] || {};
   return {
     mana_fucked: !!existing.mana_fucked,
+    misplayed: !!existing.misplayed,
     salt_count: Math.max(0, Number(existing.salt_count ?? (existing.salted ? 1 : 0)) || 0),
   };
 }
@@ -283,6 +288,7 @@ function getPlayerFlagState(playerId){
 function setPlayerFlagState(playerId, nextFlags){
   participantFlagsByPlayer[playerId] = {
     mana_fucked: !!nextFlags.mana_fucked,
+    misplayed: !!nextFlags.misplayed,
     salt_count: Math.max(0, Number(nextFlags.salt_count) || 0),
   };
 }
@@ -749,6 +755,7 @@ function openPlayerSaltMenu(playerId, anchorButton){
   playerFlagAnchorButton = anchorButton || null;
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
+  const misplayedSaltValue = Math.max(0, Number(saltActionValues?.misplayed ?? 1) || 0);
 
   const titleEl = document.getElementById("playerFlagTitle");
   const subtitleEl = document.getElementById("playerFlagSubtitle");
@@ -764,6 +771,16 @@ function openPlayerSaltMenu(playerId, anchorButton){
     {
       inactive: `Mark ${playerLabel} as mana-fucked (+${manaFuckedSaltValue} salt)`,
       active: `Unmark ${playerLabel} as mana-fucked (-${manaFuckedSaltValue} salt)`,
+    }
+  );
+  updatePlayerFlagButtonState(
+    "playerFlagMisplayedBtn",
+    playerFlags.misplayed,
+    "btn-danger",
+    "btn-outline-danger",
+    {
+      inactive: `Mark ${playerLabel} as misplayed (+${misplayedSaltValue} salt)`,
+      active: `Unmark ${playerLabel} as misplayed (-${misplayedSaltValue} salt)`,
     }
   );
 
@@ -830,6 +847,27 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(nextValue){
     playSfx(manaFuckedAudio);
   }
+  openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
+});
+
+document.getElementById("playerFlagMisplayedBtn")?.addEventListener("click", ()=>{
+  if(!playerFlagTargetId) return;
+  const playerFlags = getPlayerFlagState(playerFlagTargetId);
+  const nextValue = !playerFlags.misplayed;
+  const misplayedSaltValue = Math.max(0, Number(saltActionValues?.misplayed ?? 1) || 0);
+  const nextSaltCount = nextValue
+    ? playerFlags.salt_count + misplayedSaltValue
+    : Math.max(0, playerFlags.salt_count - misplayedSaltValue);
+
+  setPlayerFlagState(playerFlagTargetId, {
+    ...playerFlags,
+    misplayed: nextValue,
+    salt_count: nextSaltCount,
+  });
+
+  const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
+  const actionText = nextValue ? "flagged as misplayed" : "unflagged for misplayed";
+  showTransientNotice(`${playerLabel} was ${actionText} (${nextValue ? "+" : "-"}${misplayedSaltValue} salt).`);
   openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
 });
 
@@ -943,9 +981,10 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
       if(!flags || typeof flags !== "object") return;
       const normalizedFlags = {
         mana_fucked: !!flags.mana_fucked,
+        misplayed: !!flags.misplayed,
         salt_count: Math.max(0, Number(flags.salt_count ?? (flags.salted ? 1 : 0)) || 0),
       };
-      const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.salt_count > 0;
+      const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.misplayed || normalizedFlags.salt_count > 0;
       if(hasTruthyFlag) payload[playerId] = normalizedFlags;
     });
     participantFlagsInput.value = JSON.stringify(payload);

@@ -62,6 +62,7 @@ COMMON_WEAK_PASSWORDS = {
 MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 4096
 ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "mana_fucked",
+    "misplayed",
     "salt_count",
 }
 
@@ -83,6 +84,10 @@ def parse_participant_flags(raw_flags: str | None) -> dict[str, bool | int]:
     mana_flag = loaded.get("mana_fucked")
     if isinstance(mana_flag, bool):
         parsed_flags["mana_fucked"] = mana_flag
+
+    misplayed_flag = loaded.get("misplayed")
+    if isinstance(misplayed_flag, bool):
+        parsed_flags["misplayed"] = misplayed_flag
 
     salt_count_raw = loaded.get("salt_count")
     if isinstance(salt_count_raw, int) and not isinstance(salt_count_raw, bool) and salt_count_raw >= 0:
@@ -135,6 +140,7 @@ class User(db.Model):
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     use_sigtaara = db.Column(db.Boolean, default=False, nullable=False)
     mana_fucked_salt_value = db.Column(db.Integer, nullable=False, default=1)
+    misplayed_salt_value = db.Column(db.Integer, nullable=False, default=1)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     approved_at = db.Column(db.DateTime, nullable=True)
@@ -479,6 +485,19 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('008_user_salt_action_values')")
+            )
+
+        if "009_user_misplayed_salt_value" not in applied:
+            user_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(user)")).fetchall()
+            }
+            if "misplayed_salt_value" not in user_cols:
+                db.session.execute(
+                    text("ALTER TABLE user ADD COLUMN misplayed_salt_value INTEGER NOT NULL DEFAULT 1")
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('009_user_misplayed_salt_value')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -1136,6 +1155,7 @@ def profile():
             new_display = request.form.get("display_name", "").strip()
             use_sigtaara = request.form.get("use_sigtaara") == "on"
             mana_fucked_salt_value_raw = (request.form.get("mana_fucked_salt_value") or "").strip()
+            misplayed_salt_value_raw = (request.form.get("misplayed_salt_value") or "").strip()
 
             if not new_display:
                 flash("Display name cannot be empty.")
@@ -1145,14 +1165,28 @@ def profile():
                 flash("Mana Fucked salt value is required.")
                 return redirect(url_for("profile"))
 
+            if not misplayed_salt_value_raw:
+                flash("Misplayed salt value is required.")
+                return redirect(url_for("profile"))
+
             try:
                 mana_fucked_salt_value = int(mana_fucked_salt_value_raw)
             except ValueError:
                 flash("Mana Fucked salt value must be a whole number.")
                 return redirect(url_for("profile"))
 
+            try:
+                misplayed_salt_value = int(misplayed_salt_value_raw)
+            except ValueError:
+                flash("Misplayed salt value must be a whole number.")
+                return redirect(url_for("profile"))
+
             if mana_fucked_salt_value < 0 or mana_fucked_salt_value > 50:
                 flash("Mana Fucked salt value must be between 0 and 50.")
+                return redirect(url_for("profile"))
+
+            if misplayed_salt_value < 0 or misplayed_salt_value > 50:
+                flash("Misplayed salt value must be between 0 and 50.")
                 return redirect(url_for("profile"))
 
             existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
@@ -1165,6 +1199,7 @@ def profile():
             u.display_name = new_display
             u.use_sigtaara = use_sigtaara
             u.mana_fucked_salt_value = mana_fucked_salt_value
+            u.misplayed_salt_value = misplayed_salt_value
             if u.player:
                 u.player.name = new_display  # keep in sync with game tracking
 
@@ -2760,6 +2795,7 @@ def life_counter():
     current_user = get_current_user()
     salt_action_values = {
         "mana_fucked": max(0, int(getattr(current_user, "mana_fucked_salt_value", 1) or 0)),
+        "misplayed": max(0, int(getattr(current_user, "misplayed_salt_value", 1) or 0)),
     }
 
     return render_template(
@@ -2902,6 +2938,10 @@ def end_game():
                 if flag_key == "mana_fucked":
                     if not isinstance(flag_value, bool):
                         return "mana_fucked must be boolean", 400
+                    sanitized_player_flags[flag_key] = flag_value
+                elif flag_key == "misplayed":
+                    if not isinstance(flag_value, bool):
+                        return "misplayed must be boolean", 400
                     sanitized_player_flags[flag_key] = flag_value
                 elif flag_key == "salt_count":
                     if not isinstance(flag_value, int) or isinstance(flag_value, bool) or flag_value < 0:

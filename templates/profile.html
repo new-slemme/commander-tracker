@@ -97,6 +97,19 @@
                    required>
             <div class="help-text mt-1">How much salt gets added when using the Mana Fucked salt action.</div>
           </div>
+          <div>
+            <label class="form-label mb-1" for="misplayed_salt_value">Misplayed salt value</label>
+            <input class="form-control"
+                   type="number"
+                   id="misplayed_salt_value"
+                   name="misplayed_salt_value"
+                   min="0"
+                   max="50"
+                   step="1"
+                   value="{{ user.misplayed_salt_value }}"
+                   required>
+            <div class="help-text mt-1">How much salt gets added when using the Misplayed salt action.</div>
+          </div>
         </div>
 
         <div class="form-check form-switch profile-switch mb-3">
