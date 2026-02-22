@@ -68,7 +68,7 @@ body.sigtaara-ui .h4 {
         height:100%;
         top:0;
         left:0;
-        transform:none;
+        transform:translateY(100px);
       }
 
       /* 3-player custom split layout should also remain unrotated in portrait */
@@ -77,7 +77,7 @@ body.sigtaara-ui .h4 {
         height:100%;
         top:0;
         left:0;
-        transform:none;
+        transform:translateY(100px);
       }
     }
 
@@ -111,6 +111,7 @@ body.sigtaara-ui .h4 {
       position:absolute;
       top:50%;
       left:10px;
+      right:auto;
       transform:translateY(-50%);
       z-index:40;
       width:42px;
@@ -145,6 +146,27 @@ body.sigtaara-ui .h4 {
 
 .life-card.top-card .salt-dispenser-btn > span{
   transform:rotate(180deg);
+}
+
+.players-2 .life-card.left-card .salt-dispenser-btn{
+  top:50%;
+  left:10px;
+  right:auto;
+  transform:translateY(-50%);
+}
+
+.players-2 .life-card.right-card .salt-dispenser-btn{
+  top:50%;
+  left:auto;
+  right:10px;
+  transform:translateY(-50%);
+}
+
+.players-3 .life-card.p3-slot-3 .salt-dispenser-btn{
+  top:10px;
+  left:auto;
+  right:10px;
+  transform:none;
 }
 
 .players-2 .life-card.left-card .salt-dispenser-btn > span{
@@ -324,7 +346,7 @@ body.sigtaara-ui .h4 {
       position:absolute;
       bottom:0;
       left:50%;
-      transform:translateX(-50%);
+      transform:translateY(100px);
       padding:14px 14px;
       color:#fff;
       font-weight:800;
@@ -342,7 +364,7 @@ body.sigtaara-ui .h4 {
       position:fixed;
       top:14px;
       left:50%;
-      transform:translateX(-50%);
+      transform:translateY(100px);
       padding:10px 16px;
       background:rgba(0,0,0,.55);
       border-radius:999px;
@@ -379,12 +401,22 @@ body.sigtaara-ui .h4 {
     .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
     .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
     .players-3 .life-card.p3-slot-3 .turn-dmg{
-      top:auto;
-      bottom:34px;
+      top:14px;
+      bottom:auto;
       left:50%;
       right:auto;
-      transform:translateX(-50%);
+      transform:translateY(100px);
+      transform-origin:center;
       max-width:88%;
+    }
+    .players-3 .life-card.p3-slot-3 .player-name{
+      top:50%;
+      bottom:auto;
+      left:auto;
+      right:10px;
+      transform:translateY(-50%) rotate(90deg);
+      transform-origin:center;
+      max-width:none;
     }
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
