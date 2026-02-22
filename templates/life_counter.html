@@ -118,8 +118,8 @@
 
   <!-- Player flag fly-out -->
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
-  <div id="playerFlagFlyout" class="player-flag-flyout" aria-hidden="true">
-    <div class="player-flag-flyout__content">
+  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true">
+    <div class="player-salt-flyout__content">
       <button class="btn btn-warning w-100" id="playerFlagManaBtn" type="button">
         Mana-Fucked
       </button>
@@ -255,7 +255,7 @@ const LIFE_COMMIT_MS = 650;
 const PENDING_FADE_DELAY_MS = 1500;
 const saltButtonPressState = {};
 let playerFlagTargetId = null;
-let playerFlagFlyoutOpen = false;
+let playerSaltFlyoutOpen = false;
 let playerFlagAnchorButton = null;
 const participantFlagsByPlayer = {};
 const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
@@ -696,8 +696,8 @@ function getPlayerCardOrientation(playerCard){
   return "0deg";
 }
 
-function positionPlayerFlagMenu(anchorButton, playerCard){
-  const flyoutEl = document.getElementById("playerFlagFlyout");
+function positionPlayerSaltMenu(anchorButton, playerCard){
+  const flyoutEl = document.getElementById("playerSaltFlyout");
   if(!flyoutEl || !anchorButton || !playerCard) return;
 
   const viewportPadding = 10;
@@ -726,11 +726,11 @@ function positionPlayerFlagMenu(anchorButton, playerCard){
   flyoutEl.style.setProperty("--flyout-top", `${top}px`);
 }
 
-function closePlayerFlagMenu(){
-  const flyoutEl = document.getElementById("playerFlagFlyout");
+function closePlayerSaltMenu(){
+  const flyoutEl = document.getElementById("playerSaltFlyout");
   const activeCard = document.querySelector(".life-card.flag-menu-open");
-  if(!flyoutEl || !playerFlagFlyoutOpen) return;
-  playerFlagFlyoutOpen = false;
+  if(!flyoutEl || !playerSaltFlyoutOpen) return;
+  playerSaltFlyoutOpen = false;
   playerFlagAnchorButton = null;
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
@@ -738,7 +738,7 @@ function closePlayerFlagMenu(){
   resumeTimers("player-flag");
 }
 
-function openPlayerFlagMenu(playerId, anchorButton){
+function openPlayerSaltMenu(playerId, anchorButton){
   playerFlagTargetId = String(playerId);
   playerFlagAnchorButton = anchorButton || null;
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
@@ -755,7 +755,7 @@ function openPlayerFlagMenu(playerId, anchorButton){
     unmark: `Unmark Mana Fucked (-${manaFuckedSaltValue} Salt)`,
   }, "btn-warning");
 
-  const flyoutEl = document.getElementById("playerFlagFlyout");
+  const flyoutEl = document.getElementById("playerSaltFlyout");
   if(!flyoutEl) return;
 
   const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
@@ -763,12 +763,12 @@ function openPlayerFlagMenu(playerId, anchorButton){
   playerCard?.classList.add("flag-menu-open");
 
   flyoutEl.style.setProperty("--flyout-rotation", getPlayerCardOrientation(playerCard));
-  positionPlayerFlagMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
+  positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 
   pauseTimers("player-flag");
   flyoutEl.classList.add("is-open");
   flyoutEl.setAttribute("aria-hidden", "false");
-  playerFlagFlyoutOpen = true;
+  playerSaltFlyoutOpen = true;
 }
 
 
@@ -776,24 +776,24 @@ document.getElementById("quickMenuModal")?.addEventListener("shown.bs.modal", ()
 document.getElementById("quickMenuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("quick-menu"));
 document.getElementById("menuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("end-menu"));
 document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("end-menu"));
-document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePlayerFlagMenu);
+document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePlayerSaltMenu);
 
 document.addEventListener("pointerdown", (e)=>{
-  if(!playerFlagFlyoutOpen) return;
-  const flyoutEl = document.getElementById("playerFlagFlyout");
+  if(!playerSaltFlyoutOpen) return;
+  const flyoutEl = document.getElementById("playerSaltFlyout");
   if(!flyoutEl || flyoutEl.contains(e.target) || playerFlagAnchorButton?.contains?.(e.target)) return;
-  closePlayerFlagMenu();
+  closePlayerSaltMenu();
 });
 
 window.addEventListener("resize", ()=>{
-  if(!playerFlagFlyoutOpen || !playerFlagTargetId) return;
+  if(!playerSaltFlyoutOpen || !playerFlagTargetId) return;
   const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
-  positionPlayerFlagMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
+  positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 });
 
 document.addEventListener("keydown", (e)=>{
   if(e.key === "Escape"){
-    closePlayerFlagMenu();
+    closePlayerSaltMenu();
   }
 });
 
@@ -818,7 +818,7 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(nextValue){
     playSfx(manaFuckedAudio);
   }
-  openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorButton);
+  openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
 });
 
 function incrementSaltForPlayer(playerId){
@@ -857,7 +857,7 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
     clearTimeout(state.timer);
     state.timer = setTimeout(()=>{
       state.handled = true;
-      openPlayerFlagMenu(playerId, saltBtn);
+      openPlayerSaltMenu(playerId, saltBtn);
     }, SALT_BUTTON_LONG_PRESS_MS);
   });
 

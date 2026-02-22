@@ -458,7 +458,7 @@ body.sigtaara-ui .h4 {
   display:none;
 }
 
-.player-flag-flyout{
+.player-salt-flyout{
   position:fixed;
   top:var(--flyout-top, 50%);
   left:var(--flyout-left, 50%);
@@ -480,13 +480,13 @@ body.sigtaara-ui .h4 {
   transition:opacity .14s ease, transform .14s ease;
 }
 
-.player-flag-flyout__content{
+.player-salt-flyout__content{
   display:flex;
   flex-direction:column;
   gap:10px;
 }
 
-.player-flag-flyout.is-open{
+.player-salt-flyout.is-open{
   opacity:1;
   transform:translate(0, -50%) rotate(var(--flyout-rotation)) scale(1);
   pointer-events:auto;
@@ -497,7 +497,7 @@ body.sigtaara-ui .h4 {
   border-color:rgba(255,255,255,0.78);
 }
 
-.player-flag-flyout__header{
+.player-salt-flyout__header{
   color:rgba(255,255,255,0.18);
   text-align:center;
   font-size:clamp(1.15rem,2.4vw,1.5rem);
@@ -506,7 +506,7 @@ body.sigtaara-ui .h4 {
   letter-spacing:.01em;
 }
 
-.player-flag-flyout__subtitle{
+.player-salt-flyout__subtitle{
   color:rgba(228,234,246,0.9);
   font-size:clamp(.88rem,1.6vw,1rem);
   line-height:1.24;
@@ -546,7 +546,7 @@ body.sigtaara-ui .h4 {
   font-weight:700;
 }
 
-.player-flag-flyout .btn{
+.player-salt-flyout .btn{
   min-height:52px;
   padding:.7rem 1rem;
   border-radius:18px;
@@ -556,30 +556,30 @@ body.sigtaara-ui .h4 {
   box-shadow:none;
 }
 
-.player-flag-flyout #playerFlagManaBtn{
+.player-salt-flyout #playerFlagManaBtn{
   color:#15100a;
   background:#ffcb0f;
 }
 
-.player-flag-flyout #playerFlagManaBtn.btn-outline-warning{
+.player-salt-flyout #playerFlagManaBtn.btn-outline-warning{
   color:#f6d35f;
   background:rgba(255,195,37,0.14);
   border:1px solid rgba(247,212,111,0.36);
 }
 
-.player-flag-flyout #playerFlagCloseBtn{
+.player-salt-flyout #playerFlagCloseBtn{
   color:#eaf0ff;
   background:rgba(8,22,55,0.66);
   border:2px solid rgba(232,238,251,0.85);
 }
 
-.player-flag-flyout #playerFlagCloseBtn:hover,
-.player-flag-flyout #playerFlagCloseBtn:focus-visible{
+.player-salt-flyout #playerFlagCloseBtn:hover,
+.player-salt-flyout #playerFlagCloseBtn:focus-visible{
   color:#fff;
   background:rgba(21,38,82,0.85);
 }
 
-.player-flag-flyout .btn:focus-visible{
+.player-salt-flyout .btn:focus-visible{
   outline:3px solid rgba(255,255,255,0.85);
   outline-offset:2px;
 }
@@ -600,7 +600,7 @@ body.sigtaara-ui .h4 {
     padding:.58rem .8rem;
   }
 
-  .player-flag-flyout{
+  .player-salt-flyout{
     width:min(300px, calc(100vw - 18px));
     max-height:min(80vh, 480px);
     border-radius:16px;
