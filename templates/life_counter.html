@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
   <title>Commander Tracker</title>
   <link href="/static/bootstrap.min.css" rel="stylesheet">
-
-      <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/base.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
 </head>
 
 <body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">

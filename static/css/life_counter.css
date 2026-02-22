@@ -7,8 +7,6 @@
 }
 
     :root{
-      --darkest:#10121a;
-      --darker:#171a26;
       /* default background transform unless overridden */
       --bg-rotate:none;
     }
