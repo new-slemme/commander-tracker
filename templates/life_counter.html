@@ -55,6 +55,16 @@
           {% if is_top %}--bg-rotate:rotate(180deg);{% endif %}
         "
       >
+        <button
+          class="salt-dispenser-btn"
+          type="button"
+          data-player="{{ p.player_id }}"
+          aria-label="Add salt to {{ p.player_name }}"
+          title="Add salt"
+        >
+          <span aria-hidden="true">🧂</span>
+        </button>
+
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
           <div class="turn-dmg side-left" id="turn-dmg-{{ p.player_id }}">Turn dmg: 0</div>
           <div class="player-timer" id="timer-{{ p.player_id }}">--:--</div>
@@ -916,18 +926,38 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorEl, playerFlagPointer);
 });
 
-document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
-  if(!playerFlagTargetId) return;
-  const playerFlags = getPlayerFlagState(playerFlagTargetId);
+function incrementSaltForPlayer(playerId){
+  if(!playerId) return null;
+  const normalizedId = String(playerId);
+  const playerFlags = getPlayerFlagState(normalizedId);
   const nextCount = playerFlags.salt_count + 1;
-  setPlayerFlagState(playerFlagTargetId, {
+  setPlayerFlagState(normalizedId, {
     ...playerFlags,
     salt_count: nextCount,
   });
 
-  const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
+  const playerLabel = playerNames[normalizedId] || `Player ${normalizedId}`;
   showTransientNotice(`${playerLabel} received salt #${nextCount}.`);
+  return nextCount;
+}
+
+document.getElementById("playerFlagSaltedBtn")?.addEventListener("click", ()=>{
+  if(!playerFlagTargetId) return;
+  incrementSaltForPlayer(playerFlagTargetId);
   openPlayerFlagMenu(playerFlagTargetId, playerFlagAnchorEl, playerFlagPointer);
+});
+
+document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
+  saltBtn.addEventListener("pointerdown", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  saltBtn.addEventListener("click", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    incrementSaltForPlayer(saltBtn.dataset.player);
+  });
 });
 
 document.getElementById("endGameForm")?.addEventListener("submit", ()=>{

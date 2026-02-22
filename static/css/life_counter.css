@@ -109,6 +109,58 @@ body.sigtaara-ui .h4 {
       width:100%;
     }
 
+    .salt-dispenser-btn{
+      position:absolute;
+      top:50%;
+      left:10px;
+      transform:translateY(-50%);
+      z-index:40;
+      width:42px;
+      height:42px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.42);
+      background:rgba(7,10,15,0.7);
+      color:#fff;
+      display:grid;
+      place-items:center;
+      box-shadow:0 6px 16px rgba(0,0,0,0.42);
+      padding:0;
+      line-height:1;
+      font-size:1.15rem;
+      touch-action:manipulation;
+    }
+
+    .salt-dispenser-btn:hover{
+      background:rgba(20,27,40,0.82);
+    }
+
+    .salt-dispenser-btn:focus-visible{
+      outline:3px solid rgba(255,255,255,0.95);
+      outline-offset:2px;
+      box-shadow:0 0 0 4px rgba(53,120,255,0.6), 0 6px 16px rgba(0,0,0,0.42);
+    }
+
+    .life-card.top-card .salt-dispenser-btn{
+      left:auto;
+      right:10px;
+    }
+
+    .players-2 .life-card.left-card .salt-dispenser-btn{
+      top:10px;
+      left:50%;
+      right:auto;
+      transform:translateX(-50%);
+    }
+
+    .players-2 .life-card.right-card .salt-dispenser-btn,
+    .players-3 .life-card.p3-slot-3 .salt-dispenser-btn{
+      top:auto;
+      bottom:10px;
+      left:50%;
+      right:auto;
+      transform:translateX(-50%);
+    }
+
     .life-display{
       font-size:clamp(3.25rem, 18vh, 11rem);
       font-weight:900;
