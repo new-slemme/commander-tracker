@@ -520,18 +520,14 @@ body.sigtaara-ui .h4 {
 
   .player-flag-flyout,
   .player-flag-flyout.is-mobile-layout{
-    left:50% !important;
-    right:auto;
-    top:auto !important;
-    bottom:calc(env(safe-area-inset-bottom, 0px) + 10px) !important;
     width:min(520px, calc(100vw - 20px));
     border-radius:14px;
-    transform:translate(-50%, 6px) scale(.995);
+    transform:translateY(6px) scale(.995);
   }
 
   .player-flag-flyout.is-open,
   .player-flag-flyout.is-open.is-mobile-layout{
-    transform:translate(-50%, 0) scale(1);
+    transform:translateY(0) scale(1);
   }
 }
 

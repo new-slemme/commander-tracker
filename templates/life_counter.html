@@ -769,25 +769,20 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   if(!flyoutEl) return;
 
   const isNarrowViewport = window.matchMedia("(max-width: 576px)").matches;
-  if(isNarrowViewport){
-    flyoutEl.classList.add("is-mobile-layout");
-    flyoutEl.style.left = "50%";
-    flyoutEl.style.top = "auto";
-    flyoutEl.style.bottom = "calc(env(safe-area-inset-bottom, 0px) + 10px)";
-    return;
-  }
-
-  flyoutEl.classList.remove("is-mobile-layout");
+  flyoutEl.classList.toggle("is-mobile-layout", isNarrowViewport);
   flyoutEl.style.bottom = "auto";
 
-  const rect = anchorEl?.getBoundingClientRect?.();
+  const cardEl = anchorEl?.closest?.(".life-card") || null;
+  const rect = anchorEl?.getBoundingClientRect?.() || cardEl?.getBoundingClientRect?.() || null;
+  const cardRect = cardEl?.getBoundingClientRect?.() || rect;
   const pointerX = Number(pointerEvent?.clientX);
   const pointerY = Number(pointerEvent?.clientY);
+  const viewportMidX = window.innerWidth / 2;
 
   const fallbackX = Number.isFinite(pointerX)
     ? pointerX
-    : rect
-      ? rect.left + (rect.width / 2)
+    : cardRect
+      ? cardRect.left + (cardRect.width / 2)
       : window.innerWidth / 2;
   const fallbackY = Number.isFinite(pointerY)
     ? pointerY
@@ -796,7 +791,10 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
       : window.innerHeight / 2;
 
   const padding = 10;
-  const prefOffset = 12;
+  const sideInset = isNarrowViewport ? 10 : 14;
+  const verticalOffset = 12;
+  const anchorOnLeftHalf = (cardRect ? (cardRect.left + (cardRect.width / 2)) : fallbackX) < viewportMidX;
+  const isTopOrientedCard = !!cardEl?.classList?.contains("top-card");
 
   flyoutEl.style.left = "0px";
   flyoutEl.style.top = "0px";
@@ -805,18 +803,19 @@ function positionPlayerFlagFlyout(anchorEl, pointerEvent){
   const maxLeft = Math.max(padding, window.innerWidth - flyoutRect.width - padding);
   const maxTop = Math.max(padding, window.innerHeight - flyoutRect.height - padding);
 
-  let left = fallbackX - (flyoutRect.width / 2);
-  let top = fallbackY + prefOffset;
+  let left = anchorOnLeftHalf
+    ? sideInset
+    : window.innerWidth - flyoutRect.width - sideInset;
 
+  let top;
   if(rect){
-    top = rect.bottom + prefOffset;
-    if(top + flyoutRect.height + padding > window.innerHeight){
-      top = rect.top - flyoutRect.height - prefOffset;
-    }
-  }
-
-  if(top + flyoutRect.height + padding > window.innerHeight){
-    top = fallbackY - flyoutRect.height - prefOffset;
+    top = isTopOrientedCard
+      ? rect.bottom + verticalOffset
+      : rect.top - flyoutRect.height - verticalOffset;
+  }else{
+    top = isTopOrientedCard
+      ? fallbackY + verticalOffset
+      : fallbackY - flyoutRect.height - verticalOffset;
   }
 
   left = Math.min(Math.max(left, padding), maxLeft);
