@@ -687,7 +687,14 @@ body.sigtaara-ui .h4 {
   .player-flag-flyout.face-top.is-open.is-mobile-layout{
     transform:translateY(0) scale(1);
   }
+
+  .player-flag-flyout.face-left .btn,
+  .player-flag-flyout.face-right .btn{
+    min-height:180px;
+    font-size:1.7rem;
+  }
 }
+
 
 
     @media (max-width:576px){
