@@ -82,6 +82,18 @@
     white-space: nowrap;
   }
 
+  .deck-list-pill {
+    display:inline-flex;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(115, 201, 145, 0.55);
+    background: rgba(115, 201, 145, 0.2);
+    color:#fff;
+    font-weight: 800;
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
   .deck-win-badge {
     padding: 6px 10px;
     border-radius: 999px;

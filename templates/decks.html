@@ -168,6 +168,9 @@
                 {% elif d.planned %}
                   <span class="deck-planned-pill">Planned</span>
                 {% endif %}
+                {% if d.decklist_text %}
+                  <span class="deck-list-pill">Decklist</span>
+                {% endif %}
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
               </div>
             </div>
