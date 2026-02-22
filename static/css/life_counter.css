@@ -409,15 +409,14 @@ body.sigtaara-ui .h4 {
       transform-origin:center;
       max-width:70%;
     }
-    .players-3 .life-card.p3-slot-3 .player-name{
-      top:50%;
-      bottom:auto;
-      left:auto;
-      right:85%;
-      transform:translateY(-50%) rotate(90deg);
-      transform-origin:center;
-      max-width:92%;
-    }
+.players-3 .life-card.p3-slot-3 .player-name{
+  top:auto;
+  bottom:0;
+  left:50%;
+  right:auto;
+  transform:translateX(-50%);
+  transform-origin:center;
+}
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
     .players-3 .life-card.p3-slot-1{ border-bottom:1px solid rgba(255,255,255,0.18); }
