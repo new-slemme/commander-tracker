@@ -463,7 +463,7 @@ body.sigtaara-ui .h4 {
   top:var(--flyout-top, 50%);
   left:var(--flyout-left, 50%);
   z-index:320;
-  width:min(320px, calc(100vw - 32px));
+  width:min(460px, calc(100vw - 32px));
   min-height:0;
   max-height:min(74vh, 420px);
   padding:12px;
@@ -483,6 +483,13 @@ body.sigtaara-ui .h4 {
 .player-salt-flyout__content{
   display:flex;
   flex-direction:column;
+  gap:10px;
+}
+
+.player-salt-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
   gap:10px;
 }
 
@@ -562,10 +569,13 @@ body.sigtaara-ui .h4 {
   object-fit:contain;
 }
 
-.player-salt-flyout .btn{
-  min-height:56px;
-  min-width:56px;
-  padding:.6rem;
+.player-salt-flyout .btn,
+.player-salt-action-btn{
+  min-height:64px;
+  min-width:64px;
+  width:calc((100% - 20px) / 3);
+  flex:1 1 0;
+  padding:.7rem;
   border-radius:18px;
   font-size:clamp(1rem,2vw,1.08rem);
   font-weight:800;
@@ -586,8 +596,8 @@ body.sigtaara-ui .h4 {
 .player-salt-flyout #playerFlagManaBtn img,
 .player-salt-flyout #playerFlagMisplayedBtn img,
 .player-salt-flyout #playerFlagCloseBtn img{
-  width:32px;
-  height:32px;
+  width:60px;
+  height:60px;
   object-fit:contain;
   pointer-events:none;
 }
@@ -633,6 +643,7 @@ body.sigtaara-ui .h4 {
   color:#eaf0ff;
   background:rgba(8,22,55,0.66);
   border:2px solid rgba(232,238,251,0.85);
+  flex:0.8 1 0;
 }
 
 .player-salt-flyout .btn:focus-visible{
@@ -657,9 +668,16 @@ body.sigtaara-ui .h4 {
   }
 
   .player-salt-flyout{
-    width:min(300px, calc(100vw - 18px));
+    width:min(340px, calc(100vw - 18px));
     max-height:min(80vh, 480px);
     border-radius:16px;
+  }
+
+  .player-salt-flyout #playerFlagManaBtn img,
+  .player-salt-flyout #playerFlagMisplayedBtn img,
+  .player-salt-flyout #playerFlagCloseBtn img{
+    width:42px;
+    height:42px;
   }
 }
 
