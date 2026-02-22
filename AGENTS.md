@@ -31,12 +31,26 @@ If import is unavailable, paste a plain-text deck list manually (one card per li
 - Verify each participant has a distinct player+deck assignment.
 - Start the game and confirm the life counter page loads with all participants.
 
+### 4) Run a live game session before in-game UI validation
+- Start the web app locally before testing in-game UI behavior (life changes, commander damage, turn flow, etc.).
+- Ensure the server binds to `0.0.0.0` so browser automation can connect.
+- Confirm the app is reachable from the browser container at `http://localhost:<port>`.
+- Navigate through game setup until you are on the active life counter/game screen, not just pre-game forms.
+
+### 5) Screenshot requirement for in-game UI changes
+- If a task changes visible in-game UI, capture at least one screenshot of a **running game session** showing all active players.
+- Prefer a life counter screen that clearly includes player names, life totals, and game controls impacted by the change.
+- Save the screenshot artifact and include a markdown image link in the final report.
+- If screenshot capture fails, document the exact failure reason and any connectivity/port mismatch observed.
+
 ## Verification checklist (static + UI)
 - [ ] Players are present and selectable.
 - [ ] Decks exist for each player.
 - [ ] Deck records contain imported/pasted decklist text.
 - [ ] A multiplayer game can be created using those decks.
 - [ ] Life counter initializes with all players and expected starting life.
+- [ ] App server is running and reachable from browser automation.
+- [ ] At least one screenshot from an active game session is captured for UI-affecting changes.
 
 ## Notes for future agents
 - Prefer repeatable, deterministic seed data names.
