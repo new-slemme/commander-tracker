@@ -180,38 +180,21 @@
                         <span class="game-submeta__item">{{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players</span>
                         <span class="game-submeta__dot">•</span>
                         <span class="game-submeta__item">Game #{{ g.id }}</span>
-                        {% if g.win_type %}
-                          <span class="game-submeta__dot">•</span>
-                          <span class="game-submeta__item">{{ g.win_type.replace('_',' ')|title }}</span>
-                        {% endif %}
                         {% if g.ending_turn is not none %}
                           <span class="game-submeta__dot">•</span>
                           <span class="game-submeta__item">Turn {{ g.ending_turn }}</span>
-                        {% endif %}
-                        {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length, 'salt_clicks': 0}) %}
-                        {% if salt_stats.salted_players > 0 %}
-                          <span class="game-submeta__dot">•</span>
-                          <span class="game-submeta__item">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}</span>
-                        {% elif g.salt_rating %}
-                          <span class="game-submeta__dot">•</span>
-                          <span class="game-submeta__item">Legacy salt {{ g.salt_rating }} 🧂</span>
                         {% endif %}
                       </div>
                     </div>
 
                     <div class="game-summary-right">
+                      {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length, 'salt_clicks': 0}) %}
                       <div class="game-top-actions">
                         {% if scope == "all" and g.pod %}
                           <span class="game-tag game-tag--pod" title="Pod">
                             Pod · {{ g.pod.name }}
                           </span>
                         {% endif %}
-
-                        <button class="copy-link-btn" type="button"
-                                data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}"
-                                aria-label="Copy game link" title="Copy game link">
-                          <span class="copy-link-icon" aria-hidden="true">🔗</span>
-                        </button>
 
                         <div class="winner-pill">
                           <span class="dot"></span>
@@ -250,52 +233,27 @@
                       </div>
                     {% endif %}
                   </div>
-
-                  <div class="game-tags">
-                    <span class="game-tag">
-                      Decks in game: {{ game_parts[g.id]|length }}
-                    </span>
-                    {% if salt_stats.salted_players > 0 %}
-                      <span class="game-tag game-tag--salt">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}</span>
-                    {% elif g.salt_rating %}
-                      <span class="game-tag game-tag--salt">Legacy salt {{ g.salt_rating }} 🧂</span>
-                    {% endif %}
-                    {% if g.win_type %}
-                      <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
-                    {% endif %}
-                  </div>
                 </div>
                 </summary>
 
                 <div class="game-content game-content--details">
                   <div class="game-meta game-meta--redundant">
-                    {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
-                    <span class="muted">·</span>
-                    Game #{{ g.id }}
+                    Winner: {{ g.winner.name }}
                   </div>
 
                 <div class="open-head">
                   <div class="open-head__left">
-                    <div class="open-head__date">{{ g.date.strftime('%Y-%m-%d %H:%M') }}</div>
+                    <div class="open-head__date">Game #{{ g.id }}</div>
                     <div class="open-head__meta">
-                      {{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players
-                      <span class="muted">·</span>
-                      Game #{{ g.id }}
-                      {% if g.win_type %}
-                        <span class="muted">·</span>
-                        {{ g.win_type.replace('_',' ')|title }}
-                      {% endif %}
-                      {% if salt_stats.salted_players > 0 %}
-                        <span class="muted">·</span>
-                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}
-                      {% elif g.salt_rating %}
-                        <span class="muted">·</span>
-                        Legacy salt {{ g.salt_rating }} 🧂
-                      {% endif %}
+                      {{ g.date.strftime('%Y-%m-%d %H:%M') }}
                     </div>
                   </div>
                 
                   <div class="open-head__right">
+                    <a href="{{ url_for('game_detail', game_id=g.id) }}" class="btn btn-sm btn-outline-light">
+                      Open game
+                    </a>
+
                     <button class="copy-link-btn" type="button"
                             data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}"
                             aria-label="Copy game link" title="Copy game link">
@@ -307,18 +265,23 @@
                     </button>
                   </div>
                 </div>
-                    
-                  {% if g.win_type or salt_stats.salted_players > 0 or g.salt_rating %}
-                    <div class="game-meta game-meta--redundant">
-                      {% if g.win_type %}{{ g.win_type.replace('_',' ') }}{% endif %}
-                      {% if g.win_type and (salt_stats.salted_players > 0 or g.salt_rating) %}<span class="muted">·</span>{% endif %}
-                      {% if salt_stats.salted_players > 0 %}
-                        Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}
-                      {% elif g.salt_rating %}
-                        Legacy salt {{ g.salt_rating }} 🧂
-                      {% endif %}
-                    </div>
-                  {% endif %}
+
+                  <div class="game-tags">
+                    <span class="game-tag">
+                      Decks in game: {{ game_parts[g.id]|length }}
+                    </span>
+                    {% if g.win_type %}
+                      <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
+                    {% endif %}
+                    {% if g.ending_turn is not none %}
+                      <span class="game-tag">Ending turn: {{ g.ending_turn }}</span>
+                    {% endif %}
+                    {% if salt_stats.salted_players > 0 %}
+                      <span class="game-tag game-tag--salt">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}</span>
+                    {% elif g.salt_rating %}
+                      <span class="game-tag game-tag--salt">Legacy salt {{ g.salt_rating }} 🧂</span>
+                    {% endif %}
+                  </div>
 
                   <div class="players-row">
                     {% for gp in game_parts[g.id] %}
@@ -348,10 +311,6 @@
                       </span>
                     {% endfor %}
                   </div>
-
-                  <a href="{{ url_for('game_detail', game_id=g.id) }}" class="btn btn-sm btn-outline-light align-self-start mt-1">
-                    Open game #{{ g.id }}
-                  </a>
 
                 </div>
               </details>
