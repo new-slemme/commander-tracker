@@ -826,6 +826,56 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('011_game_result_canonical_values')")
             )
 
+        if "012_game_and_participant_query_indexes" not in applied:
+            db.session.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_game_pod_id_date ON game (pod_id, date)")
+            )
+            db.session.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_game_winner_id_date ON game (winner_id, date)")
+            )
+            db.session.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_game_starting_player_id ON game (starting_player_id)")
+            )
+
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_game_participant_game_id_player_id "
+                    "ON game_participant (game_id, player_id)"
+                )
+            )
+            db.session.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_game_participant_deck_id ON game_participant (deck_id)")
+            )
+            db.session.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_game_participant_player_id ON game_participant (player_id)")
+            )
+
+            participant_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
+            }
+            if "salt_count" in participant_cols:
+                db.session.execute(
+                    text("CREATE INDEX IF NOT EXISTS ix_game_participant_salt_count ON game_participant (salt_count)")
+                )
+            if "mana_fucked" in participant_cols:
+                db.session.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_game_participant_mana_fucked_true "
+                        "ON game_participant (game_id, player_id) WHERE mana_fucked = 1"
+                    )
+                )
+            if "misplayed" in participant_cols:
+                db.session.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_game_participant_misplayed_true "
+                        "ON game_participant (game_id, player_id) WHERE misplayed = 1"
+                    )
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('012_game_and_participant_query_indexes')")
+            )
+
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
         if not default_pod:
             default_pod = Pod(name=DEFAULT_POD_NAME, slug=DEFAULT_POD_SLUG, is_active=True)
