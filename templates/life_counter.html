@@ -265,6 +265,7 @@ let playerFlagTargetId = null;
 let playerSaltFlyoutOpen = false;
 let playerFlagAnchorButton = null;
 const participantFlagsByPlayer = {};
+const perTurnStatsByPlayer = {};
 const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
 const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
 
@@ -294,6 +295,39 @@ function setPlayerFlagState(playerId, nextFlags){
     misplayed: !!nextFlags.misplayed,
     salt_count: Math.max(0, Number(nextFlags.salt_count) || 0),
   };
+}
+
+function getPerTurnEntry(playerId, turnNumber){
+  const pid = String(playerId);
+  const t = Math.max(1, Number(turnNumber) || 1);
+  if(!perTurnStatsByPlayer[pid]) perTurnStatsByPlayer[pid] = {};
+  if(!perTurnStatsByPlayer[pid][t]){
+    const currentFlags = getPlayerFlagState(pid);
+    perTurnStatsByPlayer[pid][t] = {
+      turn: t,
+      life_delta: 0,
+      mana_fucked: !!currentFlags.mana_fucked,
+      misplayed: !!currentFlags.misplayed,
+    };
+  }
+  return perTurnStatsByPlayer[pid][t];
+}
+
+function recordLifeDelta(playerId, delta, turnNumber){
+  if(!Number.isFinite(Number(delta)) || Number(delta) === 0) return;
+  const entry = getPerTurnEntry(playerId, turnNumber);
+  entry.life_delta += Number(delta);
+}
+
+function snapshotCurrentFlagsForTurn(turnNumber){
+  const t = Math.max(1, Number(turnNumber) || 1);
+  cards.forEach((card)=>{
+    const pid = String(card.dataset.player);
+    const flags = getPlayerFlagState(pid);
+    const entry = getPerTurnEntry(pid, t);
+    entry.mana_fucked = !!flags.mana_fucked;
+    entry.misplayed = !!flags.misplayed;
+  });
 }
 
 function updatePlayerFlagButtonState(buttonId, enabled, ariaLabels){
@@ -514,6 +548,7 @@ function nextPlayer(){
   }
 
   if(passed.size === aliveIds.length){
+    snapshotCurrentFlagsForTurn(turn);
     turn++;
     passed.clear();
     updateTurnPills();
@@ -589,6 +624,7 @@ function applyPendingLife(playerId){
   const before = getCommittedLife(playerId);
   const after = Math.max(0, before + amount);
   committedLife[playerId] = after;
+  recordLifeDelta(playerId, amount, turn);
 
   renderDisplayedLife(playerId);
 
@@ -946,6 +982,9 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
 });
 
 document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
+  cards.forEach((card)=>applyPendingLife(String(card.dataset.player)));
+  snapshotCurrentFlagsForTurn(turn);
+
   const timedModeInput = document.getElementById("timed_mode_input");
   const timeControlInput = document.getElementById("time_control_input");
   const endedOnTimeInput = document.getElementById("ended_on_time_input");
@@ -974,15 +1013,35 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
 
   if(participantFlagsInput){
     const payload = {};
-    Object.entries(participantFlagsByPlayer).forEach(([playerId, flags])=>{
-      if(!flags || typeof flags !== "object") return;
+    const participantIds = new Set(cards.map((card)=>String(card.dataset.player)));
+    Object.keys(participantFlagsByPlayer).forEach((playerId)=>participantIds.add(String(playerId)));
+    Object.keys(perTurnStatsByPlayer).forEach((playerId)=>participantIds.add(String(playerId)));
+
+    [...participantIds].forEach((playerId)=>{
+      const flags = getPlayerFlagState(playerId);
       const normalizedFlags = {
         mana_fucked: !!flags.mana_fucked,
         misplayed: !!flags.misplayed,
         salt_count: Math.max(0, Number(flags.salt_count ?? (flags.salted ? 1 : 0)) || 0),
       };
+
+      const turnStatsMap = perTurnStatsByPlayer[playerId] || {};
+      const turnStats = Object.values(turnStatsMap)
+        .map((entry)=>({
+          turn: Math.max(1, Number(entry.turn) || 1),
+          life_delta: Number(entry.life_delta) || 0,
+          mana_fucked: !!entry.mana_fucked,
+          misplayed: !!entry.misplayed,
+        }))
+        .sort((a, b)=>a.turn - b.turn);
+
       const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.misplayed || normalizedFlags.salt_count > 0;
-      if(hasTruthyFlag) payload[playerId] = normalizedFlags;
+      if(hasTruthyFlag || turnStats.length > 0){
+        payload[playerId] = {
+          ...normalizedFlags,
+          turn_stats: turnStats,
+        };
+      }
     });
     participantFlagsInput.value = JSON.stringify(payload);
   }
