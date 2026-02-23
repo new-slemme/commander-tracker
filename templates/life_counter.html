@@ -753,26 +753,65 @@ function positionPlayerSaltMenu(anchorButton, playerCard){
   const cardPadding = 8;
   const anchorRect = anchorButton.getBoundingClientRect();
   const cardRect = playerCard.getBoundingClientRect();
+  const lifeGrid = document.getElementById("lifeGrid");
+  const player3SideCard = lifeGrid?.classList.contains("players-3") && playerCard.classList.contains("p3-slot-3");
 
-  const flyoutWidth = Math.min(460, Math.max(280, window.innerWidth - (viewportPadding * 2)));
+  const cardAvailableWidth = Math.max(220, cardRect.width - (cardPadding * 2));
+  const viewportAvailableWidth = Math.max(220, window.innerWidth - (viewportPadding * 2));
+  const flyoutWidth = Math.max(220, Math.min(460, cardAvailableWidth, viewportAvailableWidth));
+  const cardAvailableHeight = Math.max(170, cardRect.height - (cardPadding * 2));
+  const viewportAvailableHeight = Math.max(170, window.innerHeight - (viewportPadding * 2));
+  const flyoutMaxHeight = Math.max(170, Math.min(420, cardAvailableHeight, viewportAvailableHeight));
+
   flyoutEl.style.width = `${flyoutWidth}px`;
+  flyoutEl.style.maxHeight = `${flyoutMaxHeight}px`;
 
-  const availableRightInCard = cardRect.right - anchorRect.right;
-  const openToRight = availableRightInCard >= flyoutWidth + cardPadding;
-  let left = openToRight ? (anchorRect.right + 10) : (anchorRect.left - flyoutWidth - 10);
+  const flyoutHeight = Math.max(170, Math.min(flyoutEl.scrollHeight || 0, flyoutMaxHeight));
+  const flyoutRotation = getPlayerCardOrientation(playerCard);
+  const quarterTurn = flyoutRotation === "90deg" || flyoutRotation === "-90deg";
+  const halfFlyoutWidth = flyoutWidth / 2;
+  const halfFlyoutHeight = flyoutHeight / 2;
+  const halfBoundX = quarterTurn ? halfFlyoutHeight : halfFlyoutWidth;
+  const halfBoundY = quarterTurn ? halfFlyoutWidth : halfFlyoutHeight;
 
-  const cardLeftBound = cardRect.left + cardPadding;
-  const cardRightBound = cardRect.right - flyoutWidth - cardPadding;
-  left = Math.min(Math.max(left, cardLeftBound), cardRightBound);
-  left = Math.min(Math.max(left, viewportPadding), window.innerWidth - flyoutWidth - viewportPadding);
+  let centerX;
+  if(player3SideCard){
+    centerX = cardRect.left + (cardRect.width / 2);
+  } else {
+    const availableRightInCard = cardRect.right - anchorRect.right;
+    const openToRight = availableRightInCard >= flyoutWidth + cardPadding;
+    const candidateLeft = openToRight ? (anchorRect.right + 10) : (anchorRect.left - flyoutWidth - 10);
+    centerX = candidateLeft + halfFlyoutWidth;
+  }
+
+  const cardMinCenterX = cardRect.left + cardPadding + halfBoundX;
+  const cardMaxCenterX = cardRect.right - cardPadding - halfBoundX;
+  if(cardMinCenterX <= cardMaxCenterX){
+    centerX = Math.min(Math.max(centerX, cardMinCenterX), cardMaxCenterX);
+  } else {
+    centerX = cardRect.left + (cardRect.width / 2);
+  }
+  centerX = Math.min(
+    Math.max(centerX, viewportPadding + halfBoundX),
+    window.innerWidth - viewportPadding - halfBoundX
+  );
 
   const anchorCenterY = anchorRect.top + (anchorRect.height / 2);
-  const minTop = Math.max(viewportPadding + 110, cardRect.top + 110);
-  const maxTop = Math.min(window.innerHeight - viewportPadding - 110, cardRect.bottom - 110);
-  const top = Math.min(Math.max(anchorCenterY, minTop), maxTop);
+  const minCenterY = Math.max(viewportPadding + halfBoundY, cardRect.top + cardPadding + halfBoundY);
+  const maxCenterY = Math.min(window.innerHeight - viewportPadding - halfBoundY, cardRect.bottom - cardPadding - halfBoundY);
+  let centerY = Math.min(Math.max(anchorCenterY, minCenterY), maxCenterY);
 
-  flyoutEl.style.setProperty("--flyout-left", `${left}px`);
-  flyoutEl.style.setProperty("--flyout-top", `${top}px`);
+  if(minCenterY > maxCenterY){
+    const cardCenterY = cardRect.top + (cardRect.height / 2);
+    centerY = Math.min(
+      Math.max(cardCenterY, viewportPadding + halfBoundY),
+      window.innerHeight - viewportPadding - halfBoundY
+    );
+  }
+
+  flyoutEl.style.setProperty("--flyout-left", `${centerX}px`);
+  flyoutEl.style.setProperty("--flyout-top", `${centerY}px`);
+  flyoutEl.style.setProperty("--flyout-rotation", flyoutRotation);
 }
 
 function closePlayerSaltMenu(){
@@ -824,7 +863,6 @@ function openPlayerSaltMenu(playerId, anchorButton){
   document.querySelectorAll(".life-card.flag-menu-open").forEach((card)=>card.classList.remove("flag-menu-open"));
   playerCard?.classList.add("flag-menu-open");
 
-  flyoutEl.style.setProperty("--flyout-rotation", getPlayerCardOrientation(playerCard));
   positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 
   pauseTimers("player-flag");
