@@ -38,9 +38,41 @@
         </div>
       </div>
       <div class="p-3">
-        <div class="muted">
+        <div class="muted mb-3">
           Uses <b class="text-white">starting_player</b> captured from the Play Game flow.
           (Older games may not have it.)
+        </div>
+
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 salt-table">
+            <thead>
+              <tr>
+                <th>Seat</th>
+                <th class="text-end">Winrate</th>
+                <th class="text-end">Record</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in seat_winrates %}
+                <tr>
+                  <td class="fw-bold text-white">Seat {{ row.seat_position }}</td>
+                  <td class="text-end fw-bold text-white">
+                    {% if row.winrate is not none %}
+                      {{ "%.1f"|format(row.winrate) }}%
+                    {% else %}
+                      —
+                    {% endif %}
+                  </td>
+                  <td class="text-end">{{ row.wins }}/{{ row.games }}</td>
+                </tr>
+              {% endfor %}
+              {% if seat_winrates|length == 0 %}
+                <tr>
+                  <td colspan="3" class="text-center muted py-3">No seat position data yet.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
