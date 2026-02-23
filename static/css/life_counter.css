@@ -475,7 +475,7 @@ body.sigtaara-ui .h4 {
   -webkit-backdrop-filter:blur(14px);
   opacity:0;
   --flyout-rotation:0deg;
-  transform:translate(0, -50%) rotate(var(--flyout-rotation)) scale(.985);
+  transform:translate(-50%, -50%) rotate(var(--flyout-rotation)) scale(.985);
   pointer-events:none;
   transition:opacity .14s ease, transform .14s ease;
 }
@@ -495,7 +495,7 @@ body.sigtaara-ui .h4 {
 
 .player-salt-flyout.is-open{
   opacity:1;
-  transform:translate(0, -50%) rotate(var(--flyout-rotation)) scale(1);
+  transform:translate(-50%, -50%) rotate(var(--flyout-rotation)) scale(1);
   pointer-events:auto;
 }
 
