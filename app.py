@@ -64,7 +64,10 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "mana_fucked",
     "misplayed",
     "salt_count",
+    "turn_stats",
 }
+
+MAX_PER_PLAYER_TURN_STATS = 500
 
 
 def parse_participant_flags(raw_flags: str | None) -> dict[str, bool | int]:
@@ -106,6 +109,52 @@ def participant_salt_count(parsed_flags: dict[str, bool | int] | None) -> int:
     if isinstance(salt_count_raw, int) and not isinstance(salt_count_raw, bool):
         return max(0, salt_count_raw)
     return 0
+
+
+def parse_participant_turn_stats(raw_flags: str | None) -> list[dict[str, int | bool]]:
+    payload = (raw_flags or "").strip()
+    if not payload:
+        return []
+
+    try:
+        loaded = json.loads(payload)
+    except json.JSONDecodeError:
+        return []
+
+    turn_stats = loaded.get("turn_stats")
+    if not isinstance(turn_stats, list):
+        return []
+
+    parsed_stats = []
+    for entry in turn_stats:
+        if not isinstance(entry, dict):
+            continue
+
+        turn = entry.get("turn")
+        life_delta = entry.get("life_delta")
+        mana_fucked = entry.get("mana_fucked")
+        misplayed = entry.get("misplayed")
+
+        if not isinstance(turn, int) or isinstance(turn, bool) or turn < 1:
+            continue
+        if not isinstance(life_delta, int) or isinstance(life_delta, bool):
+            continue
+        if not isinstance(mana_fucked, bool):
+            continue
+        if not isinstance(misplayed, bool):
+            continue
+
+        parsed_stats.append(
+            {
+                "turn": turn,
+                "life_delta": life_delta,
+                "mana_fucked": mana_fucked,
+                "misplayed": misplayed,
+            }
+        )
+
+    parsed_stats.sort(key=lambda item: item["turn"])
+    return parsed_stats
 
 
 def validate_password_rules(password: str) -> str | None:
@@ -2107,6 +2156,7 @@ def game_detail(game_id):
     total_salt_clicks = 0
     for gp in parts:
         gp.parsed_flags = parse_participant_flags(gp.flags_json)
+        gp.turn_stats = parse_participant_turn_stats(gp.flags_json)
         salt_count = participant_salt_count(gp.parsed_flags)
         gp.salt_count = salt_count
         total_salt_clicks += salt_count
@@ -2947,6 +2997,46 @@ def end_game():
                     if not isinstance(flag_value, int) or isinstance(flag_value, bool) or flag_value < 0:
                         return "salt_count must be a non-negative integer", 400
                     sanitized_player_flags[flag_key] = flag_value
+                elif flag_key == "turn_stats":
+                    if not isinstance(flag_value, list):
+                        return "turn_stats must be a list", 400
+                    if len(flag_value) > MAX_PER_PLAYER_TURN_STATS:
+                        return "turn_stats payload too large", 400
+
+                    sanitized_turn_stats = []
+                    for turn_entry in flag_value:
+                        if not isinstance(turn_entry, dict):
+                            return "turn_stats entries must be objects", 400
+
+                        turn = turn_entry.get("turn")
+                        life_delta = turn_entry.get("life_delta")
+                        mana_fucked = turn_entry.get("mana_fucked")
+                        misplayed = turn_entry.get("misplayed")
+
+                        if not isinstance(turn, int) or isinstance(turn, bool) or turn < 1 or turn > 500:
+                            return "turn_stats.turn must be an integer between 1 and 500", 400
+                        if (
+                            not isinstance(life_delta, int)
+                            or isinstance(life_delta, bool)
+                            or life_delta < -1000
+                            or life_delta > 1000
+                        ):
+                            return "turn_stats.life_delta must be an integer between -1000 and 1000", 400
+                        if not isinstance(mana_fucked, bool):
+                            return "turn_stats.mana_fucked must be boolean", 400
+                        if not isinstance(misplayed, bool):
+                            return "turn_stats.misplayed must be boolean", 400
+
+                        sanitized_turn_stats.append(
+                            {
+                                "turn": turn,
+                                "life_delta": life_delta,
+                                "mana_fucked": mana_fucked,
+                                "misplayed": misplayed,
+                            }
+                        )
+
+                    sanitized_player_flags[flag_key] = sanitized_turn_stats
 
             if sanitized_player_flags:
                 participant_flags_by_player[player_id] = json.dumps(
