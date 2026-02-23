@@ -2572,6 +2572,71 @@ def players():
     return render_template("players.html", players=players_list, player_can_delete=player_can_delete)
 
 
+@app.route("/player/<int:player_id>")
+def player_detail(player_id):
+    player = db.session.get(Player, player_id)
+    if not player:
+        abort(404)
+
+    decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
+
+    games_played = GameParticipant.query.filter_by(player_id=player.id).count()
+    games_won = Game.query.filter_by(winner_id=player.id).count()
+    games_started = Game.query.filter_by(starting_player_id=player.id).count()
+    winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
+
+    deck_stats = {}
+    for d in decks:
+        deck_wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+        deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_losses = max(0, deck_games - deck_wins)
+        deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
+
+        deck_stats[d.id] = {
+            "wins": deck_wins,
+            "losses": deck_losses,
+            "games": deck_games,
+            "winrate": deck_winrate,
+        }
+
+    participations = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.player_id == player.id)
+        .order_by(Game.date.desc())
+        .all()
+    )
+
+    recent_games = []
+    for gp in participations:
+        game = gp.game
+        participant_count = GameParticipant.query.filter_by(game_id=game.id).count()
+        recent_games.append(
+            {
+                "game_id": game.id,
+                "date": game.date,
+                "won": game.winner_id == player.id,
+                "deck": gp.deck,
+                "participant_count": participant_count,
+            }
+        )
+
+    return render_template(
+        "player_detail.html",
+        player=player,
+        decks=decks,
+        deck_stats=deck_stats,
+        recent_games=recent_games,
+        games_played=games_played,
+        games_won=games_won,
+        games_started=games_started,
+        winrate=winrate,
+    )
+
+
 @app.route("/add_player", methods=["POST"])
 def add_player():
     name = request.form["name"].strip()

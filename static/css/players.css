@@ -113,3 +113,7 @@
     .add-guest-wrap .form-control { min-width: 160px; flex: 1 1 auto; }
     .player-name { max-width: 64vw; }
   }
+
+
+  .player-name { text-decoration: none; }
+  .player-name:hover { text-decoration: underline; color: #fff; }

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<link href="{{ url_for('static', filename='css/player_detail.css') }}" rel="stylesheet">
+
+<div class="container py-4 player-detail-page">
+  <div class="detail-hero p-4 mb-4">
+    <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+      <div>
+        <p class="eyebrow mb-2">Player Details</p>
+        <h1 class="m-0 fw-bold">{{ player.name }}</h1>
+        <div class="muted2 mt-1">
+          {% if player.user_id %}
+            Linked account player
+          {% else %}
+            Guest player
+          {% endif %}
+        </div>
+      </div>
+      <button class="btn btn-sm btn-outline-light" type="button" onclick="history.back()">← Go Back</button>
+    </div>
+
+    <div class="overview-grid mt-4">
+      <article class="stat-card">
+        <p class="stat-label">Games played</p>
+        <p class="stat-value">{{ games_played }}</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Wins</p>
+        <p class="stat-value">{{ games_won }}</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Winrate</p>
+        <p class="stat-value">{{ winrate }}%</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Started games</p>
+        <p class="stat-value">{{ games_started }}</p>
+      </article>
+      <article class="stat-card">
+        <p class="stat-label">Decks</p>
+        <p class="stat-value">{{ decks|length }}</p>
+      </article>
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <h4 class="m-0">Decks</h4>
+      <span class="muted2">Click a deck to open full stats.</span>
+    </div>
+
+    {% if decks %}
+      <div class="row g-3">
+        {% for d in decks %}
+          {% set s = deck_stats.get(d.id, {}) %}
+          <div class="col-12 col-md-6 col-lg-4">
+            <a class="deck-card text-decoration-none" href="{{ url_for('deck_detail', deck_id=d.id) }}">
+              <div class="fw-bold text-white text-truncate">{{ d.name }}</div>
+              <div class="muted2 small text-truncate">{{ d.commander_name or d.commander }}</div>
+              <div class="deck-mini-grid mt-3">
+                <div><span class="muted2">Games</span><b>{{ s.get('games', 0) }}</b></div>
+                <div><span class="muted2">W</span><b>{{ s.get('wins', 0) }}</b></div>
+                <div><span class="muted2">L</span><b>{{ s.get('losses', 0) }}</b></div>
+                <div><span class="muted2">WR</span><b>{{ s.get('winrate', 0.0) }}%</b></div>
+              </div>
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-card">No decks recorded for this player yet.</div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+      <h4 class="m-0">Recent games</h4>
+      <span class="muted2">Most recent first.</span>
+    </div>
+
+    {% if recent_games %}
+      <div class="recent-list">
+        {% for item in recent_games %}
+          <a class="recent-row" href="{{ url_for('game_detail', game_id=item.game_id) }}">
+            <div>
+              <div class="fw-bold text-white">Game #{{ item.game_id }}</div>
+              <div class="muted2 small">
+                {{ item.date.strftime('%Y-%m-%d %H:%M') }}
+                {% if item.deck %}
+                  · {{ item.deck.name }}
+                {% endif %}
+              </div>
+            </div>
+            <div class="recent-meta">
+              <span class="pill {{ 'pill-win' if item.won else 'pill-loss' }}">{{ 'Win' if item.won else 'Loss' }}</span>
+              <span class="muted2 small">{{ item.participant_count }} players</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-card">No games recorded for this player yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
