@@ -157,6 +157,26 @@ def parse_participant_turn_stats(raw_flags: str | None) -> list[dict[str, int | 
     return parsed_stats
 
 
+def validate_participant_seat_positions(participants):
+    seat_positions = []
+    for participant in participants:
+        seat_position = participant.get("seat_position")
+        if seat_position is None:
+            return "Seat position is required", None
+        if not isinstance(seat_position, int) or isinstance(seat_position, bool):
+            return "Seat position must be an integer", None
+        if seat_position < 1:
+            return "Seat position must be at least 1", None
+        seat_positions.append(seat_position)
+
+    if len(set(seat_positions)) != len(seat_positions):
+        return "Duplicate seat positions are not allowed within the same game", None
+
+    expected = list(range(1, len(participants) + 1))
+    if sorted(seat_positions) != expected:
+        return f"Seat positions must be contiguous from 1 to {len(participants)}", None
+
+    return None, seat_positions
 def participant_hot_fields_from_flags(raw_flags: str | None) -> dict[str, int | bool]:
     parsed_flags = parse_participant_flags(raw_flags)
     turn_stats = parse_participant_turn_stats(raw_flags)
@@ -339,6 +359,7 @@ class GameParticipant(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
     deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False)
+    seat_position = db.Column(db.Integer, nullable=True)
     flags_json = db.Column(db.Text, nullable=True)
     salt_count = db.Column(db.Integer, nullable=False, default=0)
     mana_fucked = db.Column(db.Boolean, nullable=False, default=False)
@@ -349,7 +370,10 @@ class GameParticipant(db.Model):
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
     game = db.relationship("Game", backref="participants", lazy=True)
 
-    __table_args__ = (db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),)
+    __table_args__ = (
+        db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),
+        db.UniqueConstraint("game_id", "seat_position", name="unique_seat_per_game"),
+    )
 
 
 # -------------------------
@@ -602,6 +626,21 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('009_user_misplayed_salt_value')")
             )
 
+        if "010_game_participant_seat_position" not in applied:
+            participant_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
+            }
+            if "seat_position" not in participant_cols:
+                db.session.execute(text("ALTER TABLE game_participant ADD COLUMN seat_position INTEGER"))
+
+            db.session.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_game_participant_game_id_seat_position ON game_participant (game_id, seat_position) WHERE seat_position IS NOT NULL"
+                )
+            )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('010_game_participant_seat_position')")
         if "010_game_participant_hot_fields" not in applied:
             participant_cols = {
                 row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
@@ -1551,6 +1590,37 @@ def saltmine():
     start_wins = int(sp.wins or 0)
     start_winrate = round((start_wins / start_games) * 100, 1) if start_games else None
 
+    seat_winrate_rows = (
+        db.session.query(
+            GameParticipant.seat_position.label("seat_position"),
+            func.count(GameParticipant.id).label("games"),
+            func.sum(
+                case(
+                    (Game.winner_id == GameParticipant.player_id, 1),
+                    else_=0,
+                )
+            ).label("wins"),
+        )
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
+        .filter(GameParticipant.seat_position.isnot(None))
+        .group_by(GameParticipant.seat_position)
+        .order_by(GameParticipant.seat_position.asc())
+        .all()
+    )
+    seat_winrates = []
+    for row in seat_winrate_rows:
+        games = int(row.games or 0)
+        wins = int(row.wins or 0)
+        seat_winrates.append(
+            {
+                "seat_position": int(row.seat_position),
+                "games": games,
+                "wins": wins,
+                "winrate": round((wins / games) * 100, 1) if games else None,
+            }
+        )
+
     return render_template(
         "saltmine.html",
         salty_games=salty_games,
@@ -1560,6 +1630,7 @@ def saltmine():
         start_games=start_games,
         start_wins=start_wins,
         start_winrate=start_winrate,
+        seat_winrates=seat_winrates,
         scope=scope,
         active_pod=active_pod,
     )
@@ -2819,6 +2890,7 @@ def start_game():
             participants.append({
                 "player_id": p_id,
                 "deck_id": d_id,
+                "seat_position": len(participants) + 1,
                 "player_name": deck.owner.name,
                 "deck_name": deck.name,
                 "commander_art": deck.commander_local_art or deck.commander_art_crop_url,
@@ -2975,6 +3047,10 @@ def end_game():
     seen = {p["player_id"] for p in participants}
     if winner_id not in seen:
         return "Winner must be a participant", 400
+
+    seat_validation_error, _ = validate_participant_seat_positions(participants)
+    if seat_validation_error:
+        return seat_validation_error, 400
 
     starting_player_id = session.get("active_player_id")
     if starting_player_id is not None:
@@ -3174,6 +3250,8 @@ def end_game():
                 game_id=game.id,
                 player_id=p["player_id"],
                 deck_id=p["deck_id"],
+                seat_position=p.get("seat_position"),
+                flags_json=participant_flags_by_player.get(p["player_id"]),
                 flags_json=participant_flags_json,
                 salt_count=int(participant_hot_fields["salt_count"]),
                 mana_fucked=bool(participant_hot_fields["mana_fucked"]),
@@ -3228,7 +3306,7 @@ def manual_record_game():
             if not deck or deck.player_id != p_id or deck.retired or deck.planned:
                 return "Invalid deck for player", 400
 
-            participants.append((p_id, d_id))
+            participants.append({"player_id": p_id, "deck_id": d_id, "seat_position": len(participants) + 1})
 
     if len(participants) < 2:
         return "Need at least 2 players", 400
@@ -3243,8 +3321,19 @@ def manual_record_game():
     db.session.add(game)
     db.session.flush()
 
-    for p_id, d_id in participants:
-        db.session.add(GameParticipant(game_id=game.id, player_id=p_id, deck_id=d_id))
+    seat_validation_error, _ = validate_participant_seat_positions(participants)
+    if seat_validation_error:
+        return seat_validation_error, 400
+
+    for participant in participants:
+        db.session.add(
+            GameParticipant(
+                game_id=game.id,
+                player_id=participant["player_id"],
+                deck_id=participant["deck_id"],
+                seat_position=participant["seat_position"],
+            )
+        )
 
     db.session.commit()
     return redirect(url_for("index"))
@@ -3274,7 +3363,7 @@ def record_game():
             if not deck or deck.player_id != p_id:
                 return "Invalid deck for player", 400
 
-            participants.append((p_id, d_id))
+            participants.append({"player_id": p_id, "deck_id": d_id, "seat_position": len(participants) + 1})
 
     if len(participants) < 2:
         return "Need at least 2 players", 400
@@ -3289,8 +3378,19 @@ def record_game():
     db.session.add(game)
     db.session.flush()
 
-    for p_id, d_id in participants:
-        db.session.add(GameParticipant(game_id=game.id, player_id=p_id, deck_id=d_id))
+    seat_validation_error, _ = validate_participant_seat_positions(participants)
+    if seat_validation_error:
+        return seat_validation_error, 400
+
+    for participant in participants:
+        db.session.add(
+            GameParticipant(
+                game_id=game.id,
+                player_id=participant["player_id"],
+                deck_id=participant["deck_id"],
+                seat_position=participant["seat_position"],
+            )
+        )
 
     db.session.commit()
     return redirect(url_for("index"))
