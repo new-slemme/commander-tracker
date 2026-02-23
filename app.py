@@ -344,7 +344,8 @@ class Deck(db.Model):
     commander_name = db.Column(db.String(120))
     commander_scryfall_id = db.Column(db.String(40), index=True)
     commander_art_crop_url = db.Column(db.String(300))
-    commander_local_art = db.Column(db.String(300))
+    commander_local_art_crop = db.Column(db.String(300))
+    commander_local_art_custom = db.Column(db.String(300))
     custom_commander_art_url = db.Column(db.String(500))
     custom_card_art_url = db.Column(db.String(500))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
@@ -352,7 +353,12 @@ class Deck(db.Model):
 
     @property
     def commander_art_url(self):
-        return self.custom_commander_art_url or self.commander_local_art or self.commander_art_crop_url
+        return (
+            self.commander_local_art_custom
+            or self.custom_commander_art_url
+            or self.commander_local_art_crop
+            or self.commander_art_crop_url
+        )
 
     @property
     def card_art_url(self):
@@ -768,6 +774,36 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('011_deck_custom_art_urls')")
             )
 
+        if "013_deck_local_art_split" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "commander_local_art_crop" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN commander_local_art_crop VARCHAR(300)"))
+            if "commander_local_art_custom" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN commander_local_art_custom VARCHAR(300)"))
+
+            if "commander_local_art" in deck_cols:
+                db.session.execute(
+                    text(
+                        "UPDATE deck SET commander_local_art_crop = commander_local_art "
+                        "WHERE commander_local_art_crop IS NULL AND commander_local_art IS NOT NULL"
+                    )
+                )
+
+            db.session.execute(
+                text(
+                    "UPDATE deck "
+                    "SET commander_local_art_custom = custom_commander_art_url, custom_commander_art_url = NULL "
+                    "WHERE commander_local_art_custom IS NULL "
+                    "AND custom_commander_art_url LIKE '/art/%'"
+                )
+            )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('013_deck_local_art_split')")
+            )
+
         if "011_game_result_canonical_values" not in applied:
             game_rows = db.session.execute(text("SELECT id, win_type, timed_mode FROM game")).fetchall()
             for row in game_rows:
@@ -1006,11 +1042,11 @@ def _store_custom_art_upload(upload, field_label: str) -> str | None:
     return f"/art/{out_filename}"
 
 
-def resolve_custom_art_value(url_value: str, upload, field_label: str) -> str | None:
+def resolve_custom_art_value(url_value: str, upload, field_label: str) -> tuple[str | None, str | None]:
     uploaded_path = _store_custom_art_upload(upload, field_label)
     if uploaded_path:
-        return uploaded_path
-    return normalized_custom_art_url(url_value)
+        return None, uploaded_path
+    return normalized_custom_art_url(url_value), None
 
 
 def scryfall_named_exact(name: str):
@@ -1074,7 +1110,8 @@ def resolve_commander_metadata(commander_input: str) -> dict:
             "commander_name": None,
             "commander_scryfall_id": None,
             "commander_art_crop_url": None,
-            "commander_local_art": None,
+            "commander_local_art_crop": None,
+            "commander_local_art_custom": None,
             "color_identity": None,
             "lookup_ok": False,
         }
@@ -1098,7 +1135,8 @@ def resolve_commander_metadata(commander_input: str) -> dict:
         "commander_name": combined_commander,
         "commander_scryfall_id": scry_id,
         "commander_art_crop_url": art_crop,
-        "commander_local_art": local_art,
+        "commander_local_art_crop": local_art,
+        "commander_local_art_custom": None,
         "color_identity": color_identity,
         "lookup_ok": len(cards) == len(commander_names),
     }
@@ -1937,8 +1975,14 @@ def fix_art_paths():
     decks = Deck.query.all()
     changed = 0
     for d in decks:
-        if d.commander_local_art and d.commander_local_art.startswith("/static/commander_art/"):
-            d.commander_local_art = None
+        deck_changed = False
+        if d.commander_local_art_crop and d.commander_local_art_crop.startswith("/static/commander_art/"):
+            d.commander_local_art_crop = None
+            deck_changed = True
+        if d.commander_local_art_custom and d.commander_local_art_custom.startswith("/static/commander_art/"):
+            d.commander_local_art_custom = None
+            deck_changed = True
+        if deck_changed:
             changed += 1
     db.session.commit()
     return f"Fixed {changed} decks"
@@ -2972,12 +3016,12 @@ def add_deck():
         if raw_import:
             parsed_import = parse_deck_input(raw_import)
 
-        custom_commander_art = resolve_custom_art_value(
+        custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
             custom_commander_art_url,
             custom_commander_art_upload,
             "custom commander art",
         )
-        custom_card_art = resolve_custom_art_value(
+        custom_card_art_url_value, _custom_card_art_local = resolve_custom_art_value(
             custom_card_art_url,
             custom_card_art_upload,
             "custom card art",
@@ -2994,8 +3038,9 @@ def add_deck():
         return redirect(url_for("decks"))
 
     deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
-    deck.custom_commander_art_url = custom_commander_art
-    deck.custom_card_art_url = custom_card_art
+    deck.custom_commander_art_url = custom_commander_art_url_value
+    deck.commander_local_art_custom = custom_commander_art_local
+    deck.custom_card_art_url = custom_card_art_url_value
     deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
@@ -3005,7 +3050,7 @@ def add_deck():
     deck.commander_name = commander_meta["commander_name"]
     deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
     deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
-    deck.commander_local_art = commander_meta["commander_local_art"]
+    deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
     deck.color_identity = commander_meta["color_identity"]
 
     db.session.add(deck)
@@ -3105,7 +3150,8 @@ def update_deck(deck_id):
     old_commander_name = deck.commander_name
     old_commander_scryfall_id = deck.commander_scryfall_id
     old_commander_art_crop_url = deck.commander_art_crop_url
-    old_commander_local_art = deck.commander_local_art
+    old_commander_local_art_crop = deck.commander_local_art_crop
+    old_commander_local_art_custom = deck.commander_local_art_custom
     old_custom_commander_art_url = deck.custom_commander_art_url
     old_custom_card_art_url = deck.custom_card_art_url
     old_color_identity = deck.color_identity
@@ -3117,12 +3163,12 @@ def update_deck(deck_id):
         if raw_import:
             parsed_import = parse_deck_input(raw_import)
 
-        custom_commander_art = resolve_custom_art_value(
+        custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
             custom_commander_art_url,
             custom_commander_art_upload,
             "custom commander art",
         )
-        custom_card_art = resolve_custom_art_value(
+        custom_card_art_url_value, _custom_card_art_local = resolve_custom_art_value(
             custom_card_art_url,
             custom_card_art_upload,
             "custom card art",
@@ -3139,8 +3185,12 @@ def update_deck(deck_id):
 
     deck.name = name
     deck.commander = commander_to_set
-    deck.custom_commander_art_url = custom_commander_art
-    deck.custom_card_art_url = custom_card_art
+    if not has_uploaded_custom_art(custom_commander_art_upload) and not custom_commander_art_url:
+        custom_commander_art_local = deck.commander_local_art_custom
+
+    deck.custom_commander_art_url = custom_commander_art_url_value
+    deck.commander_local_art_custom = custom_commander_art_local
+    deck.custom_card_art_url = custom_card_art_url_value
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
 
@@ -3160,7 +3210,7 @@ def update_deck(deck_id):
     deck.commander_name = commander_meta["commander_name"]
     deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
     deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
-    deck.commander_local_art = commander_meta["commander_local_art"]
+    deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
     deck.color_identity = commander_meta["color_identity"]
 
     try:
@@ -3177,7 +3227,8 @@ def update_deck(deck_id):
         deck.commander_name = old_commander_name
         deck.commander_scryfall_id = old_commander_scryfall_id
         deck.commander_art_crop_url = old_commander_art_crop_url
-        deck.commander_local_art = old_commander_local_art
+        deck.commander_local_art_crop = old_commander_local_art_crop
+        deck.commander_local_art_custom = old_commander_local_art_custom
         deck.custom_commander_art_url = old_custom_commander_art_url
         deck.custom_card_art_url = old_custom_card_art_url
         deck.color_identity = old_color_identity
