@@ -1,0 +1,117 @@
+.player-detail-page .detail-hero {
+  border-radius: 18px;
+  border: 1px solid rgba(143,153,197,0.28);
+  background: linear-gradient(140deg, rgba(143,153,197,0.25), rgba(14,19,39,0.9));
+}
+
+.player-detail-page .eyebrow,
+.player-detail-page .muted2 {
+  color: var(--font-base-trans);
+}
+
+.player-detail-page .overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.player-detail-page .stat-card {
+  border-radius: 14px;
+  border: 1px solid rgba(143,153,197,0.26);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 12px;
+}
+
+.player-detail-page .stat-label {
+  margin: 0;
+  font-size: .82rem;
+  color: var(--font-base-trans);
+}
+
+.player-detail-page .stat-value {
+  margin: 6px 0 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.deck-card {
+  display: block;
+  border-radius: 14px;
+  border: 1px solid rgba(143,153,197,0.2);
+  background: var(--darker);
+  padding: 14px;
+}
+
+.deck-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.deck-mini-grid div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deck-mini-grid b {
+  color: #fff;
+}
+
+.recent-list {
+  border-radius: 14px;
+  border: 1px solid rgba(143,153,197,0.22);
+  overflow: hidden;
+}
+
+.recent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  text-decoration: none;
+  border-top: 1px solid rgba(143,153,197,0.16);
+  background: var(--darker);
+}
+
+.recent-row:first-child { border-top: 0; }
+
+.recent-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: .78rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.pill-win {
+  color: #b2f2ca;
+  border-color: rgba(91, 209, 139, 0.65);
+  background: rgba(91, 209, 139, 0.18);
+}
+
+.pill-loss {
+  color: #ffd0d0;
+  border-color: rgba(217, 91, 91, 0.65);
+  background: rgba(217, 91, 91, 0.2);
+}
+
+.empty-card {
+  border-radius: 14px;
+  border: 1px dashed rgba(143,153,197,0.35);
+  background: rgba(5, 8, 18, 0.55);
+  color: var(--font-base-trans);
+  padding: 18px;
+}
