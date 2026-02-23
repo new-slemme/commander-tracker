@@ -973,6 +973,10 @@ def is_valid_custom_art_url(value: str) -> bool:
     return len(candidate) <= 500
 
 
+def has_uploaded_custom_art(upload) -> bool:
+    return bool(upload and (upload.filename or "").strip())
+
+
 def normalized_custom_art_url(value: str) -> str | None:
     candidate = (value or "").strip()
     return candidate or None
@@ -2930,12 +2934,22 @@ def add_deck():
     commander_input = request.form.get("commander", "").strip()
     custom_commander_art_url = request.form.get("custom_commander_art_url", "").strip()
     custom_card_art_url = request.form.get("custom_card_art_url", "").strip()
+    custom_commander_art_upload = request.files.get("custom_commander_art_file")
+    custom_card_art_upload = request.files.get("custom_card_art_file")
 
     if not (name and commander_input):
         flash("Deck name and commander are required.")
         return redirect(url_for("decks"))
 
-    if not is_valid_custom_art_url(custom_commander_art_url) or not is_valid_custom_art_url(custom_card_art_url):
+    commander_url_invalid = (
+        not has_uploaded_custom_art(custom_commander_art_upload)
+        and not is_valid_custom_art_url(custom_commander_art_url)
+    )
+    card_url_invalid = (
+        not has_uploaded_custom_art(custom_card_art_upload)
+        and not is_valid_custom_art_url(custom_card_art_url)
+    )
+    if commander_url_invalid or card_url_invalid:
         flash("Custom art URLs must be valid http(s) links up to 500 characters.")
         return redirect(url_for("decks"))
 
@@ -2960,12 +2974,12 @@ def add_deck():
 
         custom_commander_art = resolve_custom_art_value(
             custom_commander_art_url,
-            request.files.get("custom_commander_art_file"),
+            custom_commander_art_upload,
             "custom commander art",
         )
         custom_card_art = resolve_custom_art_value(
             custom_card_art_url,
-            request.files.get("custom_card_art_file"),
+            custom_card_art_upload,
             "custom card art",
         )
     except DeckParserError as exc:
@@ -3061,6 +3075,8 @@ def update_deck(deck_id):
     commander_input = request.form.get("commander", "").strip()
     custom_commander_art_url = request.form.get("custom_commander_art_url", "").strip()
     custom_card_art_url = request.form.get("custom_card_art_url", "").strip()
+    custom_commander_art_upload = request.files.get("custom_commander_art_file")
+    custom_card_art_upload = request.files.get("custom_card_art_file")
     if not name:
         flash("Deck name is required.")
         return redirect(request.form.get("next") or url_for("decks"))
@@ -3068,7 +3084,15 @@ def update_deck(deck_id):
         flash("Commander is required.")
         return redirect(request.form.get("next") or url_for("decks"))
 
-    if not is_valid_custom_art_url(custom_commander_art_url) or not is_valid_custom_art_url(custom_card_art_url):
+    commander_url_invalid = (
+        not has_uploaded_custom_art(custom_commander_art_upload)
+        and not is_valid_custom_art_url(custom_commander_art_url)
+    )
+    card_url_invalid = (
+        not has_uploaded_custom_art(custom_card_art_upload)
+        and not is_valid_custom_art_url(custom_card_art_url)
+    )
+    if commander_url_invalid or card_url_invalid:
         flash("Custom art URLs must be valid http(s) links up to 500 characters.")
         return redirect(request.form.get("next") or url_for("decks"))
 
@@ -3095,12 +3119,12 @@ def update_deck(deck_id):
 
         custom_commander_art = resolve_custom_art_value(
             custom_commander_art_url,
-            request.files.get("custom_commander_art_file"),
+            custom_commander_art_upload,
             "custom commander art",
         )
         custom_card_art = resolve_custom_art_value(
             custom_card_art_url,
-            request.files.get("custom_card_art_file"),
+            custom_card_art_upload,
             "custom card art",
         )
     except DeckParserError as exc:
