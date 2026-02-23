@@ -285,7 +285,7 @@
 
                   <div class="players-row">
                     {% for gp in game_parts[g.id] %}
-                      {% set commander_art = gp.deck.commander_local_art or gp.deck.commander_art_crop_url %}
+                      {% set commander_art = gp.deck.card_art_url %}
                       <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}"
                             {% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
                         <span class="ppill-top">

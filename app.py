@@ -25,6 +25,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func, text, case
 from sqlalchemy.orm import aliased
 from functools import wraps
+from uuid import uuid4
 
 from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist
 
@@ -344,8 +345,18 @@ class Deck(db.Model):
     commander_scryfall_id = db.Column(db.String(40), index=True)
     commander_art_crop_url = db.Column(db.String(300))
     commander_local_art = db.Column(db.String(300))
+    custom_commander_art_url = db.Column(db.String(500))
+    custom_card_art_url = db.Column(db.String(500))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
     decklist_text = db.Column(db.Text)
+
+    @property
+    def commander_art_url(self):
+        return self.custom_commander_art_url or self.commander_local_art or self.commander_art_crop_url
+
+    @property
+    def card_art_url(self):
+        return self.custom_card_art_url or self.commander_art_url
 
 
 class Game(db.Model):
@@ -743,6 +754,20 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('010_game_participant_hot_fields')")
             )
 
+
+        if "011_deck_custom_art_urls" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "custom_commander_art_url" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN custom_commander_art_url VARCHAR(500)"))
+            if "custom_card_art_url" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN custom_card_art_url VARCHAR(500)"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('011_deck_custom_art_urls')")
+            )
+
         if "011_game_result_canonical_values" not in applied:
             game_rows = db.session.execute(text("SELECT id, win_type, timed_mode FROM game")).fetchall()
             for row in game_rows:
@@ -937,6 +962,51 @@ with app.app_context():
 
 def _safe_filename(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", s).strip("_")
+
+
+def is_valid_custom_art_url(value: str) -> bool:
+    candidate = (value or "").strip()
+    if not candidate:
+        return True
+    if not candidate.lower().startswith(("http://", "https://")):
+        return False
+    return len(candidate) <= 500
+
+
+def normalized_custom_art_url(value: str) -> str | None:
+    candidate = (value or "").strip()
+    return candidate or None
+
+
+def _store_custom_art_upload(upload, field_label: str) -> str | None:
+    if not upload or not upload.filename:
+        return None
+
+    filename = upload.filename.strip()
+    ext = Path(filename).suffix.lower()
+    allowed = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif"}
+    if ext not in allowed:
+        raise DeckParserError(
+            f"Unsupported {field_label} image '{filename}'. Allowed extensions: "
+            ".png, .jpg, .jpeg, .webp, .gif, .avif."
+        )
+
+    raw_bytes = upload.read()
+    if not raw_bytes:
+        raise DeckParserError(f"Uploaded {field_label} image '{filename}' was empty.")
+
+    safe_name = _safe_filename(Path(filename).stem) or "custom_art"
+    out_filename = f"custom_{safe_name}_{uuid4().hex}{ext}"
+    out_path = ART_DIR / out_filename
+    out_path.write_bytes(raw_bytes)
+    return f"/art/{out_filename}"
+
+
+def resolve_custom_art_value(url_value: str, upload, field_label: str) -> str | None:
+    uploaded_path = _store_custom_art_upload(upload, field_label)
+    if uploaded_path:
+        return uploaded_path
+    return normalized_custom_art_url(url_value)
 
 
 def scryfall_named_exact(name: str):
@@ -1928,7 +1998,7 @@ def index():
         if most_played:
             deck = most_played[0]
             row["most_played_deck"] = deck
-            row["bg_art"] = deck.commander_local_art or deck.commander_art_crop_url
+            row["bg_art"] = deck.card_art_url
         else:
             row["most_played_deck"] = None
             row["bg_art"] = None
@@ -2858,9 +2928,15 @@ def add_deck():
 
     name = request.form.get("name", "").strip()
     commander_input = request.form.get("commander", "").strip()
+    custom_commander_art_url = request.form.get("custom_commander_art_url", "").strip()
+    custom_card_art_url = request.form.get("custom_card_art_url", "").strip()
 
     if not (name and commander_input):
         flash("Deck name and commander are required.")
+        return redirect(url_for("decks"))
+
+    if not is_valid_custom_art_url(custom_commander_art_url) or not is_valid_custom_art_url(custom_card_art_url):
+        flash("Custom art URLs must be valid http(s) links up to 500 characters.")
         return redirect(url_for("decks"))
 
     # Decide owner:
@@ -2881,8 +2957,19 @@ def add_deck():
         raw_import, imported_from = _extract_deck_import_text()
         if raw_import:
             parsed_import = parse_deck_input(raw_import)
+
+        custom_commander_art = resolve_custom_art_value(
+            custom_commander_art_url,
+            request.files.get("custom_commander_art_file"),
+            "custom commander art",
+        )
+        custom_card_art = resolve_custom_art_value(
+            custom_card_art_url,
+            request.files.get("custom_card_art_file"),
+            "custom card art",
+        )
     except DeckParserError as exc:
-        flash(f"Deck import failed: {exc}")
+        flash(f"Deck setup failed: {exc}")
         return redirect(url_for("decks"))
 
     resolved_commander = parsed_import.get("commander") if parsed_import else None
@@ -2893,6 +2980,8 @@ def add_deck():
         return redirect(url_for("decks"))
 
     deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
+    deck.custom_commander_art_url = custom_commander_art
+    deck.custom_card_art_url = custom_card_art
     deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
@@ -2970,11 +3059,17 @@ def update_deck(deck_id):
 
     name = request.form.get("name", "").strip()
     commander_input = request.form.get("commander", "").strip()
+    custom_commander_art_url = request.form.get("custom_commander_art_url", "").strip()
+    custom_card_art_url = request.form.get("custom_card_art_url", "").strip()
     if not name:
         flash("Deck name is required.")
         return redirect(request.form.get("next") or url_for("decks"))
     if not commander_input:
         flash("Commander is required.")
+        return redirect(request.form.get("next") or url_for("decks"))
+
+    if not is_valid_custom_art_url(custom_commander_art_url) or not is_valid_custom_art_url(custom_card_art_url):
+        flash("Custom art URLs must be valid http(s) links up to 500 characters.")
         return redirect(request.form.get("next") or url_for("decks"))
 
     old_name = deck.name
@@ -2987,6 +3082,8 @@ def update_deck(deck_id):
     old_commander_scryfall_id = deck.commander_scryfall_id
     old_commander_art_crop_url = deck.commander_art_crop_url
     old_commander_local_art = deck.commander_local_art
+    old_custom_commander_art_url = deck.custom_commander_art_url
+    old_custom_card_art_url = deck.custom_card_art_url
     old_color_identity = deck.color_identity
 
     parsed_import = None
@@ -2995,8 +3092,19 @@ def update_deck(deck_id):
         raw_import, imported_from = _extract_deck_import_text()
         if raw_import:
             parsed_import = parse_deck_input(raw_import)
+
+        custom_commander_art = resolve_custom_art_value(
+            custom_commander_art_url,
+            request.files.get("custom_commander_art_file"),
+            "custom commander art",
+        )
+        custom_card_art = resolve_custom_art_value(
+            custom_card_art_url,
+            request.files.get("custom_card_art_file"),
+            "custom card art",
+        )
     except DeckParserError as exc:
-        flash(f"Deck import failed: {exc}")
+        flash(f"Deck setup failed: {exc}")
         return redirect(request.form.get("next") or url_for("decks"))
 
     resolved_commander = parsed_import.get("commander") if parsed_import else None
@@ -3007,6 +3115,8 @@ def update_deck(deck_id):
 
     deck.name = name
     deck.commander = commander_to_set
+    deck.custom_commander_art_url = custom_commander_art
+    deck.custom_card_art_url = custom_card_art
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
 
@@ -3044,6 +3154,8 @@ def update_deck(deck_id):
         deck.commander_scryfall_id = old_commander_scryfall_id
         deck.commander_art_crop_url = old_commander_art_crop_url
         deck.commander_local_art = old_commander_local_art
+        deck.custom_commander_art_url = old_custom_commander_art_url
+        deck.custom_card_art_url = old_custom_card_art_url
         deck.color_identity = old_color_identity
 
         flash(f"Failed to update deck: {exc}")
@@ -3082,7 +3194,7 @@ def add_game():
             {
                 "id": d.id,
                 "name": d.name,
-                "art": d.commander_local_art or d.commander_art_crop_url
+                "art": d.card_art_url
             }
             for d in active_decks
         ]
@@ -3104,7 +3216,7 @@ def play_game():
             {
                 "id": d.id,
                 "name": d.name,
-                "art": d.commander_local_art or d.commander_art_crop_url,
+                "art": d.card_art_url,
             }
             for d in active_decks
         ]
@@ -3143,7 +3255,7 @@ def start_game():
                 "seat_position": len(participants) + 1,
                 "player_name": deck.owner.name,
                 "deck_name": deck.name,
-                "commander_art": deck.commander_local_art or deck.commander_art_crop_url,
+                "commander_art": deck.commander_art_url,
             })
 
     if len(participants) < 2:
@@ -3265,7 +3377,7 @@ def life_counter():
         p["color"] = colors[(i - 1) % len(colors)]
 
         deck = db.session.get(Deck, p["deck_id"])
-        p["commander_art"] = (deck.commander_local_art or deck.commander_art_crop_url) if deck else None
+        p["commander_art"] = deck.commander_art_url if deck else None
 
     current_user = get_current_user()
     salt_action_values = {
