@@ -225,8 +225,8 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  border: 1px solid rgba(143,153,197,0.35);
-  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--base);
+  background: var(--base-trans);
   color: rgba(255,255,255,0.9);
 }
 
@@ -281,16 +281,16 @@
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  border: 1px solid rgba(143,153,197,0.35);
-  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--base);
+  background: var(--base-trans);
   color: #fff;
   font-size: 1rem;
   line-height: 1;
   transition: background .15s ease, border-color .15s ease, transform .08s ease;
 }
 .copy-link-btn:hover {
-  background: rgba(255,255,255,0.15);
-  border-color: rgba(143,153,197,0.52);
+  background: var(--base-trans);
+  border-color: var(--base);
 }
 .copy-link-btn:active { transform: scale(0.98); }
 .copy-link-btn:focus-visible {
@@ -537,8 +537,8 @@
   align-items:center;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(143,153,197,0.3);
-  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--yellow);
+  background: var(--yellow-trans);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 900;
@@ -712,15 +712,15 @@
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  border: 1px solid rgba(143,153,197,0.35);
-  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--base);
+  background: var(--base-trans);
   color: #fff;
   font-weight: 900;
   line-height: 1;
 }
 .collapse-btn:hover {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(143,153,197,0.52);
+  background: var(--base-trans);
+  border-color: var(--base);
 }
 .collapse-btn:focus-visible {
   outline: none;

@@ -39,8 +39,8 @@
     width: 28px;
     height: 28px;
     border-radius: 10px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(143,153,197,0.25);
+    background: var(--base-trans);
+    border: 1px solid var(--base);
     color:#fff;
     font-weight: 900;
     font-size: 0.85rem;
@@ -56,8 +56,8 @@
     padding: 6px 10px;
     border-radius: 999px;
     font-weight: 900;
-    border: 1px solid rgba(143,153,197,0.28);
-    background: rgba(255,255,255,0.06);
+    border: 1px solid var(--base);
+    background: var(--base-trans);
     color:#fff;
     white-space: nowrap;
   }
@@ -200,15 +200,15 @@
     gap: 8px;
     padding: 8px 12px;
     border-radius: 999px;
-    background: rgba(58,107,84,0.22);
-    border: 1px solid rgba(58,107,84,0.55);
+    background: var(--green-trans);
+    border: 1px solid var(--green);
     color: #fff;
     font-weight: 900;
     white-space: nowrap;
   }
   .winner-pill .dot {
     width: 10px; height: 10px; border-radius: 999px;
-    background: rgba(58,107,84,0.95);
+    background: var(--green);
     box-shadow: 0 0 10px rgba(58,107,84,0.55);
   }
 
@@ -245,7 +245,7 @@
     justify-content:center;
     width: 22px; height: 22px;
     border-radius: 999px;
-    background: rgba(58,107,84,0.95);
+    background: var(--green);
     box-shadow: 0 0 10px rgba(58,107,84,0.55);
     color: #fff;
     font-size: 0.78rem;
@@ -270,10 +270,10 @@
   .pod-button {
     width: 100%;
     text-align: left;
-    border: 1px solid rgba(143,153,197,0.25);
+    border: 1px solid var(--base);
     border-radius: 16px;
     padding: 10px 12px;
-    background: rgba(255,255,255,0.04);
+    background: var(--base-trans);
     color: #fff;
     font-weight: 700;
   }

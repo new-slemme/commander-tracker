@@ -52,8 +52,8 @@
   gap: 8px;
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(143, 153, 197, 0.22);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--base);
+  background: var(--base-trans);
   color: #fff;
   font-size: 0.84rem;
   white-space: nowrap;

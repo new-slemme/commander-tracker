@@ -44,8 +44,8 @@
     gap: 8px;
     padding: 8px 12px;
     border-radius: 999px;
-    border: 1px solid rgba(143,153,197,0.22);
-    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--base);
+    background: var(--base-trans);
     color: var(--font-base);
     font-weight: 800;
     font-size: 0.9rem;
@@ -54,18 +54,18 @@
   .profile-pill b { color: #fff; }
 
   .status-pill {
-    border-color: rgba(58,107,84,0.6);
-    background: rgba(58,107,84,0.22);
+    border-color: var(--green);
+    background: var(--green-trans);
     color: #fff;
   }
   .status-pill.pending {
-    border-color: rgba(242,201,76,0.55);
-    background: rgba(242,201,76,0.14);
+    border-color: var(--yellow);
+    background: var(--yellow-trans);
   }
 
   .role-pill.admin {
-    border-color: rgba(30,58,95,0.6);
-    background: rgba(30,58,95,0.22);
+    border-color: var(--blue);
+    background: var(--blue-trans);
     color: #fff;
   }
 

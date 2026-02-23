@@ -8,15 +8,15 @@
     gap: 10px;
     border-radius: 14px;
     padding: 10px 14px;
-    border: 1px solid rgba(143,153,197,0.25);
-    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--base);
+    background: var(--base-trans);
     color: var(--font-base);
     text-decoration: none;
     font-weight: 800;
     box-shadow: 0 0 18px rgba(0,0,0,0.35);
     -webkit-tap-highlight-color: transparent;
   }
-  .back-btn:hover { color: #fff; border-color: rgba(143,153,197,0.35); background: rgba(255,255,255,0.06); }
+  .back-btn:hover { color: #fff; border-color: var(--base); background: var(--base-trans); }
   .back-btn:active { transform: scale(0.99); }
 
   .menu-trigger {
