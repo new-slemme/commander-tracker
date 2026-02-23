@@ -105,10 +105,8 @@
       {% endfor %}
 
       <div class="col-12 col-md-6">
-        <div class="part-card h-100">
-          <div class="art-strip {% if art %}has-bg{% endif %}"
-               {% if art %}style="background-image:url('{{ art }}');"{% endif %}></div>
-
+        <div class="part-card h-100 {% if art %}has-art-bg{% endif %}"
+             {% if art %}style="--card-art:url('{{ art }}');"{% endif %}>
           <div class="p-3">
             <div class="player-header-row">
               <div class="fw-bold text-white d-flex align-items-center gap-2 player-name-row">
