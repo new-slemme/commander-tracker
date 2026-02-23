@@ -468,8 +468,8 @@ body.sigtaara-ui .h4 {
   max-height:min(74vh, 420px);
   padding:12px;
   border-radius:18px;
-  border:2px solid rgba(162,177,211,0.32);
-  background:linear-gradient(160deg, rgba(8,16,45,0.95), rgba(8,19,56,0.94));
+  border:2px solid rgba(173,189,224,0.42);
+  background:var(--base-trans);
   box-shadow:0 30px 84px rgba(0,0,0,0.68), 0 0 0 1px rgba(255,255,255,0.05);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
