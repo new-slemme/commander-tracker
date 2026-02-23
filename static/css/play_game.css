@@ -39,13 +39,13 @@
   }
 
   .pg-btn-secondary {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(143,153,197,0.25);
+    background: var(--base-trans);
+    border: 1px solid var(--base);
     color: #fff;
   }
   .pg-btn-secondary:hover {
-    background: rgba(255,255,255,0.08);
-    border-color: rgba(143,153,197,0.35);
+    background: var(--base-trans);
+    border-color: var(--base);
     color: #fff;
   }
 
@@ -150,7 +150,7 @@
       margin-bottom: 8px;
       padding: 3px 9px;
       border-radius: 999px;
-      background: rgba(255,255,255,0.08);
+      background: var(--base-trans);
       border: 1px solid rgba(170,181,235,0.35);
       color: rgba(230,235,255,0.95);
       font-size: 0.72rem;
@@ -334,7 +334,7 @@
 
   .start-pill {
     border: 1px solid rgba(170,181,235,0.35);
-    background: rgba(255,255,255,0.04);
+    background: var(--base-trans);
     color: #dbe2ff;
     border-radius: 999px;
     padding: 8px 14px;
@@ -343,15 +343,15 @@
   }
 
   .start-pill:hover {
-    border-color: rgba(170,181,235,0.7);
-    background: rgba(170,181,235,0.14);
+    border-color: var(--blue);
+    background: var(--blue-trans);
     transform: translateY(-1px);
   }
 
   .start-pill.active {
-    background: linear-gradient(135deg, rgba(90,114,219,0.9), rgba(130,150,240,0.9));
+    background: var(--blue-trans);
     color: #fff;
-    border-color: rgba(211,220,255,0.95);
+    border-color: var(--blue);
     box-shadow: 0 0 20px rgba(124,146,245,0.35);
   }
 
