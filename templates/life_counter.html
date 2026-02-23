@@ -767,12 +767,6 @@ function positionPlayerSaltMenu(anchorButton, playerCard){
   flyoutEl.style.maxHeight = `${flyoutMaxHeight}px`;
 
   const flyoutHeight = Math.max(170, Math.min(flyoutEl.scrollHeight || 0, flyoutMaxHeight));
-  const halfFlyoutHeight = flyoutHeight / 2;
-
-  flyoutEl.style.width = `${flyoutWidth}px`;
-  flyoutEl.style.maxHeight = `${flyoutMaxHeight}px`;
-
-  const flyoutHeight = Math.max(170, Math.min(flyoutEl.scrollHeight || 0, flyoutMaxHeight));
   const flyoutRotation = getPlayerCardOrientation(playerCard);
   const quarterTurn = flyoutRotation === "90deg" || flyoutRotation === "-90deg";
   const halfFlyoutWidth = flyoutWidth / 2;
@@ -790,25 +784,28 @@ function positionPlayerSaltMenu(anchorButton, playerCard){
     centerX = candidateLeft + halfFlyoutWidth;
   }
 
-  const cardLeftBound = cardRect.left + cardPadding;
-  const cardRightBound = cardRect.right - flyoutWidth - cardPadding;
-  if(cardLeftBound <= cardRightBound){
-    left = Math.min(Math.max(left, cardLeftBound), cardRightBound);
+  const minCenterX = Math.max(viewportPadding + halfBoundX, cardRect.left + cardPadding + halfBoundX);
+  const maxCenterX = Math.min(window.innerWidth - viewportPadding - halfBoundX, cardRect.right - cardPadding - halfBoundX);
+  if(minCenterX <= maxCenterX){
+    centerX = Math.min(Math.max(centerX, minCenterX), maxCenterX);
   } else {
-    left = cardRect.left + ((cardRect.width - flyoutWidth) / 2);
+    const cardCenterX = cardRect.left + (cardRect.width / 2);
+    centerX = Math.min(
+      Math.max(cardCenterX, viewportPadding + halfBoundX),
+      window.innerWidth - viewportPadding - halfBoundX
+    );
   }
-  left = Math.min(Math.max(left, viewportPadding), window.innerWidth - flyoutWidth - viewportPadding);
 
   const anchorCenterY = anchorRect.top + (anchorRect.height / 2);
-  const minTop = Math.max(viewportPadding + halfFlyoutHeight, cardRect.top + cardPadding + halfFlyoutHeight);
-  const maxTop = Math.min(window.innerHeight - viewportPadding - halfFlyoutHeight, cardRect.bottom - cardPadding - halfFlyoutHeight);
-  let top = Math.min(Math.max(anchorCenterY, minTop), maxTop);
+  const minCenterY = Math.max(viewportPadding + halfBoundY, cardRect.top + cardPadding + halfBoundY);
+  const maxCenterY = Math.min(window.innerHeight - viewportPadding - halfBoundY, cardRect.bottom - cardPadding - halfBoundY);
+  let centerY = Math.min(Math.max(anchorCenterY, minCenterY), maxCenterY);
 
-  if(minTop > maxTop){
+  if(minCenterY > maxCenterY){
     const cardCenterY = cardRect.top + (cardRect.height / 2);
-    top = Math.min(
-      Math.max(cardCenterY, viewportPadding + halfFlyoutHeight),
-      window.innerHeight - viewportPadding - halfFlyoutHeight
+    centerY = Math.min(
+      Math.max(cardCenterY, viewportPadding + halfBoundY),
+      window.innerHeight - viewportPadding - halfBoundY
     );
   }
 
