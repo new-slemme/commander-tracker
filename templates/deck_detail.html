@@ -16,10 +16,10 @@
 
 <div class="deck-banner position-relative text-white rounded-4 overflow-hidden mb-4"
      style="
-     {% if deck.commander_local_art or deck.commander_art_crop_url %}
+     {% if deck.commander_art_url %}
        background-image:
          linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.85)),
-         url('{{ deck.commander_local_art or deck.commander_art_crop_url }}');
+         url('{{ deck.commander_art_url }}');
        background-size: cover;
        background-position: top;
        border-radius: 20px;
@@ -400,32 +400,71 @@
           </div>
           {% endif %}
 
-          <div id="editCommanderPreview" class="mt-3" {% if not (deck.commander_local_art or deck.commander_art_crop_url) %}style="display:none;"{% endif %}>
-            <img id="editCommanderImg" alt="Commander preview" src="{{ deck.commander_local_art or deck.commander_art_crop_url or '' }}" style="max-width:100%; border-radius: 12px;" />
+          <div id="editCommanderPreview" class="mt-3" {% if not (deck.commander_art_url) %}style="display:none;"{% endif %}>
+            <img id="editCommanderImg" alt="Commander preview" src="{{ deck.commander_art_url or '' }}" style="max-width:100%; border-radius: 12px;" />
           </div>
 
           <div id="editPartnerCommanderPreview" class="mt-3" style="display:none;">
             <img id="editPartnerCommanderImg" alt="Partner commander preview" style="max-width:100%; border-radius: 12px;" />
           </div>
 
-          <div class="mt-3">
-            <label class="form-label">Decklist URL (optional)</label>
-            <input class="form-control" id="editDecklistUrlInput" name="decklist_url" placeholder="https://www.moxfield.com/decks/... or https://archidekt.com/decks/..." />
+          <div class="dropdown mt-3">
+            <button class="btn btn-outline-info w-100 text-start d-flex justify-content-between align-items-center"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#editCustomArtOptions"
+                    aria-expanded="false"
+                    aria-controls="editCustomArtOptions">
+              <span>Custom Art Options</span>
+              <span>▾</span>
+            </button>
+          </div>
+          <div class="collapse mt-3" id="editCustomArtOptions">
+            <div class="card p-3 bg-transparent border-secondary">
+              <label class="form-label">Custom commander artwork URL (optional)</label>
+              <input class="form-control" name="custom_commander_art_url" value="{{ deck.custom_commander_art_url or '' }}" placeholder="https://..." />
+
+              <label class="form-label mt-3">Or upload commander artwork (optional)</label>
+              <input class="form-control" type="file" name="custom_commander_art_file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
+
+              <label class="form-label mt-3">Custom card artwork URL (optional)</label>
+              <input class="form-control" name="custom_card_art_url" value="{{ deck.custom_card_art_url or '' }}" placeholder="https://..." />
+
+              <label class="form-label mt-3">Or upload card artwork (optional)</label>
+              <input class="form-control" type="file" name="custom_card_art_file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
+            </div>
           </div>
 
-          <div class="mt-3">
-            <label class="form-label">Decklist file (optional)</label>
-            <input class="form-control" id="editDecklistFileInput" type="file" name="decklist_file" accept=".txt,.dek,.csv" />
+          <div class="dropdown mt-3">
+            <button class="btn btn-outline-info w-100 text-start d-flex justify-content-between align-items-center"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#editDecklistOptions"
+                    aria-expanded="false"
+                    aria-controls="editDecklistOptions">
+              <span>Decklist Options</span>
+              <span>▾</span>
+            </button>
+          </div>
+          <div class="collapse mt-3" id="editDecklistOptions">
+            <div class="card p-3 bg-transparent border-secondary">
+              <label class="form-label">Decklist URL (optional)</label>
+              <input class="form-control" id="editDecklistUrlInput" name="decklist_url" placeholder="https://www.moxfield.com/decks/... or https://archidekt.com/decks/..." />
+
+              <label class="form-label mt-3">Decklist file (optional)</label>
+              <input class="form-control" id="editDecklistFileInput" type="file" name="decklist_file" accept=".txt,.dek,.csv" />
+
+              <label class="form-label mt-3">Paste decklist (optional fallback)</label>
+              <textarea class="form-control" id="editDecklistTextInput" name="decklist_text" rows="5" placeholder="Commander
+1 Sol Ring
+1 Arcane Signet"></textarea>
+
+              <div class="d-grid mt-3">
+                <button class="btn btn-outline-info" type="button" id="editImportAutofillBtn">Autofill commander(s) from import</button>
+              </div>
+            </div>
           </div>
 
-          <div class="mt-3">
-            <label class="form-label">Paste decklist (optional fallback)</label>
-            <textarea class="form-control" id="editDecklistTextInput" name="decklist_text" rows="5" placeholder="Commander\n1 Sol Ring\n1 Arcane Signet"></textarea>
-          </div>
-
-          <div class="d-grid mt-3">
-            <button class="btn btn-outline-info" type="button" id="editImportAutofillBtn">Autofill commander(s) from import</button>
-          </div>
 
           <div class="d-flex gap-2 mt-4">
             <button class="btn btn-success w-100 btn-lg app-btn" type="submit">Save</button>
