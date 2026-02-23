@@ -569,88 +569,41 @@ body.sigtaara-ui .h4 {
   object-fit:contain;
 }
 
-.player-salt-flyout .btn,
 .player-salt-action-btn{
-  min-height:64px;
-  min-width:64px;
-  width:calc((100% - 20px) / 3);
-  flex:1 1 0;
+  width:72px;
+  height:72px;
+  flex:0 0 72px;
   padding:.7rem;
-  border-radius:18px;
+  border-radius:999px;
   font-size:clamp(1rem,2vw,1.08rem);
   font-weight:800;
-  border-width:0;
+  border:0;
   box-shadow:none;
+  color:#eaf0ff;
+  background:var(--darker);
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:.5rem;
-  transition:background-color .14s ease, color .14s ease, border-color .14s ease, transform .14s ease;
+  transition:background-color .14s ease, color .14s ease, transform .14s ease;
 }
 
-.player-salt-flyout #playerFlagManaBtn{
-  color:#15100a;
-  background:#ffcb0f;
-}
-
-.player-salt-flyout #playerFlagManaBtn img,
-.player-salt-flyout #playerFlagMisplayedBtn img,
-.player-salt-flyout #playerFlagCloseBtn img{
+.player-salt-action-btn img{
   width:60px;
   height:60px;
   object-fit:contain;
   pointer-events:none;
 }
 
-.player-salt-flyout #playerFlagMisplayedBtn{
-  color:#fff0f2;
-  background:#b12a41;
-}
-
-.player-salt-flyout #playerFlagMisplayedBtn.btn-outline-danger{
-  color:#ff8ea1;
-  background:rgba(210,64,92,0.12);
-  border:1px solid rgba(255,132,154,0.36);
-}
-
-.player-salt-flyout #playerFlagManaBtn.btn-outline-warning{
-  color:#f6d35f;
-  background:rgba(255,195,37,0.14);
-  border:1px solid rgba(247,212,111,0.36);
-}
-
-.player-salt-flyout #playerFlagManaBtn:hover,
-.player-salt-flyout #playerFlagManaBtn:focus-visible,
-.player-salt-flyout #playerFlagMisplayedBtn:hover,
-.player-salt-flyout #playerFlagMisplayedBtn:focus-visible,
-.player-salt-flyout #playerFlagCloseBtn:hover,
-.player-salt-flyout #playerFlagCloseBtn:focus-visible{
+.player-salt-action-btn:hover,
+.player-salt-action-btn:focus-visible{
   transform:translateY(-1px);
-  filter:brightness(1.03);
+  filter:brightness(1.06);
 }
 
-.player-salt-flyout #playerFlagManaBtn.is-active:hover,
-.player-salt-flyout #playerFlagManaBtn.is-active:focus-visible{
-  background:rgba(255,195,37,0.24);
-}
-
-.player-salt-flyout #playerFlagMisplayedBtn.is-active:hover,
-.player-salt-flyout #playerFlagMisplayedBtn.is-active:focus-visible{
-  background:rgba(210,64,92,0.24);
-}
-
-.player-salt-flyout #playerFlagCloseBtn{
-  color:#eaf0ff;
-  background:rgba(8,22,55,0.66);
-  border:2px solid rgba(232,238,251,0.85);
-  flex:0.8 1 0;
-}
-
-.player-salt-flyout .btn:focus-visible{
+.player-salt-action-btn:focus-visible{
   outline:3px solid rgba(255,255,255,0.85);
   outline-offset:2px;
 }
-
 
 @media (max-width:576px){
   #quickMenuModal .modal-dialog.quick-menu-sheet-dialog{
@@ -673,9 +626,13 @@ body.sigtaara-ui .h4 {
     border-radius:16px;
   }
 
-  .player-salt-flyout #playerFlagManaBtn img,
-  .player-salt-flyout #playerFlagMisplayedBtn img,
-  .player-salt-flyout #playerFlagCloseBtn img{
+  .player-salt-action-btn{
+    width:56px;
+    height:56px;
+    flex-basis:56px;
+  }
+
+  .player-salt-action-btn img{
     width:42px;
     height:42px;
   }

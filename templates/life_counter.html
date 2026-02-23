@@ -122,15 +122,15 @@
     <div class="player-salt-flyout__content">
 
       <div class="player-salt-actions" role="group" aria-label="Player salt actions">
-        <button class="btn player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
+        <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
           <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
         </button>
 
-        <button class="btn player-salt-action-btn" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
+        <button class="player-salt-action-btn" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
           <img src="/static/icons/misplayed.png" alt="Misplayed status" />
         </button>
 
-        <button class="btn player-salt-action-btn" id="playerFlagCloseBtn" type="button" aria-label="Back to game">
+        <button class="player-salt-action-btn" id="playerFlagCloseBtn" type="button" aria-label="Back to game">
           <img src="/static/icons/back.png" alt="Back to game" />
         </button>
       </div>
@@ -296,12 +296,10 @@ function setPlayerFlagState(playerId, nextFlags){
   };
 }
 
-function updatePlayerFlagButtonState(buttonId, enabled, inactiveClass, activeClass, ariaLabels){
+function updatePlayerFlagButtonState(buttonId, enabled, ariaLabels){
   const btn = document.getElementById(buttonId);
   if(!btn) return;
 
-  btn.classList.toggle(inactiveClass, !enabled);
-  btn.classList.toggle(activeClass, enabled);
   btn.classList.toggle("is-active", enabled);
   btn.setAttribute("aria-pressed", enabled ? "true" : "false");
 
@@ -769,8 +767,6 @@ function openPlayerSaltMenu(playerId, anchorButton){
   updatePlayerFlagButtonState(
     "playerFlagManaBtn",
     playerFlags.mana_fucked,
-    "btn-warning",
-    "btn-outline-warning",
     {
       inactive: `Mark ${playerLabel} as mana-fucked (+${manaFuckedSaltValue} salt)`,
       active: `Unmark ${playerLabel} as mana-fucked (-${manaFuckedSaltValue} salt)`,
@@ -779,8 +775,6 @@ function openPlayerSaltMenu(playerId, anchorButton){
   updatePlayerFlagButtonState(
     "playerFlagMisplayedBtn",
     playerFlags.misplayed,
-    "btn-danger",
-    "btn-outline-danger",
     {
       inactive: `Mark ${playerLabel} as misplayed (+${misplayedSaltValue} salt)`,
       active: `Unmark ${playerLabel} as misplayed (-${misplayedSaltValue} salt)`,
