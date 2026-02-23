@@ -201,9 +201,18 @@
           </div>
           <div class="deck-card-grid commander-grid">
             {% for entry in commander_section.entries %}
-              <article class="deck-card-entry" data-card-name="{{ entry.name }}">
+              <article
+                class="deck-card-entry"
+                data-card-name="{{ entry.name }}"
+                {% if deck.custom_commander_art_url %}data-preferred-image="{{ deck.custom_commander_art_url }}"{% endif %}
+              >
                 <div class="deck-card-image-wrap">
-                  <img class="deck-card-image" alt="{{ entry.name }}" loading="lazy">
+                  <img
+                    class="deck-card-image"
+                    alt="{{ entry.name }}"
+                    loading="lazy"
+                    {% if deck.custom_commander_art_url %}src="{{ deck.custom_commander_art_url }}"{% endif %}
+                  >
                 </div>
                 <div class="deck-card-meta">
                   <span class="decklist-qty">{{ entry.quantity }}×</span>
@@ -617,8 +626,14 @@
     const cache = new Map();
     await Promise.all(entries.map(async (entry) => {
       const name = (entry.getAttribute('data-card-name') || '').trim();
+      const preferredImage = (entry.getAttribute('data-preferred-image') || '').trim();
       const img = entry.querySelector('.deck-card-image');
       if (!name || !img) return;
+
+      if (preferredImage) {
+        img.src = preferredImage;
+        return;
+      }
 
       if (!cache.has(name)) {
         cache.set(name, scryfallCardImageByName(name).catch(() => null));
