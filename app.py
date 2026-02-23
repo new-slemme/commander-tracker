@@ -177,6 +177,53 @@ def validate_participant_seat_positions(participants):
         return f"Seat positions must be contiguous from 1 to {len(participants)}", None
 
     return None, seat_positions
+def participant_hot_fields_from_flags(raw_flags: str | None) -> dict[str, int | bool]:
+    parsed_flags = parse_participant_flags(raw_flags)
+    turn_stats = parse_participant_turn_stats(raw_flags)
+
+    life_delta_total = 0
+    for entry in turn_stats:
+        life_delta = entry.get("life_delta")
+        if isinstance(life_delta, int) and not isinstance(life_delta, bool):
+            life_delta_total += life_delta
+
+    mana_fucked = parsed_flags.get("mana_fucked")
+    misplayed = parsed_flags.get("misplayed")
+
+    return {
+        "salt_count": participant_salt_count(parsed_flags),
+        "mana_fucked": mana_fucked if isinstance(mana_fucked, bool) else False,
+        "misplayed": misplayed if isinstance(misplayed, bool) else False,
+        "life_delta_total": life_delta_total,
+    }
+
+
+def participant_flags_snapshot(gp: "GameParticipant") -> dict[str, bool | int]:
+    parsed_flags = parse_participant_flags(gp.flags_json)
+
+    salt_count_raw = getattr(gp, "salt_count", None)
+    if isinstance(salt_count_raw, int) and not isinstance(salt_count_raw, bool):
+        salt_count = max(0, salt_count_raw)
+    else:
+        salt_count = participant_salt_count(parsed_flags)
+
+    mana_fucked_raw = getattr(gp, "mana_fucked", None)
+    if isinstance(mana_fucked_raw, bool):
+        mana_fucked = mana_fucked_raw
+    else:
+        mana_fucked = bool(parsed_flags.get("mana_fucked", False))
+
+    misplayed_raw = getattr(gp, "misplayed", None)
+    if isinstance(misplayed_raw, bool):
+        misplayed = misplayed_raw
+    else:
+        misplayed = bool(parsed_flags.get("misplayed", False))
+
+    return {
+        "mana_fucked": mana_fucked,
+        "misplayed": misplayed,
+        "salt_count": salt_count,
+    }
 
 
 def validate_password_rules(password: str) -> str | None:
@@ -314,6 +361,10 @@ class GameParticipant(db.Model):
     deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False)
     seat_position = db.Column(db.Integer, nullable=True)
     flags_json = db.Column(db.Text, nullable=True)
+    salt_count = db.Column(db.Integer, nullable=False, default=0)
+    mana_fucked = db.Column(db.Boolean, nullable=False, default=False)
+    misplayed = db.Column(db.Boolean, nullable=False, default=False)
+    life_delta_total = db.Column(db.Integer, nullable=True, default=0)
 
     player = db.relationship("Player", backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
@@ -590,6 +641,54 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('010_game_participant_seat_position')")
+        if "010_game_participant_hot_fields" not in applied:
+            participant_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
+            }
+            if "salt_count" not in participant_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN salt_count INTEGER NOT NULL DEFAULT 0")
+                )
+            if "mana_fucked" not in participant_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN mana_fucked BOOLEAN NOT NULL DEFAULT 0")
+                )
+            if "misplayed" not in participant_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN misplayed BOOLEAN NOT NULL DEFAULT 0")
+                )
+            if "life_delta_total" not in participant_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN life_delta_total INTEGER DEFAULT 0")
+                )
+
+            participant_rows = db.session.execute(
+                text("SELECT id, flags_json FROM game_participant")
+            ).fetchall()
+            for row in participant_rows:
+                hot_fields = participant_hot_fields_from_flags(row.flags_json)
+                db.session.execute(
+                    text(
+                        """
+                        UPDATE game_participant
+                        SET salt_count = :salt_count,
+                            mana_fucked = :mana_fucked,
+                            misplayed = :misplayed,
+                            life_delta_total = :life_delta_total
+                        WHERE id = :participant_id
+                        """
+                    ),
+                    {
+                        "participant_id": row.id,
+                        "salt_count": int(hot_fields["salt_count"]),
+                        "mana_fucked": 1 if hot_fields["mana_fucked"] else 0,
+                        "misplayed": 1 if hot_fields["misplayed"] else 0,
+                        "life_delta_total": int(hot_fields["life_delta_total"]),
+                    },
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('010_game_participant_hot_fields')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -1375,7 +1474,7 @@ def saltmine():
     deck_salt_stats: dict[int, dict[str, int]] = {}
 
     for gp in participants:
-        parsed_flags = parse_participant_flags(gp.flags_json)
+        parsed_flags = participant_flags_snapshot(gp)
         salt_count = participant_salt_count(parsed_flags)
         salted = salt_count > 0
 
@@ -2172,7 +2271,7 @@ def games():
     game_parts = {}
     game_salt_stats = {}
     for gp in parts:
-        gp.parsed_flags = parse_participant_flags(gp.flags_json)
+        gp.parsed_flags = participant_flags_snapshot(gp)
         game_parts.setdefault(gp.game_id, []).append(gp)
 
         stats = game_salt_stats.setdefault(gp.game_id, {"salted_players": 0, "participants": 0, "salt_clicks": 0})
@@ -2230,7 +2329,7 @@ def game_detail(game_id):
     salted_players = 0
     total_salt_clicks = 0
     for gp in parts:
-        gp.parsed_flags = parse_participant_flags(gp.flags_json)
+        gp.parsed_flags = participant_flags_snapshot(gp)
         gp.turn_stats = parse_participant_turn_stats(gp.flags_json)
         salt_count = participant_salt_count(gp.parsed_flags)
         gp.salt_count = salt_count
@@ -3144,6 +3243,8 @@ def end_game():
     db.session.flush()
 
     for p in participants:
+        participant_flags_json = participant_flags_by_player.get(p["player_id"])
+        participant_hot_fields = participant_hot_fields_from_flags(participant_flags_json)
         db.session.add(
             GameParticipant(
                 game_id=game.id,
@@ -3151,6 +3252,11 @@ def end_game():
                 deck_id=p["deck_id"],
                 seat_position=p.get("seat_position"),
                 flags_json=participant_flags_by_player.get(p["player_id"]),
+                flags_json=participant_flags_json,
+                salt_count=int(participant_hot_fields["salt_count"]),
+                mana_fucked=bool(participant_hot_fields["mana_fucked"]),
+                misplayed=bool(participant_hot_fields["misplayed"]),
+                life_delta_total=int(participant_hot_fields["life_delta_total"]),
             )
         )
 
