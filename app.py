@@ -69,6 +69,56 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
 
 MAX_PER_PLAYER_TURN_STATS = 500
 
+CANONICAL_WIN_TYPES = {
+    "combat",
+    "combo",
+    "alt_win",
+    "concede",
+    "time",
+    "lock",
+    "other",
+}
+LEGACY_WIN_TYPE_MAP = {
+    "scoop": "concede",
+    "infinite_turns": "combo",
+    "mill": "other",
+    "alternate_win": "alt_win",
+    "altwin": "alt_win",
+}
+
+CANONICAL_TIMED_MODES = {
+    "off",
+    "chess_clock",
+    "turn_timer",
+}
+LEGACY_TIMED_MODE_MAP = {
+    "none": "off",
+    "disabled": "off",
+    "chess": "chess_clock",
+    "clock": "chess_clock",
+    "turn": "turn_timer",
+}
+
+
+def canonicalize_win_type(value: str | None, *, unknown_default: str | None = None) -> str | None:
+    raw = (value or "").strip().lower()
+    if not raw:
+        return None
+    normalized = LEGACY_WIN_TYPE_MAP.get(raw, raw)
+    if normalized in CANONICAL_WIN_TYPES:
+        return normalized
+    return unknown_default
+
+
+def canonicalize_timed_mode(value: str | None) -> str | None:
+    raw = (value or "").strip().lower()
+    if not raw:
+        return None
+    normalized = LEGACY_TIMED_MODE_MAP.get(raw, raw)
+    if normalized in CANONICAL_TIMED_MODES:
+        return normalized
+    return None
+
 
 def parse_participant_flags(raw_flags: str | None) -> dict[str, bool | int]:
     parsed_flags = {}
@@ -641,6 +691,8 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('010_game_participant_seat_position')")
+            )
+
         if "010_game_participant_hot_fields" not in applied:
             participant_cols = {
                 row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
@@ -689,6 +741,89 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('010_game_participant_hot_fields')")
+            )
+
+        if "011_game_result_canonical_values" not in applied:
+            game_rows = db.session.execute(text("SELECT id, win_type, timed_mode FROM game")).fetchall()
+            for row in game_rows:
+                canonical_win_type = canonicalize_win_type(row.win_type, unknown_default="other")
+                canonical_timed_mode = canonicalize_timed_mode(row.timed_mode)
+                if canonical_win_type != row.win_type or canonical_timed_mode != row.timed_mode:
+                    db.session.execute(
+                        text(
+                            """
+                            UPDATE game
+                            SET win_type = :win_type,
+                                timed_mode = :timed_mode
+                            WHERE id = :game_id
+                            """
+                        ),
+                        {
+                            "game_id": row.id,
+                            "win_type": canonical_win_type,
+                            "timed_mode": canonical_timed_mode,
+                        },
+                    )
+
+            db.session.execute(
+                text(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS ck_game_win_type_insert
+                    BEFORE INSERT ON game
+                    FOR EACH ROW
+                    WHEN NEW.win_type IS NOT NULL
+                         AND NEW.win_type NOT IN ('combat','combo','alt_win','concede','time','lock','other')
+                    BEGIN
+                        SELECT RAISE(ABORT, 'invalid win_type');
+                    END;
+                    """
+                )
+            )
+            db.session.execute(
+                text(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS ck_game_win_type_update
+                    BEFORE UPDATE OF win_type ON game
+                    FOR EACH ROW
+                    WHEN NEW.win_type IS NOT NULL
+                         AND NEW.win_type NOT IN ('combat','combo','alt_win','concede','time','lock','other')
+                    BEGIN
+                        SELECT RAISE(ABORT, 'invalid win_type');
+                    END;
+                    """
+                )
+            )
+            db.session.execute(
+                text(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS ck_game_timed_mode_insert
+                    BEFORE INSERT ON game
+                    FOR EACH ROW
+                    WHEN NEW.timed_mode IS NOT NULL
+                         AND NEW.timed_mode NOT IN ('off','chess_clock','turn_timer')
+                    BEGIN
+                        SELECT RAISE(ABORT, 'invalid timed_mode');
+                    END;
+                    """
+                )
+            )
+            db.session.execute(
+                text(
+                    """
+                    CREATE TRIGGER IF NOT EXISTS ck_game_timed_mode_update
+                    BEFORE UPDATE OF timed_mode ON game
+                    FOR EACH ROW
+                    WHEN NEW.timed_mode IS NOT NULL
+                         AND NEW.timed_mode NOT IN ('off','chess_clock','turn_timer')
+                    BEGIN
+                        SELECT RAISE(ABORT, 'invalid timed_mode');
+                    END;
+                    """
+                )
+            )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('011_game_result_canonical_values')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -3060,16 +3195,11 @@ def end_game():
             starting_player_id = None
 
     # Legacy game-level salt rating is deprecated for new submissions.
-    win_type = (request.form.get("win_type") or "").strip() or None
-    allowed_win_types = {
-        "combat", "combo", "infinite_turns", "mill", "alt_win", "concede", "scoop"
-    }
-    if win_type is not None and win_type not in allowed_win_types:
-        return "Invalid win type", 400
+    win_type_raw = request.form.get("win_type")
+    win_type = canonicalize_win_type(win_type_raw, unknown_default="other")
 
-    timed_mode_raw = (request.form.get("timed_mode") or "").strip().lower()
-    allowed_timed_modes = {"off", "chess_clock", "turn_timer"}
-    timed_mode = timed_mode_raw if timed_mode_raw in allowed_timed_modes else None
+    timed_mode_raw = request.form.get("timed_mode")
+    timed_mode = canonicalize_timed_mode(timed_mode_raw)
 
     time_control_raw = (request.form.get("time_control") or "").strip()
     time_control = None
@@ -3251,7 +3381,6 @@ def end_game():
                 player_id=p["player_id"],
                 deck_id=p["deck_id"],
                 seat_position=p.get("seat_position"),
-                flags_json=participant_flags_by_player.get(p["player_id"]),
                 flags_json=participant_flags_json,
                 salt_count=int(participant_hot_fields["salt_count"]),
                 mana_fucked=bool(participant_hot_fields["mana_fucked"]),
