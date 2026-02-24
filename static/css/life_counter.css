@@ -113,19 +113,59 @@ body.sigtaara-ui .h4 {
       z-index:2;
       height:100%;
       width:100%;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      align-items:stretch;
+      padding:var(--ui-pad-top) var(--ui-pad-side) var(--ui-pad-bottom);
+      gap:clamp(8px, 1.8vh, 18px);
+    }
+
+    .card-lane{
+      position:relative;
+      width:100%;
+      display:flex;
+      align-items:center;
+    }
+
+    .card-lane-top{
+      justify-content:space-between;
+      min-height:40px;
+      z-index:35;
+      pointer-events:none;
+    }
+
+    .card-lane-middle{
+      flex:1;
+      justify-content:center;
+      align-items:center;
+      flex-direction:column;
+      gap:8px;
+      min-height:0;
+    }
+
+    .card-lane-bottom{
+      justify-content:center;
+      min-height:32px;
+      z-index:10;
     }
 
 
 .status-strip{
-  position:absolute;
-  top:var(--ui-pad-top);
-  left:var(--ui-pad-side);
+  position:relative;
+  top:auto;
+  left:auto;
   z-index:35;
   display:flex;
   gap:12px;
   pointer-events:auto;
   transform-origin:center;
 }
+
+.card-lane-top .status-strip{
+  margin-inline-end:auto;
+}
+
 
 .status-strip-btn{
   position:relative;
@@ -183,27 +223,26 @@ body.sigtaara-ui .h4 {
 }
 
 .life-card.top-card .status-strip{
-  left:auto;
-  right:var(--ui-pad-side);
+  margin-inline-start:auto;
+  margin-inline-end:0;
   transform:rotate(180deg);
 }
 
 .players-2 .life-card.left-card .status-strip{
-  left:var(--ui-pad-side);
-  right:auto;
+  margin-inline-start:0;
+  margin-inline-end:auto;
   transform:rotate(90deg);
 }
 
 .players-2 .life-card.right-card .status-strip{
-  left:auto;
-  right:var(--ui-pad-side);
+  margin-inline-start:auto;
+  margin-inline-end:0;
   transform:rotate(-90deg);
 }
 
 .players-3 .life-card.p3-slot-3 .status-strip{
-  top:var(--ui-pad-top);
-  left:auto;
-  right:var(--ui-pad-side);
+  margin-inline-start:auto;
+  margin-inline-end:0;
   transform:rotate(-90deg) scaleX(-1);
 }
 
@@ -279,6 +318,7 @@ body.sigtaara-ui .h4 {
 }
 
     .life-display{
+      position:relative;
       font-size:clamp(3.25rem, 18vh, 11rem);
       font-weight:900;
       color:#fff;
@@ -286,11 +326,11 @@ body.sigtaara-ui .h4 {
       user-select:none;
     }
     .life-pending{
-      --pending-translate-y:-170%;
-      position:absolute;
-      left:50%;
-      top:50%;
-      transform:translate(-50%,var(--pending-translate-y));
+      --pending-translate-y:-10%;
+      position:relative;
+      left:auto;
+      top:auto;
+      transform:translateY(var(--pending-translate-y));
       font-size:clamp(1rem, 2.8vw, 2rem);
       font-weight:900;
       color:#fff;
@@ -308,15 +348,15 @@ body.sigtaara-ui .h4 {
     .life-pending.anim-loss{ animation: pending-bump-down .22s ease-out; }
 
     @keyframes pending-bump-up{
-      0%{ transform:translate(-50%,-195%) scale(.92); }
-      55%{ transform:translate(-50%,-212%) scale(1.07); }
-      100%{ transform:translate(-50%,-205%) scale(1); }
+      0%{ transform:translateY(-30%) scale(.92); }
+      55%{ transform:translateY(-46%) scale(1.07); }
+      100%{ transform:translateY(-36%) scale(1); }
     }
 
     @keyframes pending-bump-down{
-      0%{ transform:translate(-50%,-215%) scale(.92); }
-      55%{ transform:translate(-50%,-198%) scale(1.07); }
-      100%{ transform:translate(-50%,-205%) scale(1); }
+      0%{ transform:translateY(-44%) scale(.92); }
+      55%{ transform:translateY(-30%) scale(1.07); }
+      100%{ transform:translateY(-36%) scale(1); }
     }
 
     /* ===== ACTIVE PLAYER: GLOW FRAME + BACKGROUND LIFT (NO BADGE) ===== */
@@ -463,16 +503,18 @@ body.sigtaara-ui .h4 {
 
 
     .player-name{
-      position:absolute;
-      bottom:var(--ui-pad-bottom);
-      left:50%;
-      transform:translateX(-50%);
-      padding:14px 14px;
+      position:relative;
+      bottom:auto;
+      left:auto;
+      transform:none;
+      display:block;
+      padding:0;
       color:#fff;
       font-weight:800;
       text-shadow:0 0 10px rgba(0,0,0,.8);
       user-select:none;
       white-space:nowrap;
+      width:min(100%, 92%);
       max-width:92%;
       overflow:hidden;
       text-overflow:ellipsis;
@@ -520,14 +562,7 @@ body.sigtaara-ui .h4 {
     .players-3 .life-card.p3-slot-3{ grid-area:p3; }
     .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
     .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
-.players-3 .life-card.p3-slot-3 .player-name{
-  top:auto;
-  bottom:var(--ui-pad-bottom);
-  left:50%;
-  right:auto;
-  transform:translateX(-50%);
-  transform-origin:center;
-}
+.players-3 .life-card.p3-slot-3 .player-name{ transform-origin:center; }
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
     .players-3 .life-card.p3-slot-1{ border-bottom:1px solid rgba(255,255,255,0.18); }
@@ -608,10 +643,10 @@ body.sigtaara-ui .h4 {
 
 
 .player-timer{
-  position:absolute;
-  top:14px;
-  left:50%;
-  transform:translateX(-50%);
+  position:relative;
+  top:auto;
+  left:auto;
+  transform:none;
   z-index:21;
   display:none;
   min-width:86px;
@@ -720,7 +755,6 @@ body.sigtaara-ui .h4 {
   margin-top:-4px;
 }
 
-.players-3 .life-card.p3-slot-3 .player-timer{ top:auto; bottom:12px; }
 .mode-2p .player-timer{ font-size:clamp(.78rem,1.7vw,.95rem); }
 
 
@@ -871,6 +905,16 @@ body.sigtaara-ui .h4 {
     }
 @media (max-width:576px){
   .life-pending{
-    --pending-translate-y:-190%;
+    --pending-translate-y:-14%;
   }
+}
+
+
+.players-3 .card-inner,
+.players-4 .card-inner,
+.players-5 .card-inner,
+.players-6 .card-inner{
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
 }
