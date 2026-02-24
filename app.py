@@ -388,7 +388,7 @@ class Deck(db.Model):
 
     @property
     def card_art_url(self):
-        return self.custom_card_art_local or self.custom_card_art_url or self.commander_art_url
+        return self.custom_card_art_local or self.custom_card_art_url
 
     @property
     def card_art(self):
