@@ -9,7 +9,7 @@
   <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
 </head>
 
-<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">
+<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}{% if debug_ui_enabled %} debug-ui{% endif %}">
   {% set n = participants|length %}
 
   <div class="life-wrapper">
@@ -332,6 +332,12 @@ const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
 const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
 const ACTIVE_TURN_BADGE_PREF_KEY = "life_counter_show_active_corner_badge";
 const ACTIVE_TURN_BADGE_DEFAULT = true;
+const DEBUG_UI_ENABLED = {{ debug_ui_enabled|default(false, true)|tojson }};
+
+function initializeDebugUiOverlays(){
+  if(!DEBUG_UI_ENABLED) return;
+  document.body.classList.add("debug-ui");
+}
 
 function setActiveTurnBadgeVisibility(enabled){
   document.body.classList.toggle("show-active-turn-badge", !!enabled);
@@ -1356,6 +1362,7 @@ if(cards.length){
 setInterval(tickTimers, 250);
 
 lockLandscapeBestEffort();
+initializeDebugUiOverlays();
 
 const activeTurnBadgeToggle = document.getElementById("activeTurnBadgeToggle");
 if(activeTurnBadgeToggle){

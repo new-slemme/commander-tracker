@@ -3701,6 +3701,7 @@ def life_counter():
         active_mechanics["poison"] = active_mechanics["poison"] or bool(tags.get("poison")) or bool(tags.get("proliferate"))
 
     current_user = get_current_user()
+    debug_ui_enabled = app.debug and request.args.get("debug_ui") == "1"
     salt_action_values = {
         "mana_fucked": max(0, int(getattr(current_user, "mana_fucked_salt_value", 1) or 0)),
         "misplayed": max(0, int(getattr(current_user, "misplayed_salt_value", 1) or 0)),
@@ -3715,6 +3716,7 @@ def life_counter():
         turn_number=session.get("turn_number", 1),
         salt_action_values=salt_action_values,
         active_mechanics=active_mechanics,
+        debug_ui_enabled=debug_ui_enabled,
     )
 
 
