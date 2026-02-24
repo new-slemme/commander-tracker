@@ -211,10 +211,13 @@
                 <div class="game-summary-extras">
                   <div class="decks-compact" data-decks-compact>
                     {% for gp in game_parts[g.id][:3] %}
-                      <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
+                      <a class="deck-mini deck-mini--link {% if gp.player_id == g.winner_id %}win{% endif %}"
+                         href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
+                         aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name }})"
+                         title="Open deck: {{ gp.deck.name }}">
                         <span class="deck-mini__player">{{ gp.player.name }}</span>
                         <span class="deck-mini__deck">{{ gp.deck.name }}</span>
-                      </span>
+                      </a>
                     {% endfor %}
 
                     {% if game_parts[g.id]|length > 3 %}
@@ -225,10 +228,13 @@
 
                       <div class="deck-mini-extra" data-decks-extra hidden>
                         {% for gp in game_parts[g.id][3:] %}
-                          <span class="deck-mini {% if gp.player_id == g.winner_id %}win{% endif %}">
+                          <a class="deck-mini deck-mini--link {% if gp.player_id == g.winner_id %}win{% endif %}"
+                             href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
+                             aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name }})"
+                             title="Open deck: {{ gp.deck.name }}">
                             <span class="deck-mini__player">{{ gp.player.name }}</span>
                             <span class="deck-mini__deck">{{ gp.deck.name }}</span>
-                          </span>
+                          </a>
                         {% endfor %}
                       </div>
                     {% endif %}
@@ -286,8 +292,11 @@
                   <div class="players-row">
                     {% for gp in game_parts[g.id] %}
                       {% set commander_art = gp.deck.commander_art_url %}
-                      <span class="ppill {% if gp.player_id == g.winner_id %}win{% endif %}"
-                            {% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
+                      <a class="ppill ppill--link {% if gp.player_id == g.winner_id %}win{% endif %}"
+                         href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
+                         aria-label="Open deck: {{ gp.deck.name }} for {{ gp.player.name }}"
+                         title="Open deck: {{ gp.deck.name }}"
+                         {% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
                         <span class="ppill-top">
                           {% if gp.player_id == g.winner_id %}
                             <span class="wmark">W</span>
@@ -308,7 +317,7 @@
                             <span class="retired-pill">Retired</span>
                           {% endif %}
                         </span>
-                      </span>
+                      </a>
                     {% endfor %}
                   </div>
 
