@@ -69,43 +69,47 @@
         </button>
 
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
-          {% if active_mechanics.monarch or active_mechanics.poison %}
-          <div class="status-strip" data-player="{{ p.player_id }}">
-            {% if active_mechanics.monarch %}
-            <button
-              type="button"
-              class="status-strip-btn monarch-btn"
-              data-player="{{ p.player_id }}"
-              data-mechanic="monarch"
-              aria-pressed="false"
-              aria-label="Toggle monarch for {{ p.player_name }}"
-              title="Toggle monarch"
-            >👑</button>
+          <div class="card-lane card-lane-top">
+            {% if active_mechanics.monarch or active_mechanics.poison %}
+            <div class="status-strip" data-player="{{ p.player_id }}">
+              {% if active_mechanics.monarch %}
+              <button
+                type="button"
+                class="status-strip-btn monarch-btn"
+                data-player="{{ p.player_id }}"
+                data-mechanic="monarch"
+                aria-pressed="false"
+                aria-label="Toggle monarch for {{ p.player_name }}"
+                title="Toggle monarch"
+              >👑</button>
+              {% endif %}
+              {% if active_mechanics.poison %}
+              <button
+                type="button"
+                class="status-strip-btn poison-btn"
+                data-player="{{ p.player_id }}"
+                data-mechanic="poison"
+                aria-pressed="false"
+                aria-label="Adjust poison for {{ p.player_name }}"
+                title="Adjust poison"
+              ><span class="poison-icon" aria-hidden="true">☠️</span><span class="poison-value" data-player="{{ p.player_id }}">0</span></button>
+              {% endif %}
+            </div>
             {% endif %}
-            {% if active_mechanics.poison %}
-            <button
-              type="button"
-              class="status-strip-btn poison-btn"
-              data-player="{{ p.player_id }}"
-              data-mechanic="poison"
-              aria-pressed="false"
-              aria-label="Adjust poison for {{ p.player_name }}"
-              title="Adjust poison"
-            ><span class="poison-icon" aria-hidden="true">☠️</span><span class="poison-value" data-player="{{ p.player_id }}">0</span></button>
-            {% endif %}
+
+            <div class="player-timer" id="timer-{{ p.player_id }}">--:--</div>
           </div>
-          {% endif %}
 
-          <div class="player-timer" id="timer-{{ p.player_id }}">--:--</div>
+          <div class="card-lane card-lane-middle">
+            <div class="life-display" id="life-{{ p.player_id }}">40</div>
+            <div class="life-pending" id="pending-{{ p.player_id }}">+0</div>
+          </div>
 
-          <div class="life-display position-absolute top-50 start-50 translate-middle"
-               id="life-{{ p.player_id }}">40</div>
-
-          <div class="player-name">{{ p.player_name }}</div>
+          <div class="card-lane card-lane-bottom">
+            <div class="player-name" title="{{ p.player_name }}">{{ p.player_name }}</div>
+          </div>
 
           <div class="active-corner-badge" aria-hidden="true"></div>
-
-          <div class="life-pending" id="pending-{{ p.player_id }}">+0</div>
         </div>
 
         <!-- kept in DOM, but hidden by CSS -->
