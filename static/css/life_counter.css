@@ -59,6 +59,55 @@ body.sigtaara-ui .h4 {
       display:grid;
     }
 
+    body.debug-ui .life-card{
+      outline:2px dashed rgba(0, 255, 255, 0.95);
+      outline-offset:-2px;
+    }
+
+    body.debug-ui .life-card::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      border:2px solid rgba(0, 255, 255, 0.45);
+      pointer-events:none;
+      z-index:90;
+    }
+
+    body.debug-ui button,
+    body.debug-ui [role="button"],
+    body.debug-ui .center-pass-hit-area{
+      outline:2px solid rgba(255, 99, 71, 0.95);
+      outline-offset:2px;
+    }
+
+    body.debug-ui .life-wrapper::before{
+      content:"";
+      position:fixed;
+      top:var(--safe-top);
+      right:var(--safe-right);
+      bottom:var(--safe-bottom);
+      left:var(--safe-left);
+      border:2px dashed rgba(255, 220, 0, 0.95);
+      pointer-events:none;
+      z-index:2500;
+    }
+
+    body.debug-ui .life-wrapper::after{
+      content:"DEBUG UI OVERLAY";
+      position:fixed;
+      top:calc(var(--safe-top) + 8px);
+      left:calc(var(--safe-left) + 8px);
+      z-index:2501;
+      font-size:12px;
+      letter-spacing:0.08em;
+      padding:4px 8px;
+      border-radius:999px;
+      background:rgba(255, 220, 0, 0.9);
+      color:#111;
+      font-weight:700;
+      pointer-events:none;
+    }
+
     /* Portrait: rotate only the grid to mimic landscape layout (EXCEPT 2P) */
     @media (orientation:portrait){
       .life-grid{
