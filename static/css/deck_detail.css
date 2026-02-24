@@ -32,6 +32,7 @@
     justify-content: center;
     gap: 4px;
     padding: 0;
+    flex: 0 0 auto;
   }
 
   .menu-trigger span {
@@ -43,6 +44,36 @@
     opacity: 0.95;
   }
 
+
+  .banner-actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .deck-status-pill {
+    height: 44px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    flex: 0 0 auto;
+  }
+
+  .deck-status-pill-planned {
+    background: #27d6ff;
+    color: #0f1730;
+  }
+
+  .deck-status-pill-retired {
+    background: #f7c65d;
+    color: #17110a;
+  }
   .menu-trigger:hover,
   .menu-trigger:focus-visible,
   .menu-trigger:active,
@@ -147,9 +178,6 @@
       gap: 10px !important;
     }
 
-    .banner-actions {
-      margin-left: auto;
-    }
 
     .banner-menu {
       min-width: 170px;
