@@ -131,7 +131,7 @@
     <div class="deck-grid">
       {% for d in decks %}
         {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
-        {% set art = d.card_art_url %}
+        {% set art = d.commander_art_url %}
         {% set wr = s.winrate %}
         {% set badge_class = 'bad' %}
         {% if wr >= 60 %}{% set badge_class = 'good' %}
