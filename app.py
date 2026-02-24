@@ -2067,7 +2067,7 @@ def index():
         if most_played:
             deck = most_played[0]
             row["most_played_deck"] = deck
-            row["bg_art"] = deck.card_art_url
+            row["bg_art"] = deck.commander_art_url
         else:
             row["most_played_deck"] = None
             row["bg_art"] = None
@@ -3296,7 +3296,7 @@ def add_game():
             {
                 "id": d.id,
                 "name": d.name,
-                "art": d.card_art_url
+                "art": d.commander_art_url
             }
             for d in active_decks
         ]
@@ -3318,7 +3318,7 @@ def play_game():
             {
                 "id": d.id,
                 "name": d.name,
-                "art": d.card_art_url,
+                "art": d.commander_art_url,
             }
             for d in active_decks
         ]

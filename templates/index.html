@@ -175,7 +175,7 @@
   </div>
 
   {% if last_winning_deck %}
-    {% set art = last_winning_deck.card_art_url %}
+    {% set art = last_winning_deck.commander_art_url %}
     <div class="spotlight mb-5">
       <div class="bg" style="{% if art %}background-image:url('{{ art }}'); background-position: top;{% endif %}"></div>
       <div class="overlay"></div>
@@ -218,7 +218,7 @@
             {# Collect commander art URLs for this game (up to 6) #}
             {% set ns = namespace(arts=[]) %}
             {% for gp in game_parts[g.id] %}
-              {% set art = gp.deck.card_art_url %}
+              {% set art = gp.deck.commander_art_url %}
               {% if art and (ns.arts|length) < 6 %}
                 {% set ns.arts = ns.arts + [art] %}
               {% endif %}
@@ -294,7 +294,7 @@
     <div class="deck-grid mb-5">
       {% for s in deck_stats %}
         {% set d = s.deck %}
-        {% set art = d.card_art_url %}
+        {% set art = d.commander_art_url %}
         {% set wr = s.winrate %}
         {% set badge_class = 'bad' %}
         {% if wr >= 60 %}{% set badge_class = 'good' %}
