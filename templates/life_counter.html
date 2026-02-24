@@ -9,7 +9,7 @@
   <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
 </head>
 
-<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">
+<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">
   {% set n = participants|length %}
 
   <div class="life-wrapper">
@@ -317,8 +317,10 @@ let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
 const SALT_BUTTON_LONG_PRESS_MS = LONG_PRESS_MS;
 const LIFE_COMMIT_MS = 650;
+const HIDE_SALT_BUTTON_BY_DEFAULT = document.body.classList.contains("mode-6p");
 const PENDING_FADE_DELAY_MS = 1000;
 const saltButtonPressState = {};
+const saltRevealTimers = {};
 let playerFlagTargetId = null;
 let playerSaltFlyoutOpen = false;
 let playerFlagAnchorButton = null;
@@ -812,6 +814,22 @@ function queueLifeChange(playerId, delta){
   pendingTimers[playerId] = setTimeout(()=>applyPendingLife(playerId), LIFE_COMMIT_MS);
 }
 
+function revealSaltButtonForCard(playerCard, revealMs = 2200){
+  if(!HIDE_SALT_BUTTON_BY_DEFAULT || !playerCard) return;
+  const playerId = String(playerCard.dataset.player || "");
+  if(!playerId) return;
+
+  playerCard.classList.add("salt-controls-revealed");
+  clearTimeout(saltRevealTimers[playerId]);
+  saltRevealTimers[playerId] = setTimeout(()=>{
+    const flyoutEl = document.getElementById("playerSaltFlyout");
+    const flyoutOpen = Boolean(flyoutEl?.classList.contains("is-open"));
+    if(!flyoutOpen){
+      playerCard.classList.remove("salt-controls-revealed");
+    }
+  }, revealMs);
+}
+
 function checkWinner(){
   const alive = cards.filter(c=>isPlayerAlive(String(c.dataset.player)));
 
@@ -852,7 +870,7 @@ cards.forEach(card=>{
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
-    if(e.target.closest(".player-name")) return;
+    if(e.target.closest(".player-name, .status-strip-btn, .salt-dispenser-btn, .center-pass-btn")) return;
     e.preventDefault();
 
     const rect = card.getBoundingClientRect();
@@ -869,6 +887,15 @@ cards.forEach(card=>{
     }
 
     queueLifeChange(playerId, delta);
+  });
+
+  card.addEventListener("contextmenu", (event)=>{
+    if(event.target.closest(".status-strip-btn, .center-pass-btn")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const saltBtn = card.querySelector(".salt-dispenser-btn");
+    revealSaltButtonForCard(card, 2800);
+    openPlayerSaltMenu(playerId, saltBtn);
   });
 });
 
@@ -972,6 +999,9 @@ function closePlayerSaltMenu(){
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
   activeCard?.classList.remove("flag-menu-open");
+  if(HIDE_SALT_BUTTON_BY_DEFAULT && activeCard){
+    activeCard.classList.remove("salt-controls-revealed");
+  }
   resumeTimers("player-flag");
 }
 
@@ -1011,6 +1041,7 @@ function openPlayerSaltMenu(playerId, anchorButton){
   const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
   document.querySelectorAll(".life-card.flag-menu-open").forEach((card)=>card.classList.remove("flag-menu-open"));
   playerCard?.classList.add("flag-menu-open");
+  revealSaltButtonForCard(playerCard, 4000);
 
   positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 
@@ -1131,6 +1162,7 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
 
     const state = saltButtonPressState[playerId];
     state.handled = false;
+    revealSaltButtonForCard(saltBtn.closest(".life-card"));
     state.pointerId = event.pointerId;
     clearTimeout(state.timer);
     state.timer = setTimeout(()=>{
