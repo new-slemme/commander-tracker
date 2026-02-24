@@ -351,6 +351,7 @@ class Deck(db.Model):
     custom_card_art_local = db.Column(db.String(300))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
     decklist_text = db.Column(db.Text)
+    tags_json = db.Column(db.Text, nullable=False, default="{}")
 
     @property
     def commander_art_url(self):
@@ -831,6 +832,18 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('014_deck_custom_card_local_art')")
+            )
+
+        if "015_deck_tags_json" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "tags_json" not in deck_cols:
+                db.session.execute(
+                    text("ALTER TABLE deck ADD COLUMN tags_json TEXT NOT NULL DEFAULT '{}'"))
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('015_deck_tags_json')")
             )
 
         if "011_game_result_canonical_values" not in applied:
