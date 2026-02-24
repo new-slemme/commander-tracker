@@ -95,7 +95,7 @@
   <div class="row g-3">
     {% for gp in parts %}
       {% set d = gp.deck %}
-      {% set art = d.card_art_url %}
+      {% set art = d.commander_art_url %}
       {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
       {% set ns = namespace(life_delta=0, mana_fucked_turns=0, misplayed_turns=0) %}
       {% for ts in gp.turn_stats %}
