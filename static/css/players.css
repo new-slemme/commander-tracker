@@ -36,6 +36,7 @@
 
   .player-row {
     display:flex;
+    cursor:pointer;
     align-items:center;
     justify-content:space-between;
     gap:12px;
@@ -115,5 +116,8 @@
   }
 
 
-  .player-name { text-decoration: none; }
-  .player-name:hover { text-decoration: underline; color: #fff; }
+
+  .player-row:hover,
+  .player-row:focus-visible {
+    background: rgba(255,255,255,0.03);
+  }

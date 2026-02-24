@@ -52,6 +52,9 @@
     letter-spacing: 0.01em;
   }
 
+  .stats-table .player-name { text-decoration: none; }
+  .stats-table .player-name:hover { text-decoration: underline; color: #fff; }
+
   .win-badge {
     padding: 6px 10px;
     border-radius: 999px;
@@ -301,4 +304,16 @@
     margin-bottom: 8px;
     padding: 8px 10px;
     text-align: left;
+  }
+
+
+  .recent-game-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+  }
+
+  .recent-game-link:hover {
+    color: inherit;
+    border-color: rgba(143,153,197,0.38);
   }

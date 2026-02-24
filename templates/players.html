@@ -60,9 +60,13 @@
           {% set can_delete = player_can_delete.get(p.id) %}
         {% endif %}
 
-        <div class="player-row">
+        <div class="player-row"
+             role="link"
+             tabindex="0"
+             onclick="window.location.href='{{ url_for('player_detail', player_id=p.id) }}'"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); window.location.href='{{ url_for('player_detail', player_id=p.id) }}';}">
           <div class="player-left">
-            <a class="player-name" href="{{ url_for('player_detail', player_id=p.id) }}">{{ p.name }}</a>
+            <div class="player-name">{{ p.name }}</div>
 
             <div class="player-meta">
               {% if is_guest %}
@@ -75,6 +79,10 @@
               {% if p.username is defined and p.username %}
                 <span class="muted">@{{ p.username }}</span>
               {% endif %}
+              {% set stats = player_stats.get(p.id, {}) %}
+              <span class="muted">· {{ stats.get('winrate', 0.0) }}% WR</span>
+              <span class="muted">· {{ stats.get('deck_count', 0) }} decks</span>
+              <span class="muted">· Joined on {{ stats.get('joined_on').strftime('%Y-%m-%d') if stats.get('joined_on') else 'n/a' }}</span>
             </div>
           </div>
 
@@ -84,14 +92,16 @@
                 <form method="post"
                       action="{{ url_for('delete_player', player_id=p.id) }}"
                       onsubmit="return confirm('Delete {{ p.name }}? This cannot be undone.');"
-                      class="m-0">
-                  <button type="submit" class="btn btn-danger btn-danger-soft">
+                      class="m-0"
+                      onclick="event.stopPropagation();">
+                  <button type="submit" class="btn btn-danger btn-danger-soft" onclick="event.stopPropagation();">
                     Delete
                   </button>
                 </form>
               {% else %}
                 <button type="button"
                         class="btn btn-danger btn-danger-soft"
+                        onclick="event.stopPropagation();"
                         disabled
                         title="Can't delete: player has related data">
                   Delete

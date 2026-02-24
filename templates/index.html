@@ -132,7 +132,7 @@
               <td><span class="rank-pill">{{ loop.index }}</span></td>
 
               <td>
-                <div class="player-name">{{ s.player.name }}</div>
+                <a class="player-name" href="{{ url_for('player_detail', player_id=s.player.id) }}">{{ s.player.name }}</a>
                 <div class="stat-mini mt-1 d-sm-none">
                   <div><b>{{ s.wins }}</b> W</div>
                   <div><b>{{ s.played }}</b> games</div>
@@ -228,7 +228,8 @@
             {% if n == 0 %}{% set n = 1 %}{% endif %}
             {% set slice = (100 / n) %}
 
-            <div class="list-group-item p-0 recent-game-tile">
+            <a class="list-group-item p-0 recent-game-tile recent-game-link"
+               href="{{ url_for('game_detail', game_id=g.id) }}">
               <div class="recent-game-inner">
 
                 <div class="recent-game-bg">
@@ -271,7 +272,7 @@
 
                 </div>
               </div>
-            </div>
+            </a>
 
           {% endfor %}
         </div>
