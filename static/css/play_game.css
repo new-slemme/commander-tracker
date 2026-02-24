@@ -240,7 +240,7 @@
     position:absolute;
     inset:0;
     background-image: var(--deck-bg);
-    background-size: cover;
+    background-size: var(--deck-bg-size, cover);
     background-position: center top;
     background-repeat:no-repeat;
     opacity: 0;

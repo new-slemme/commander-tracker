@@ -365,6 +365,14 @@ class Deck(db.Model):
     def card_art_url(self):
         return self.custom_card_art_local or self.custom_card_art_url or self.commander_art_url
 
+    @property
+    def commander_art_scale(self):
+        # Uploaded/linked custom art is usually full-card framing. Slightly zoom it so
+        # life-counter and deck tiles keep a useful crop without letterboxing.
+        if self.commander_local_art_custom or self.custom_commander_art_url or self.custom_card_art_local or self.custom_card_art_url:
+            return "118%"
+        return "cover"
+
 
 class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -3296,7 +3304,8 @@ def add_game():
             {
                 "id": d.id,
                 "name": d.name,
-                "art": d.commander_art_url
+                "art": d.commander_art_url,
+                "art_scale": d.commander_art_scale,
             }
             for d in active_decks
         ]
@@ -3319,6 +3328,7 @@ def play_game():
                 "id": d.id,
                 "name": d.name,
                 "art": d.commander_art_url,
+                "art_scale": d.commander_art_scale,
             }
             for d in active_decks
         ]
@@ -3358,6 +3368,7 @@ def start_game():
                 "player_name": deck.owner.name,
                 "deck_name": deck.name,
                 "commander_art": deck.commander_art_url,
+                "commander_art_scale": deck.commander_art_scale,
             })
 
     if len(participants) < 2:
@@ -3480,6 +3491,7 @@ def life_counter():
 
         deck = db.session.get(Deck, p["deck_id"])
         p["commander_art"] = deck.commander_art_url if deck else None
+        p["commander_art_scale"] = deck.commander_art_scale if deck else "cover"
 
     current_user = get_current_user()
     salt_action_values = {

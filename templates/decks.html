@@ -146,7 +146,7 @@
            data-deck-owner-id="{{ d.player_id }}"
            data-deck-retired="{{ 1 if d.retired else 0 }}"
            data-deck-planned="{{ 1 if d.planned else 0 }}"
-           {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
+           {% if art %}style="background-image:url('{{ art }}'); --deck-art-scale: {{ d.commander_art_scale }};"{% endif %}>
 
           <div class="deck-tile-inner">
 

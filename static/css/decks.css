@@ -26,7 +26,7 @@
     min-height: 140px;
     text-decoration:none;
   }
-  .deck-tile.has-bg { background-size:cover; background-position: top; }
+  .deck-tile.has-bg { background-size: var(--deck-art-scale, cover); background-position: top; }
   .deck-tile::before{
     content:"";
     position:absolute; inset:0;
