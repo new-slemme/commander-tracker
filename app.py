@@ -3581,6 +3581,8 @@ def life_counter():
 
     colors = ["--blue", "--red", "--green", "--purple", "--orange", "--yellow"]
 
+    active_mechanics = {"monarch": False, "poison": False}
+
     for i, p in enumerate(participants, 1):
         p["index"] = i
         p["color"] = colors[(i - 1) % len(colors)]
@@ -3588,6 +3590,18 @@ def life_counter():
         deck = db.session.get(Deck, p["deck_id"])
         p["commander_art"] = deck.commander_art_url if deck else None
         p["commander_art_scale"] = deck.commander_art_scale if deck else "cover"
+
+        tags = {}
+        if deck and deck.tags_json:
+            try:
+                loaded_tags = json.loads(deck.tags_json)
+                if isinstance(loaded_tags, dict):
+                    tags = loaded_tags
+            except (TypeError, ValueError):
+                tags = {}
+
+        active_mechanics["monarch"] = active_mechanics["monarch"] or bool(tags.get("monarch"))
+        active_mechanics["poison"] = active_mechanics["poison"] or bool(tags.get("poison")) or bool(tags.get("proliferate"))
 
     current_user = get_current_user()
     salt_action_values = {
@@ -3603,6 +3617,7 @@ def life_counter():
         game_started_at=session.get("game_started_at"),
         turn_number=session.get("turn_number", 1),
         salt_action_values=salt_action_values,
+        active_mechanics=active_mechanics,
     )
 
 

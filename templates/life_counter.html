@@ -68,6 +68,31 @@
         </button>
 
         <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
+          {% if active_mechanics.monarch or active_mechanics.poison %}
+          <div class="status-strip" data-player="{{ p.player_id }}">
+            {% if active_mechanics.monarch %}
+            <button
+              type="button"
+              class="status-strip-btn monarch-btn"
+              data-player="{{ p.player_id }}"
+              data-mechanic="monarch"
+              aria-label="Toggle monarch for {{ p.player_name }}"
+              title="Toggle monarch"
+            >👑</button>
+            {% endif %}
+            {% if active_mechanics.poison %}
+            <button
+              type="button"
+              class="status-strip-btn poison-btn"
+              data-player="{{ p.player_id }}"
+              data-mechanic="poison"
+              aria-label="Adjust poison for {{ p.player_name }}"
+              title="Adjust poison"
+            >☠️</button>
+            {% endif %}
+          </div>
+          {% endif %}
+
           <div class="player-timer" id="timer-{{ p.player_id }}">--:--</div>
 
           <div class="life-display position-absolute top-50 start-50 translate-middle"
