@@ -320,15 +320,37 @@ body.sigtaara-ui .h4 {
     .life-card.active-turn::after{
       content:"";
       position:absolute;
-      inset:10px;
+      inset:8px;
       border-radius:18px;
-      border:2px solid rgba(255,255,255,0.28);
+      border:2px solid rgba(255,255,255,0.34);
       box-shadow:
-        0 0 0 4px rgba(255,255,255,0.08),
-        0 0 26px rgba(255,255,255,0.22),
-        0 0 60px rgba(255,235,59,0.18) inset;
+        0 0 0 5px rgba(255,255,255,0.1),
+        0 0 34px rgba(255,255,255,0.26),
+        0 0 72px rgba(255,235,59,0.2) inset;
       pointer-events:none;
       z-index:25;
+    }
+
+    .active-corner-badge{
+      position:absolute;
+      top:16px;
+      right:16px;
+      width:12px;
+      height:12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,0.9);
+      background:rgba(255,255,255,0.96);
+      box-shadow:0 0 0 3px rgba(0,0,0,0.34), 0 0 14px rgba(255,255,255,0.55);
+      opacity:0;
+      transform:scale(0.8);
+      transition:opacity .16s ease, transform .16s ease;
+      pointer-events:none;
+      z-index:40;
+    }
+
+    body.show-active-turn-badge .life-card.active-turn .active-corner-badge{
+      opacity:1;
+      transform:scale(1);
     }
 
 .life-card.active-turn::before{
