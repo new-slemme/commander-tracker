@@ -9,6 +9,14 @@
     :root{
       /* default background transform unless overridden */
       --bg-rotate:none;
+      --safe-top:env(safe-area-inset-top, 0px);
+      --safe-right:env(safe-area-inset-right, 0px);
+      --safe-bottom:env(safe-area-inset-bottom, 0px);
+      --safe-left:env(safe-area-inset-left, 0px);
+
+      --ui-pad-top:max(10px, var(--safe-top));
+      --ui-pad-side:max(10px, var(--safe-left), var(--safe-right));
+      --ui-pad-bottom:max(14px, var(--safe-bottom));
     }
 
     html,body{
@@ -110,7 +118,7 @@ body.sigtaara-ui .h4 {
 
 .status-strip{
   position:absolute;
-  top:10px;
+  top:var(--ui-pad-top);
   left:50%;
   transform:translateX(-50%);
   z-index:35;
@@ -180,13 +188,13 @@ body.sigtaara-ui .h4 {
 
 .players-3 .life-card.p3-slot-3 .status-strip{
   top:auto;
-  bottom:10px;
+  bottom:var(--ui-pad-bottom);
 }
 
     .salt-dispenser-btn{
       position:absolute;
       top:50%;
-      left:10px;
+      left:var(--ui-pad-side);
       right:auto;
       transform:translateY(-50%);
       z-index:40;
@@ -226,7 +234,7 @@ body.sigtaara-ui .h4 {
 
 .players-2 .life-card.left-card .salt-dispenser-btn{
   top:50%;
-  left:10px;
+  left:var(--ui-pad-side);
   right:auto;
   transform:translateY(-50%);
 }
@@ -234,14 +242,14 @@ body.sigtaara-ui .h4 {
 .players-2 .life-card.right-card .salt-dispenser-btn{
   top:50%;
   left:auto;
-  right:10px;
+  right:var(--ui-pad-side);
   transform:translateY(-50%);
 }
 
 .players-3 .life-card.p3-slot-3 .salt-dispenser-btn{
-  top:10px;
+  top:var(--ui-pad-top);
   left:auto;
-  right:10px;
+  right:var(--ui-pad-side);
   transform:none;
 }
 
@@ -361,7 +369,7 @@ body.sigtaara-ui .h4 {
 .transient-notice-container{
   position:fixed;
   left:50%;
-  bottom:calc(env(safe-area-inset-bottom, 0px) + 16px);
+  bottom:calc(var(--ui-pad-bottom) + 2px);
   transform:translate(-50%, 14px);
   z-index:230;
   max-width:min(88vw, 420px);
@@ -385,7 +393,7 @@ body.sigtaara-ui .h4 {
 
 @media (max-height: 600px){
   .transient-notice-container{
-    bottom:calc(env(safe-area-inset-bottom, 0px) + 10px);
+    bottom:var(--ui-pad-bottom);
     max-width:min(92vw, 360px);
     font-size:.95rem;
   }
@@ -398,7 +406,7 @@ body.sigtaara-ui .h4 {
 
     .player-name{
       position:absolute;
-      bottom:0;
+      bottom:var(--ui-pad-bottom);
       left:50%;
       transform:translateX(-50%);
       padding:14px 14px;
@@ -416,7 +424,7 @@ body.sigtaara-ui .h4 {
     /* Turn pill (top center) */
     .turn-pill{
       position:fixed;
-      top:14px;
+      top:var(--ui-pad-top);
       left:50%;
       transform:translateX(-50%);
       padding:10px 16px;
@@ -435,7 +443,7 @@ body.sigtaara-ui .h4 {
 
     .turn-pill.bottom{
       top:auto;
-      bottom:14px;
+      bottom:var(--ui-pad-bottom);
       transform:translateX(-50%) rotate(180deg);
     }
 
@@ -456,7 +464,7 @@ body.sigtaara-ui .h4 {
     .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
 .players-3 .life-card.p3-slot-3 .player-name{
   top:auto;
-  bottom:0;
+  bottom:var(--ui-pad-bottom);
   left:50%;
   right:auto;
   transform:translateX(-50%);
@@ -682,6 +690,12 @@ body.sigtaara-ui .h4 {
 }
 
 @media (max-width:576px){
+  :root{
+    --ui-pad-top:max(12px, var(--safe-top));
+    --ui-pad-side:max(12px, var(--safe-left), var(--safe-right));
+    --ui-pad-bottom:max(16px, var(--safe-bottom));
+  }
+
   #quickMenuModal .modal-dialog.quick-menu-sheet-dialog{
     margin:.35rem;
     min-height:calc(100% - .7rem);
@@ -711,6 +725,14 @@ body.sigtaara-ui .h4 {
   .player-salt-action-btn img{
     width:42px;
     height:42px;
+  }
+}
+
+@media (max-width: 932px) and (orientation: landscape){
+  :root{
+    --ui-pad-top:max(10px, var(--safe-top));
+    --ui-pad-side:max(14px, var(--safe-left), var(--safe-right));
+    --ui-pad-bottom:max(14px, var(--safe-bottom));
   }
 }
 
