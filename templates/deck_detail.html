@@ -198,23 +198,26 @@
           </div>
           <div class="deck-card-grid commander-grid">
             {% for entry in commander_section.entries %}
+              {% set card_info_url = entry.url or entry.uri or entry.scryfall_uri or entry.card_url or ('https://scryfall.com/search?q=' ~ (entry.name | urlencode)) %}
               <article
                 class="deck-card-entry"
                 data-card-name="{{ entry.name }}"
                 {% if deck.card_art_url %}data-preferred-image="{{ deck.card_art_url }}"{% endif %}
               >
-                <div class="deck-card-image-wrap">
-                  <img
-                    class="deck-card-image"
-                    alt="{{ entry.name }}"
-                    loading="lazy"
-                    {% if deck.card_art_url %}src="{{ deck.card_art_url }}"{% endif %}
-                  >
-                </div>
-                <div class="deck-card-meta">
-                  <span class="decklist-qty">{{ entry.quantity }}×</span>
-                  <span class="deck-card-name">{{ entry.name }}</span>
-                </div>
+                <a class="deck-card-link" href="{{ card_info_url }}" target="_blank" rel="noopener noreferrer">
+                  <div class="deck-card-image-wrap">
+                    <img
+                      class="deck-card-image"
+                      alt="{{ entry.name }}"
+                      loading="lazy"
+                      {% if deck.card_art_url %}src="{{ deck.card_art_url }}"{% endif %}
+                    >
+                  </div>
+                  <div class="deck-card-meta">
+                    <span class="decklist-qty">{{ entry.quantity }}×</span>
+                    <span class="deck-card-name">{{ entry.name }}</span>
+                  </div>
+                </a>
               </article>
             {% endfor %}
           </div>
@@ -232,14 +235,17 @@
               </div>
               <div class="deck-card-grid">
                 {% for entry in section.entries %}
+                  {% set card_info_url = entry.url or entry.uri or entry.scryfall_uri or entry.card_url or ('https://scryfall.com/search?q=' ~ (entry.name | urlencode)) %}
                   <article class="deck-card-entry" data-card-name="{{ entry.name }}">
-                    <div class="deck-card-image-wrap">
-                      <img class="deck-card-image" alt="{{ entry.name }}" loading="lazy">
-                    </div>
-                    <div class="deck-card-meta">
-                      <span class="decklist-qty">{{ entry.quantity }}×</span>
-                      <span class="deck-card-name">{{ entry.name }}</span>
-                    </div>
+                    <a class="deck-card-link" href="{{ card_info_url }}" target="_blank" rel="noopener noreferrer">
+                      <div class="deck-card-image-wrap">
+                        <img class="deck-card-image" alt="{{ entry.name }}" loading="lazy">
+                      </div>
+                      <div class="deck-card-meta">
+                        <span class="decklist-qty">{{ entry.quantity }}×</span>
+                        <span class="deck-card-name">{{ entry.name }}</span>
+                      </div>
+                    </a>
                   </article>
                 {% endfor %}
               </div>
