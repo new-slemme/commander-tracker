@@ -119,12 +119,12 @@ body.sigtaara-ui .h4 {
 .status-strip{
   position:absolute;
   top:var(--ui-pad-top);
-  left:50%;
-  transform:translateX(-50%);
+  left:var(--ui-pad-side);
   z-index:35;
   display:flex;
   gap:12px;
   pointer-events:auto;
+  transform-origin:center;
 }
 
 .status-strip-btn{
@@ -182,22 +182,29 @@ body.sigtaara-ui .h4 {
   box-shadow:0 0 0 4px rgba(53,120,255,0.6), 0 6px 16px rgba(0,0,0,0.42);
 }
 
-.life-card.top-card .status-strip-btn{
+.life-card.top-card .status-strip{
+  left:auto;
+  right:var(--ui-pad-side);
   transform:rotate(180deg);
 }
 
-.players-2 .life-card.left-card .status-strip-btn{
+.players-2 .life-card.left-card .status-strip{
+  left:var(--ui-pad-side);
+  right:auto;
   transform:rotate(90deg);
 }
 
-.players-2 .life-card.right-card .status-strip-btn,
-.players-3 .life-card.p3-slot-3 .status-strip-btn{
+.players-2 .life-card.right-card .status-strip{
+  left:auto;
+  right:var(--ui-pad-side);
   transform:rotate(-90deg);
 }
 
 .players-3 .life-card.p3-slot-3 .status-strip{
-  top:auto;
-  bottom:var(--ui-pad-bottom);
+  top:var(--ui-pad-top);
+  left:auto;
+  right:var(--ui-pad-side);
+  transform:rotate(-90deg) scaleX(-1);
 }
 
     .salt-dispenser-btn{
