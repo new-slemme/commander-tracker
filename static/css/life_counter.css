@@ -138,6 +138,27 @@ body.sigtaara-ui .h4 {
   background:rgba(20,27,40,0.82);
 }
 
+
+.status-strip-btn.is-active{
+  background:rgba(177,132,44,0.9);
+  border-color:rgba(255,236,179,0.95);
+}
+
+.poison-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:0 6px;
+  width:auto;
+  min-width:48px;
+}
+
+.poison-value{
+  font-size:0.78rem;
+  font-weight:700;
+}
+
 .status-strip-btn:focus-visible{
   outline:3px solid rgba(255,255,255,0.95);
   outline-offset:2px;

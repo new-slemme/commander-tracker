@@ -76,6 +76,7 @@
               class="status-strip-btn monarch-btn"
               data-player="{{ p.player_id }}"
               data-mechanic="monarch"
+              aria-pressed="false"
               aria-label="Toggle monarch for {{ p.player_name }}"
               title="Toggle monarch"
             >👑</button>
@@ -86,9 +87,10 @@
               class="status-strip-btn poison-btn"
               data-player="{{ p.player_id }}"
               data-mechanic="poison"
+              aria-pressed="false"
               aria-label="Adjust poison for {{ p.player_name }}"
               title="Adjust poison"
-            >☠️</button>
+            ><span class="poison-icon" aria-hidden="true">☠️</span><span class="poison-value" data-player="{{ p.player_id }}">0</span></button>
             {% endif %}
           </div>
           {% endif %}
@@ -293,6 +295,8 @@ let playerSaltFlyoutOpen = false;
 let playerFlagAnchorButton = null;
 const participantFlagsByPlayer = {};
 const perTurnStatsByPlayer = {};
+let monarchHolderByPlayer = {};
+const poisonCountersByPlayer = {};
 const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
 const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
 
@@ -354,6 +358,56 @@ function snapshotCurrentFlagsForTurn(turnNumber){
     const entry = getPerTurnEntry(pid, t);
     entry.mana_fucked = !!flags.mana_fucked;
     entry.misplayed = !!flags.misplayed;
+  });
+}
+
+function setMonarchHolder(playerId){
+  const normalizedId = String(playerId);
+  monarchHolderByPlayer = { [normalizedId]: true };
+}
+
+function clearMonarchHolder(playerId){
+  const normalizedId = String(playerId);
+  if(monarchHolderByPlayer[normalizedId]){
+    monarchHolderByPlayer = {};
+  }
+}
+
+function getPoisonCounter(playerId){
+  return Math.max(0, Number(poisonCountersByPlayer[String(playerId)] || 0));
+}
+
+function setPoisonCounter(playerId, value){
+  poisonCountersByPlayer[String(playerId)] = Math.max(0, Number(value) || 0);
+}
+
+function updateStatusStripState(playerId){
+  const normalizedId = String(playerId);
+  const monarchButton = document.querySelector(`.monarch-btn[data-player="${normalizedId}"]`);
+  if(monarchButton){
+    const isActive = !!monarchHolderByPlayer[normalizedId];
+    monarchButton.classList.toggle("is-active", isActive);
+    monarchButton.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  const poisonButton = document.querySelector(`.poison-btn[data-player="${normalizedId}"]`);
+  const poisonValueEl = poisonButton?.querySelector(".poison-value");
+  if(poisonButton){
+    const poisonCount = getPoisonCounter(normalizedId);
+    const isActive = poisonCount > 0;
+    poisonButton.classList.toggle("is-active", isActive);
+    poisonButton.setAttribute("aria-pressed", isActive ? "true" : "false");
+    if(poisonValueEl) poisonValueEl.textContent = String(poisonCount);
+  }
+}
+
+function initializeStatusStripState(){
+  cards.forEach((card)=>{
+    const playerId = String(card.dataset.player);
+    if(poisonCountersByPlayer[playerId] === undefined){
+      poisonCountersByPlayer[playerId] = 0;
+    }
+    updateStatusStripState(playerId);
   });
 }
 
@@ -1054,6 +1108,34 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
   });
 });
 
+document.querySelectorAll(".status-strip-btn").forEach((button)=>{
+  button.addEventListener("pointerdown", (event)=>{
+    event.stopPropagation();
+  });
+
+  button.addEventListener("click", (event)=>{
+    event.stopPropagation();
+
+    const playerId = String(button.dataset.player || "");
+    if(!playerId) return;
+
+    if(button.dataset.mechanic === "monarch") {
+      if(monarchHolderByPlayer[playerId]){
+        clearMonarchHolder(playerId);
+      }else{
+        setMonarchHolder(playerId);
+      }
+      cards.forEach((card)=>updateStatusStripState(String(card.dataset.player)));
+      return;
+    }
+
+    if(button.dataset.mechanic === "poison") {
+      setPoisonCounter(playerId, getPoisonCounter(playerId) + 1);
+      updateStatusStripState(playerId);
+    }
+  });
+});
+
 document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
   cards.forEach((card)=>applyPendingLife(String(card.dataset.player)));
   snapshotCurrentFlagsForTurn(turn);
@@ -1095,6 +1177,8 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
       const normalizedFlags = {
         mana_fucked: !!flags.mana_fucked,
         misplayed: !!flags.misplayed,
+        monarch: !!monarchHolderByPlayer[playerId],
+        poison: getPoisonCounter(playerId),
         salt_count: Math.max(0, Number(flags.salt_count ?? (flags.salted ? 1 : 0)) || 0),
       };
 
@@ -1108,7 +1192,7 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
         }))
         .sort((a, b)=>a.turn - b.turn);
 
-      const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.misplayed || normalizedFlags.salt_count > 0;
+      const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.misplayed || normalizedFlags.monarch || normalizedFlags.poison > 0 || normalizedFlags.salt_count > 0;
       if(hasTruthyFlag || turnStats.length > 0){
         payload[playerId] = {
           ...normalizedFlags,
@@ -1157,6 +1241,7 @@ if(cards.length){
   setActive(initialActive);
   initializeTimers();
   updateTurnPills();
+  initializeStatusStripState();
 }
 
 setInterval(tickTimers, 250);
