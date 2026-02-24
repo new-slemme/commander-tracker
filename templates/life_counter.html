@@ -9,7 +9,7 @@
   <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
 </head>
 
-<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">
+<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}">
   {% set n = participants|length %}
 
   <div class="life-wrapper">
@@ -35,7 +35,8 @@
                {% if is_top %}top-card{% endif %}
                {% if is_left %}left-card{% endif %}
                {% if is_right %}right-card{% endif %}
-               {% if n == 3 %}p3-slot-{{ loop.index }}{% endif %}"
+               {% if n == 3 %}p3-slot-{{ loop.index }}{% endif %}
+               {% if n == 5 %}p5-slot-{{ loop.index }}{% endif %}"
         data-player="{{ p.player_id }}"
         style="
           {% if p.commander_art %}
@@ -109,14 +110,31 @@
         <div class="turn-badge" id="turn-badge-{{ p.player_id }}">Active</div>
       </div>
       {% endfor %}
+
+      {% if n == 5 %}
+      <div class="life-hud-tile" id="lifeHudTile" aria-hidden="false">
+        <button class="center-pass-btn center-pass-btn--in-tile is-idle"
+                id="centerPassBtn"
+                type="button"
+                aria-label="Pass turn (tap) or open menu (long press)">
+          <span class="center-pass-hit-area"><span class="center-pass-icon">↻</span></span>
+        </button>
+        <div class="hud-tile-meta" aria-live="polite" aria-atomic="true">
+          <div class="hud-tile-turn" id="hudTileTurn">TURN 1</div>
+          <div class="hud-tile-timer" id="hudTileTimer">Timer Off</div>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
-    <button class="center-pass-btn"
+    {% if n != 5 %}
+    <button class="center-pass-btn is-idle"
             id="centerPassBtn"
             type="button"
             aria-label="Pass turn (tap) or open menu (long press)">
-      <span class="center-pass-icon">↻</span>
+      <span class="center-pass-hit-area"><span class="center-pass-icon">↻</span></span>
     </button>
+    {% endif %}
   </div>
 
   <!-- Modal -->
@@ -470,8 +488,29 @@ function updateTurnPills(){
   const t = "TURN " + turn;
   const top = document.getElementById("turnPillTop");
   const bot = document.getElementById("turnPillBottom");
+  const hudTurn = document.getElementById("hudTileTurn");
   if(top) top.textContent = t;
   if(bot) bot.textContent = t;
+  if(hudTurn) hudTurn.textContent = t;
+}
+
+function updateHudTileTimerLabel(){
+  const hudTimer = document.getElementById("hudTileTimer");
+  if(!hudTimer) return;
+
+  if(timerState.mode === "chess_clock"){
+    const activeId = String(active || "");
+    const activeName = playerNames[activeId] || "Active";
+    hudTimer.textContent = `${activeName}: ${formatMs(timerState.chessClocksMs[activeId] || 0)}`;
+    return;
+  }
+
+  if(timerState.mode === "turn_timer"){
+    hudTimer.textContent = `Turn Timer: ${formatMs(timerState.ropeRemainingMs || 0)}`;
+    return;
+  }
+
+  hudTimer.textContent = "Timer Off";
 }
 
 
@@ -533,6 +572,8 @@ function renderTimers(){
   if(center){
     center.style.display = "none";
   }
+
+  updateHudTileTimerLabel();
 }
 
 function pauseTimers(reason){
@@ -1218,10 +1259,12 @@ if(centerPassBtn){
 
   const finishPress = (e)=>{
     e?.preventDefault?.();
+    centerPassBtn.classList.remove("is-idle");
     clearTimeout(longPressTimer);
     if(!longPressTriggered){
       nextPlayer();
     }
+    setTimeout(()=>centerPassBtn.classList.add("is-idle"), 1500);
     longPressTriggered = false;
   };
 
