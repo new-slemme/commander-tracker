@@ -15,9 +15,8 @@
       </div>
 
       <div class="d-flex gap-2 flex-wrap align-items-center">
-        <button class="btn btn-sm btn-outline-light" type="button" onclick="history.back()">
-          ← Go Back
-        </button>
+        {% set back_fallback_url = url_for('games') %}
+        {% include '_detail_back_button.html' %}
 
         {% if session.get("is_admin") %}
           <form method="post"
