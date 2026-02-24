@@ -345,33 +345,50 @@ body.sigtaara-ui .h4 {
 
     /* Combined pass/menu button in center */
     .center-pass-btn{
+      --center-pass-size:88px;
       position:fixed;
       top:50%;
       left:50%;
       transform:translate(-50%,-50%);
       z-index:240;
-      width:88px;
-      height:88px;
+      width:var(--center-pass-size);
+      height:var(--center-pass-size);
+      border:0;
+      padding:0;
+      background:transparent;
+      color:#000;
+      pointer-events:none;
+      user-select:none;
+      touch-action:manipulation;
+    }
+
+    .center-pass-hit-area{
+      width:100%;
+      height:100%;
       border-radius:999px;
       display:grid;
       place-items:center;
       pointer-events:auto;
-      touch-action:manipulation;
       border:1px solid rgba(255,255,255,0.35);
       background:rgba(255,255,255,0.94);
-      color:#000;
       box-shadow:0 10px 26px rgba(0,0,0,0.45);
-      user-select:none;
+      transition:transform .13s ease, opacity .16s ease, filter .16s ease;
     }
 
-    .center-pass-btn:active{
-      transform:translate(-50%,-50%) scale(0.97);
+    .center-pass-btn:active .center-pass-hit-area{
+      transform:scale(0.97);
+    }
+
+    .center-pass-btn.is-idle .center-pass-hit-area{
+      opacity:.62;
+      filter:saturate(.85);
     }
 
     .center-pass-icon{
       font-size:1.55rem;
       line-height:1;
       font-weight:900;
+      pointer-events:none;
     }
 
 
@@ -401,6 +418,8 @@ body.sigtaara-ui .h4 {
 }
 
 @media (max-height: 600px){
+  .center-pass-btn{ --center-pass-size:72px; }
+
   .transient-notice-container{
     bottom:var(--ui-pad-bottom);
     max-width:min(92vw, 360px);
@@ -486,10 +505,67 @@ body.sigtaara-ui .h4 {
     .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
     .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
 
+    .players-5{
+      grid-template-areas:
+        "p1 p2 p3"
+        "p4 hud p5";
+    }
+    .players-5 .life-card.p5-slot-1{ grid-area:p1; }
+    .players-5 .life-card.p5-slot-2{ grid-area:p2; }
+    .players-5 .life-card.p5-slot-3{ grid-area:p3; }
+    .players-5 .life-card.p5-slot-4{ grid-area:p4; }
+    .players-5 .life-card.p5-slot-5{ grid-area:p5; }
+
+    .life-hud-tile{
+      grid-area:hud;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-direction:column;
+      gap:8px;
+      pointer-events:none;
+      z-index:140;
+    }
+
+    .center-pass-btn--in-tile{
+      position:relative;
+      inset:auto;
+      transform:none;
+      z-index:145;
+    }
+
+    .center-pass-btn--in-tile:active .center-pass-hit-area{
+      transform:scale(0.97);
+    }
+
+    .hud-tile-meta{
+      pointer-events:none;
+      text-align:center;
+      font-weight:800;
+      color:rgba(255,255,255,.9);
+      text-shadow:0 0 10px rgba(0,0,0,.8);
+      line-height:1.15;
+    }
+
+    .hud-tile-turn{
+      font-size:.82rem;
+      letter-spacing:.08em;
+    }
+
+    .hud-tile-timer{
+      font-size:.72rem;
+      opacity:.88;
+      max-width:120px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+
     /* ==================== 2 PLAYER FIXES (NO :has, NO INLINE VAR FIGHTS) ==================== */
 
     /* Hide the bottom turn pill in 2-player mode (reduces clutter & overlap) */
     .mode-2p #turnPillBottom{ display:none; }
+    .mode-5p .turn-pill{ display:none; }
 
     /* Rotate each player's UI to face them */
     .players-2 .life-card.left-card  .card-inner{ transform:rotate(90deg);  transform-origin:center; }
@@ -754,12 +830,12 @@ body.sigtaara-ui .h4 {
 
     @media (max-width:576px){
       .life-display{ font-size:clamp(2.8rem, 15vh, 7.5rem); }
-      .center-pass-btn{ width:84px; height:84px; }
+      .center-pass-btn{ --center-pass-size:84px; }
       .turn-pill{ padding:8px 12px; font-size:.8rem; }
       .turn-timer-pill{ padding:9px 14px; min-width:96px; }
       .player-name{ padding:10px 10px; font-size:.9rem; }
     }
 
     @media (max-width:576px) and (max-height:720px){
-      .center-pass-btn{ width:76px; height:76px; }
+      .center-pass-btn{ --center-pass-size:76px; }
     }
