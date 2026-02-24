@@ -40,6 +40,10 @@ DEFAULT_POD_SLUG = "der-keller-die-salzmine"
 
 ART_DIR = Path("/data/art")
 ART_DIR.mkdir(parents=True, exist_ok=True)
+COMMANDER_ART_DIR = ART_DIR / "commander_art"
+COMMANDER_ART_DIR.mkdir(parents=True, exist_ok=True)
+CARD_ART_DIR = ART_DIR / "card_art"
+CARD_ART_DIR.mkdir(parents=True, exist_ok=True)
 
 # --- Dev/test bootstrap user (env-gated) ---
 BOOTSTRAP_TEST_USER = os.getenv("BOOTSTRAP_TEST_USER", "0") == "1"
@@ -1266,8 +1270,8 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
         return None
 
     filename = f"{_safe_filename(commander_name)}_{scryfall_id}.jpg"
-    out_path = ART_DIR / filename
-    web_path = f"/art/{filename}"
+    out_path = COMMANDER_ART_DIR / filename
+    web_path = f"/art/commander_art/{filename}"
 
     if out_path.exists() and out_path.stat().st_size > 0:
         return web_path
@@ -1295,6 +1299,65 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
         return None
     except Exception as e:
         print("download_art_crop unexpected error:", e, art_url)
+        return None
+
+
+def extract_normal_image(card: dict) -> str | None:
+    if not card:
+        return None
+    if card.get("image_uris") and card["image_uris"].get("normal"):
+        return card["image_uris"]["normal"]
+    for face in card.get("card_faces") or []:
+        if face.get("image_uris") and face["image_uris"].get("normal"):
+            return face["image_uris"]["normal"]
+    return None
+
+
+def cache_card_art_by_name(card_name: str) -> str | None:
+    normalized_name = (card_name or "").strip()
+    if not normalized_name:
+        return None
+
+    card = scryfall_named_exact(normalized_name)
+    if not card:
+        return None
+
+    image_url = extract_normal_image(card)
+    if not image_url:
+        return None
+
+    card_id = card.get("id") or _safe_filename(normalized_name)
+    safe_name = _safe_filename(card.get("name") or normalized_name) or "card"
+    filename = f"{safe_name}_{card_id}.jpg"
+    out_path = CARD_ART_DIR / filename
+    web_path = f"/art/card_art/{filename}"
+
+    if out_path.exists() and out_path.stat().st_size > 0:
+        return web_path
+
+    try:
+        req = Request(
+            image_url,
+            headers={
+                "User-Agent": "CommanderTracker/1.0 (https://edh.figurensohn.de)",
+                "Accept": "image/*,*/*;q=0.8",
+            },
+        )
+        with urlopen(req, timeout=20) as resp:
+            data = resp.read()
+
+        if not data:
+            print("cache_card_art_by_name: empty response", image_url)
+            return None
+
+        out_path.write_bytes(data)
+        return web_path
+
+    except (HTTPError, URLError) as e:
+        print("cache_card_art_by_name failed:", e, image_url)
+        return None
+    except Exception as e:
+        print("cache_card_art_by_name unexpected error:", e, image_url)
         return None
 
 
@@ -3214,6 +3277,16 @@ def add_deck():
     else:
         flash("Deck added.")
     return redirect(url_for("decks"))
+
+
+@app.route("/api/card-art")
+def api_card_art():
+    card_name = (request.args.get("name") or "").strip()
+    if not card_name:
+        return jsonify({"image": None})
+
+    image = cache_card_art_by_name(card_name)
+    return jsonify({"image": image})
 
 
 @app.route("/api/deck-import-preview", methods=["POST"])
