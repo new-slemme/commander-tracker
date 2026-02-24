@@ -1117,6 +1117,55 @@ def extract_art_crop(card: dict):
     return None
 
 
+def extract_oracle_text(card_json: dict) -> str:
+    """Collects oracle text from single- and multi-face cards."""
+    if not card_json:
+        return ""
+
+    chunks: list[str] = []
+    oracle_text = card_json.get("oracle_text")
+    if oracle_text:
+        chunks.append(str(oracle_text))
+
+    for face in card_json.get("card_faces") or []:
+        face_text = face.get("oracle_text")
+        if face_text:
+            chunks.append(str(face_text))
+
+    return "\n".join(chunks).lower()
+
+
+def analyze_scryfall_card(card_json: dict) -> dict:
+    oracle_text = extract_oracle_text(card_json)
+    return {
+        "monarch": "monarch" in oracle_text,
+        "poison": "poison" in oracle_text,
+        "proliferate": "proliferate" in oracle_text,
+    }
+
+
+def compute_deck_tags(decklist_cards: list[str]) -> dict:
+    tags = {"monarch": False, "poison": False, "proliferate": False}
+    seen_names: set[str] = set()
+
+    for raw_name in decklist_cards:
+        name = (raw_name or "").strip()
+        if not name:
+            continue
+
+        lowered = name.lower()
+        if lowered in seen_names:
+            continue
+        seen_names.add(lowered)
+
+        card_json = scryfall_named_exact(name)
+        card_tags = analyze_scryfall_card(card_json)
+        for key in tags:
+            tags[key] = tags[key] or card_tags.get(key, False)
+
+    return tags
+
+
 def _split_commander_names(value: str) -> list[str]:
     if not value:
         return []
@@ -3103,6 +3152,14 @@ def add_deck():
     deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
+        parsed_sections = parsed_import.get("sections", {}) or {}
+        decklist_cards = [
+            entry.get("name", "")
+            for entries in parsed_sections.values()
+            for entry in (entries or [])
+        ]
+        tags = compute_deck_tags(decklist_cards)
+        deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
 
     commander_meta = resolve_commander_metadata(commander_to_set)
     deck.commander = commander_meta["commander"] or commander_to_set
@@ -3215,6 +3272,7 @@ def update_deck(deck_id):
     old_custom_card_art_url = deck.custom_card_art_url
     old_custom_card_art_local = deck.custom_card_art_local
     old_color_identity = deck.color_identity
+    old_tags_json = deck.tags_json
 
     parsed_import = None
     imported_from = None
@@ -3256,6 +3314,14 @@ def update_deck(deck_id):
     deck.custom_card_art_local = custom_card_art_local
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
+        parsed_sections = parsed_import.get("sections", {}) or {}
+        decklist_cards = [
+            entry.get("name", "")
+            for entries in parsed_sections.values()
+            for entry in (entries or [])
+        ]
+        tags = compute_deck_tags(decklist_cards)
+        deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
 
     if u.is_admin:
         owner_id = request.form.get("player_id", type=int)
@@ -3296,6 +3362,7 @@ def update_deck(deck_id):
         deck.custom_card_art_url = old_custom_card_art_url
         deck.custom_card_art_local = old_custom_card_art_local
         deck.color_identity = old_color_identity
+        deck.tags_json = old_tags_json
 
         flash(f"Failed to update deck: {exc}")
         return redirect(request.form.get("next") or url_for("decks"))
