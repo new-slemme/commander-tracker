@@ -2695,12 +2695,23 @@ def delete_game(game_id):
 
 @app.route("/players")
 def players():
-    players_list = Player.query.all()
+    players_list = Player.query.order_by(Player.name.asc()).all()
 
     player_can_delete = {}
+    player_stats = {}
     for p in players_list:
         played = GameParticipant.query.filter_by(player_id=p.id).count()
         won = Game.query.filter_by(winner_id=p.id).count()
+
+        deck_count = Deck.query.filter_by(player_id=p.id).count()
+        winrate = round((won / played) * 100, 1) if played else 0.0
+        joined_on = p.user.created_at if p.user else None
+
+        player_stats[p.id] = {
+            "winrate": winrate,
+            "deck_count": deck_count,
+            "joined_on": joined_on,
+        }
 
         deck_used = (
             db.session.query(GameParticipant.id)
@@ -2716,7 +2727,12 @@ def players():
         # - none of their decks are used
         player_can_delete[p.id] = (p.user_id is None and played == 0 and won == 0 and not deck_used)
 
-    return render_template("players.html", players=players_list, player_can_delete=player_can_delete)
+    return render_template(
+        "players.html",
+        players=players_list,
+        player_can_delete=player_can_delete,
+        player_stats=player_stats,
+    )
 
 
 @app.route("/player/<int:player_id>")
