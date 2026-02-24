@@ -319,6 +319,20 @@
   min-width: 0;
 }
 
+.deck-mini--link {
+  text-decoration: none;
+}
+
+.deck-mini--link:hover {
+  text-decoration: none;
+  border-color: rgba(143,153,197,0.40);
+}
+
+.deck-mini--link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(120,160,255,0.25);
+}
+
 .deck-mini.win {
   border-color: var(--green);
   background: var(--green-trans);
@@ -451,6 +465,20 @@
   color: #fff;
   min-width: 0;
   overflow: hidden;
+}
+
+.ppill--link {
+  text-decoration: none;
+}
+
+.ppill--link:hover {
+  text-decoration: none;
+  border-color: rgba(143,153,197,0.40);
+}
+
+.ppill--link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(120,160,255,0.25);
 }
 
 .ppill::before {
