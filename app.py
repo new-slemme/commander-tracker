@@ -387,6 +387,10 @@ class Deck(db.Model):
         return self.custom_card_art_local or self.custom_card_art_url or self.commander_art_url
 
     @property
+    def card_art(self):
+        return self.card_art_url
+
+    @property
     def commander_art_scale(self):
         # Uploaded/linked custom art is usually full-card framing. Slightly zoom it so
         # life-counter and deck tiles keep a useful crop without letterboxing.
