@@ -348,6 +348,7 @@ class Deck(db.Model):
     commander_local_art_custom = db.Column(db.String(300))
     custom_commander_art_url = db.Column(db.String(500))
     custom_card_art_url = db.Column(db.String(500))
+    custom_card_art_local = db.Column(db.String(300))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
     decklist_text = db.Column(db.Text)
 
@@ -362,7 +363,7 @@ class Deck(db.Model):
 
     @property
     def card_art_url(self):
-        return self.custom_card_art_url or self.commander_art_url
+        return self.custom_card_art_local or self.custom_card_art_url or self.commander_art_url
 
 
 class Game(db.Model):
@@ -802,6 +803,26 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('013_deck_local_art_split')")
+            )
+
+        if "014_deck_custom_card_local_art" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "custom_card_art_local" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN custom_card_art_local VARCHAR(300)"))
+
+            db.session.execute(
+                text(
+                    "UPDATE deck "
+                    "SET custom_card_art_local = custom_card_art_url, custom_card_art_url = NULL "
+                    "WHERE custom_card_art_local IS NULL "
+                    "AND custom_card_art_url LIKE '/art/%'"
+                )
+            )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('014_deck_custom_card_local_art')")
             )
 
         if "011_game_result_canonical_values" not in applied:
@@ -3021,7 +3042,7 @@ def add_deck():
             custom_commander_art_upload,
             "custom commander art",
         )
-        custom_card_art_url_value, _custom_card_art_local = resolve_custom_art_value(
+        custom_card_art_url_value, custom_card_art_local = resolve_custom_art_value(
             custom_card_art_url,
             custom_card_art_upload,
             "custom card art",
@@ -3041,6 +3062,7 @@ def add_deck():
     deck.custom_commander_art_url = custom_commander_art_url_value
     deck.commander_local_art_custom = custom_commander_art_local
     deck.custom_card_art_url = custom_card_art_url_value
+    deck.custom_card_art_local = custom_card_art_local
     deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
@@ -3154,6 +3176,7 @@ def update_deck(deck_id):
     old_commander_local_art_custom = deck.commander_local_art_custom
     old_custom_commander_art_url = deck.custom_commander_art_url
     old_custom_card_art_url = deck.custom_card_art_url
+    old_custom_card_art_local = deck.custom_card_art_local
     old_color_identity = deck.color_identity
 
     parsed_import = None
@@ -3168,7 +3191,7 @@ def update_deck(deck_id):
             custom_commander_art_upload,
             "custom commander art",
         )
-        custom_card_art_url_value, _custom_card_art_local = resolve_custom_art_value(
+        custom_card_art_url_value, custom_card_art_local = resolve_custom_art_value(
             custom_card_art_url,
             custom_card_art_upload,
             "custom card art",
@@ -3187,10 +3210,13 @@ def update_deck(deck_id):
     deck.commander = commander_to_set
     if not has_uploaded_custom_art(custom_commander_art_upload) and not custom_commander_art_url:
         custom_commander_art_local = deck.commander_local_art_custom
+    if not has_uploaded_custom_art(custom_card_art_upload) and not custom_card_art_url:
+        custom_card_art_local = deck.custom_card_art_local
 
     deck.custom_commander_art_url = custom_commander_art_url_value
     deck.commander_local_art_custom = custom_commander_art_local
     deck.custom_card_art_url = custom_card_art_url_value
+    deck.custom_card_art_local = custom_card_art_local
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
 
@@ -3231,6 +3257,7 @@ def update_deck(deck_id):
         deck.commander_local_art_custom = old_commander_local_art_custom
         deck.custom_commander_art_url = old_custom_commander_art_url
         deck.custom_card_art_url = old_custom_card_art_url
+        deck.custom_card_art_local = old_custom_card_art_local
         deck.color_identity = old_color_identity
 
         flash(f"Failed to update deck: {exc}")

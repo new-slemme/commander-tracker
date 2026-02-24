@@ -204,14 +204,14 @@
               <article
                 class="deck-card-entry"
                 data-card-name="{{ entry.name }}"
-                {% if deck.commander_art_url %}data-preferred-image="{{ deck.commander_art_url }}"{% endif %}
+                {% if deck.card_art_url %}data-preferred-image="{{ deck.card_art_url }}"{% endif %}
               >
                 <div class="deck-card-image-wrap">
                   <img
                     class="deck-card-image"
                     alt="{{ entry.name }}"
                     loading="lazy"
-                    {% if deck.commander_art_url %}src="{{ deck.commander_art_url }}"{% endif %}
+                    {% if deck.card_art_url %}src="{{ deck.card_art_url }}"{% endif %}
                   >
                 </div>
                 <div class="deck-card-meta">
