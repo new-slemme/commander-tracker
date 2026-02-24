@@ -241,18 +241,22 @@
     const did = deckSel.value;
 
     let art = null;
+    let artScale = "cover";
     if (pid && did) {
       const list = decksData[String(pid)] || [];
       const match = list.find(x => String(x.id) === String(did));
       art = match?.art || null;
+      artScale = match?.art_scale || "cover";
     }
 
     if (art) {
       tile.classList.add("has-bg");
       tile.style.setProperty("--deck-bg", `url('${art}')`);
+      tile.style.setProperty("--deck-bg-size", artScale);
     } else {
       tile.classList.remove("has-bg");
       tile.style.removeProperty("--deck-bg");
+      tile.style.removeProperty("--deck-bg-size");
     }
   }
 
@@ -378,6 +382,7 @@
         if (tile) {
           tile.classList.remove('has-bg');
           tile.style.removeProperty('--deck-bg');
+          tile.style.removeProperty('--deck-bg-size');
         }
       } else {
         refreshDeckSelect(i);

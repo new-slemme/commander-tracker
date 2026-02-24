@@ -94,7 +94,7 @@ body.sigtaara-ui .h4 {
       position:absolute;
       inset:0;
       background-image:var(--bg-layer);
-      background-size:cover;
+      background-size:var(--bg-size, cover);
       background-position:center;
       transform:var(--bg-rotate);
       transform-origin:center;
