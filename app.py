@@ -64,6 +64,8 @@ MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 4096
 ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "mana_fucked",
     "misplayed",
+    "monarch",
+    "poison",
     "salt_count",
     "turn_stats",
 }
@@ -142,6 +144,14 @@ def parse_participant_flags(raw_flags: str | None) -> dict[str, bool | int]:
     misplayed_flag = loaded.get("misplayed")
     if isinstance(misplayed_flag, bool):
         parsed_flags["misplayed"] = misplayed_flag
+
+    monarch_flag = loaded.get("monarch")
+    if isinstance(monarch_flag, bool):
+        parsed_flags["monarch"] = monarch_flag
+
+    poison_raw = loaded.get("poison")
+    if isinstance(poison_raw, int) and not isinstance(poison_raw, bool) and poison_raw >= 0:
+        parsed_flags["poison"] = min(poison_raw, 10)
 
     salt_count_raw = loaded.get("salt_count")
     if isinstance(salt_count_raw, int) and not isinstance(salt_count_raw, bool) and salt_count_raw >= 0:
@@ -270,9 +280,19 @@ def participant_flags_snapshot(gp: "GameParticipant") -> dict[str, bool | int]:
     else:
         misplayed = bool(parsed_flags.get("misplayed", False))
 
+    monarch = bool(parsed_flags.get("monarch", False))
+
+    poison_raw = parsed_flags.get("poison", 0)
+    if isinstance(poison_raw, int) and not isinstance(poison_raw, bool):
+        poison = max(0, min(poison_raw, 10))
+    else:
+        poison = 0
+
     return {
         "mana_fucked": mana_fucked,
         "misplayed": misplayed,
+        "monarch": monarch,
+        "poison": poison,
         "salt_count": salt_count,
     }
 
@@ -3754,6 +3774,14 @@ def end_game():
                     if not isinstance(flag_value, bool):
                         return "misplayed must be boolean", 400
                     sanitized_player_flags[flag_key] = flag_value
+                elif flag_key == "monarch":
+                    if not isinstance(flag_value, bool):
+                        return "monarch must be boolean", 400
+                    sanitized_player_flags[flag_key] = flag_value
+                elif flag_key == "poison":
+                    if not isinstance(flag_value, int) or isinstance(flag_value, bool) or flag_value < 0:
+                        return "poison must be a non-negative integer", 400
+                    sanitized_player_flags[flag_key] = min(flag_value, 10)
                 elif flag_key == "salt_count":
                     if not isinstance(flag_value, int) or isinstance(flag_value, bool) or flag_value < 0:
                         return "salt_count must be a non-negative integer", 400
