@@ -66,13 +66,15 @@
   }
 
   .deck-status-pill-planned {
-    background: #27d6ff;
-    color: #0f1730;
+    background: var(--purple-trans);
+    color: white;
+    font-family: 'Beleren';
   }
 
   .deck-status-pill-retired {
-    background: #f7c65d;
-    color: #17110a;
+    background: var(--red-trans);
+    color: white;
+    font-family: 'Beleren';
   }
   .menu-trigger:hover,
   .menu-trigger:focus-visible,
