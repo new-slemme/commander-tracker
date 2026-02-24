@@ -1,0 +1,42 @@
+[
+  {
+    "profile": "Small phone",
+    "viewport": {"width": 320, "height": 568},
+    "clipping_pass": true,
+    "overlap_pass": true,
+    "tap_pass": false,
+    "center_interference_pass": false
+  },
+  {
+    "profile": "Standard phone",
+    "viewport": {"width": 390, "height": 844},
+    "clipping_pass": true,
+    "overlap_pass": true,
+    "tap_pass": false,
+    "center_interference_pass": false
+  },
+  {
+    "profile": "Notched phone",
+    "viewport": {"width": 393, "height": 852},
+    "clipping_pass": true,
+    "overlap_pass": true,
+    "tap_pass": false,
+    "center_interference_pass": false
+  },
+  {
+    "profile": "Tablet portrait",
+    "viewport": {"width": 768, "height": 1024},
+    "clipping_pass": true,
+    "overlap_pass": true,
+    "tap_pass": true,
+    "center_interference_pass": false
+  },
+  {
+    "profile": "Tablet landscape",
+    "viewport": {"width": 1024, "height": 768},
+    "clipping_pass": true,
+    "overlap_pass": true,
+    "tap_pass": true,
+    "center_interference_pass": false
+  }
+]
