@@ -32,11 +32,8 @@
   {# NEW: Top bar with Go Back + actions (keeps your old actions, just relocates for mobile sanity) #}
   <div class="position-absolute top-0 start-0 end-0 d-flex align-items-center justify-content-between banner-topbar"
        style="padding: 14px; padding-top: calc(env(safe-area-inset-top) + 14px);">
-    <a class="back-btn"
-       href="{{ url_for('decks') }}"
-       onclick="(function(e){ try{ if(window.history.length>1){ e.preventDefault(); window.history.back(); } }catch(_){ } })(event);">
-      ← Go Back
-    </a>
+    {% set back_fallback_url = url_for('decks') %}
+    {% include '_detail_back_button.html' %}
 
     <div class="dropdown banner-actions">
       <button class="btn menu-trigger"

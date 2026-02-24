@@ -16,7 +16,8 @@
           {% endif %}
         </div>
       </div>
-      <button class="btn btn-sm btn-outline-light" type="button" onclick="history.back()">← Go Back</button>
+      {% set back_fallback_url = url_for('players') %}
+      {% include '_detail_back_button.html' %}
     </div>
 
     <div class="overview-grid mt-4">
