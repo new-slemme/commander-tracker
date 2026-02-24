@@ -203,7 +203,7 @@
               <article
                 class="deck-card-entry"
                 data-card-name="{{ entry.name }}"
-                {% if deck.card_art %}data-preferred-image="{{ deck.card_art }}"{% endif %}
+                {% if deck.card_art and not (deck.custom_card_art_local or deck.custom_card_art_url) %}data-preferred-image="{{ deck.card_art }}"{% endif %}
               >
                 <a class="deck-card-link" href="{{ card_info_url }}" target="_blank" rel="noopener noreferrer">
                   <div class="deck-card-image-wrap">
@@ -211,7 +211,7 @@
                       class="deck-card-image"
                       alt="{{ entry.name }}"
                       loading="lazy"
-                      {% if deck.card_art %}src="{{ deck.card_art }}"{% endif %}
+                      {% if deck.card_art and not (deck.custom_card_art_local or deck.custom_card_art_url) %}src="{{ deck.card_art }}"{% endif %}
                     >
                   </div>
                   <div class="deck-card-meta">
@@ -609,18 +609,11 @@
 
 
   async function scryfallCardImageByName(name) {
-    const url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`;
+    const url = `/api/card-art?name=${encodeURIComponent(name)}`;
     const res = await fetch(url);
     if (!res.ok) return null;
-    const card = await res.json();
-
-    if (card?.image_uris?.normal) return card.image_uris.normal;
-    if (Array.isArray(card?.card_faces)) {
-      for (const face of card.card_faces) {
-        if (face?.image_uris?.normal) return face.image_uris.normal;
-      }
-    }
-    return null;
+    const payload = await res.json().catch(() => ({}));
+    return payload?.image || null;
   }
 
   async function hydrateDeckCardImages() {
