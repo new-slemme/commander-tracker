@@ -602,7 +602,7 @@ body.sigtaara-ui .h4 {
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
     .players-3 .life-card.p3-slot-1{ border-bottom:1px solid rgba(255,255,255,0.18); }
     .players-4{ grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
-    .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
+    .players-5{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:minmax(0, 1.04fr) minmax(0, .96fr); }
     .players-6{ grid-template-columns:1fr 1fr 1fr; grid-template-rows:1fr 1fr; }
 
     .players-5{
@@ -622,9 +622,18 @@ body.sigtaara-ui .h4 {
       align-items:center;
       justify-content:center;
       flex-direction:column;
-      gap:8px;
+      gap:10px;
       pointer-events:none;
       z-index:140;
+      margin:10px;
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,0.26);
+      background:linear-gradient(160deg, rgba(13,18,27,0.82), rgba(6,9,14,0.66));
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.05),
+        0 12px 28px rgba(0,0,0,0.44);
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
     }
 
     .center-pass-btn--in-tile{
@@ -632,6 +641,7 @@ body.sigtaara-ui .h4 {
       inset:auto;
       transform:none;
       z-index:145;
+      --center-pass-size:74px;
     }
 
     .center-pass-btn--in-tile:active .center-pass-hit-area{
@@ -648,17 +658,44 @@ body.sigtaara-ui .h4 {
     }
 
     .hud-tile-turn{
-      font-size:.82rem;
+      font-size:.78rem;
       letter-spacing:.08em;
+      opacity:.95;
     }
 
     .hud-tile-timer{
-      font-size:.72rem;
+      font-size:.7rem;
       opacity:.88;
       max-width:120px;
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
+    }
+
+    .players-5 .life-card .card-inner{
+      padding:max(8px, var(--safe-top)) max(9px, var(--safe-left), var(--safe-right)) max(10px, var(--safe-bottom));
+      gap:clamp(6px, 1.15vh, 12px);
+    }
+
+    .players-5 .life-card .card-lane-top,
+    .players-5 .life-card .card-lane-bottom{
+      min-height:34px;
+    }
+
+    .players-5 .life-card .life-display{
+      font-size:clamp(2.45rem, 12.2vh, 6.1rem);
+    }
+
+    .players-5 .life-card .player-name{
+      font-size:clamp(.76rem, 1.55vw, .98rem);
+      width:100%;
+      max-width:100%;
+      text-align:center;
+    }
+
+    .players-5 .life-card .salt-dispenser-btn{
+      width:42px;
+      height:42px;
     }
 
     /* ==================== 2 PLAYER FIXES (NO :has, NO INLINE VAR FIGHTS) ==================== */
