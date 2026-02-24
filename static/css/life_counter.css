@@ -698,6 +698,59 @@ body.sigtaara-ui .h4 {
       height:42px;
     }
 
+
+    .mode-6p .life-card .card-inner{
+      padding:max(7px, var(--safe-top)) max(8px, var(--safe-left), var(--safe-right)) max(9px, var(--safe-bottom));
+    }
+
+    .mode-6p .life-card .card-lane-top,
+    .mode-6p .life-card .card-lane-bottom{
+      min-height:32px;
+    }
+
+    .mode-6p .life-card .status-strip{
+      gap:8px;
+    }
+
+    .mode-6p .life-card .status-strip-btn{
+      width:48px;
+      height:48px;
+      font-size:.92rem;
+    }
+
+    .mode-6p .life-card .poison-btn{
+      min-width:56px;
+      padding:0 8px;
+      gap:2px;
+    }
+
+    .mode-6p .life-card .poison-value{
+      font-size:.72rem;
+    }
+
+    .mode-6p .life-card .salt-dispenser-btn{
+      width:48px;
+      height:48px;
+      top:var(--ui-pad-top);
+      left:var(--ui-pad-side);
+      right:auto;
+      transform:none;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .16s ease;
+    }
+
+    .mode-6p .life-card.top-card .salt-dispenser-btn{
+      left:auto;
+      right:var(--ui-pad-side);
+    }
+
+    .mode-6p .life-card.salt-controls-revealed .salt-dispenser-btn,
+    .mode-6p .life-card.flag-menu-open .salt-dispenser-btn{
+      opacity:1;
+      pointer-events:auto;
+    }
+
     /* ==================== 2 PLAYER FIXES (NO :has, NO INLINE VAR FIGHTS) ==================== */
 
     /* Hide the bottom turn pill in 2-player mode (reduces clutter & overlap) */
@@ -951,6 +1004,11 @@ body.sigtaara-ui .h4 {
   .salt-dispenser-btn{
     width:56px;
     height:56px;
+  }
+
+  .mode-6p .life-card .salt-dispenser-btn{
+    width:48px;
+    height:48px;
   }
 }
 
