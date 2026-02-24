@@ -555,7 +555,7 @@ function initializeTimers(){
   }else if(timerState.mode === "turn_timer"){
     timerState.ropeRemainingMs = timerState.ropeDurationMs;
     cards.forEach(card=> card.classList.remove("has-player-timer"));
-    if(center) center.style.display = "none";
+    if(center) center.style.display = "block";
   }else{
     cards.forEach(card=> card.classList.remove("has-player-timer"));
     if(center) center.style.display = "none";
@@ -599,7 +599,14 @@ function renderTimers(){
 
   const center = document.getElementById("centralTurnTimer");
   if(center){
-    center.style.display = "none";
+    if(timerState.mode === "turn_timer"){
+      center.style.display = "block";
+      center.textContent = formatMs(timerState.ropeRemainingMs || 0);
+      center.classList.toggle("low-time", (timerState.ropeRemainingMs || 0) <= 10000);
+    }else{
+      center.style.display = "none";
+      center.classList.remove("low-time");
+    }
   }
 
   updateHudTileTimerLabel();
