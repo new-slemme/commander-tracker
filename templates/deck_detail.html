@@ -192,6 +192,7 @@
       </ul>
 
       {% if commander_section %}
+        {% set preferred_card_art = deck.card_art_url or deck.commander_art_url %}
         <div class="card p-3 mt-3 decklist-card commander-showcase">
           <div class="d-flex justify-content-between align-items-center mb-2">
             <h5 class="mb-0">Commander</h5>
@@ -203,7 +204,7 @@
               <article
                 class="deck-card-entry"
                 data-card-name="{{ entry.name }}"
-                {% if deck.card_art %}data-preferred-image="{{ deck.card_art }}"{% endif %}
+                {% if preferred_card_art %}data-preferred-image="{{ preferred_card_art }}"{% endif %}
               >
                 <a class="deck-card-link" href="{{ card_info_url }}" target="_blank" rel="noopener noreferrer">
                   <div class="deck-card-image-wrap">
@@ -211,7 +212,7 @@
                       class="deck-card-image"
                       alt="{{ entry.name }}"
                       loading="lazy"
-                      {% if deck.card_art %}src="{{ deck.card_art }}"{% endif %}
+                      {% if preferred_card_art %}src="{{ preferred_card_art }}"{% endif %}
                     >
                   </div>
                   <div class="deck-card-meta">
