@@ -35,17 +35,24 @@
     {% set back_fallback_url = url_for('decks') %}
     {% include '_detail_back_button.html' %}
 
-    <div class="dropdown banner-actions">
-      <button class="btn menu-trigger"
-              type="button"
-              data-bs-toggle="dropdown"
-              data-bs-display="static"
-              aria-expanded="false"
-              aria-label="Deck actions menu">
-        <span></span><span></span><span></span>
-      </button>
+    <div class="banner-actions">
+      {% if deck.retired %}
+        <span class="deck-status-pill deck-status-pill-retired">Retired</span>
+      {% elif deck.planned %}
+        <span class="deck-status-pill deck-status-pill-planned">Planned</span>
+      {% endif %}
 
-      <ul class="dropdown-menu dropdown-menu-end banner-menu">
+      <div class="dropdown">
+        <button class="btn menu-trigger"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-bs-display="static"
+                aria-expanded="false"
+                aria-label="Deck actions menu">
+          <span></span><span></span><span></span>
+        </button>
+
+        <ul class="dropdown-menu dropdown-menu-end banner-menu">
         <li>
           <button type="button"
                   class="dropdown-item"
@@ -99,20 +106,14 @@
             </button>
           </form>
         </li>
-      </ul>
+        </ul>
+      </div>
     </div>
   </div>
 
   {# Existing banner content (kept), just wrapped for mobile padding control #}
   <div class="position-absolute bottom-0 start-0 banner-inner" style="padding: 3rem;">
-    <h1 class="display-3 fw-bold mb-2 banner-title">
-      {{ deck.name }}
-      {% if deck.retired %}
-        <span class="badge bg-warning text-dark ms-2">Retired</span>
-      {% elif deck.planned %}
-        <span class="badge bg-info text-dark ms-2">Planned</span>
-      {% endif %}
-    </h1>
+    <h1 class="display-3 fw-bold mb-2 banner-title">{{ deck.name }}</h1>
 
     <div class="fs-5 banner-subtitle">{{ deck.commander_name or deck.commander }}</div>
 
