@@ -1044,30 +1044,49 @@ function checkWinner(){
   }
 } // ✅ FIX: this closing brace was missing before
 
+function getLifeDeltaFromTap(playerCard, clientX, clientY){
+  if(!playerCard) return 1;
+
+  const rect = playerCard.getBoundingClientRect();
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+  const centerX = rect.width / 2;
+  const centerY = rect.height / 2;
+
+  const fromCenterX = localX - centerX;
+  const fromCenterY = localY - centerY;
+  const orientation = getPlayerCardOrientation(playerCard);
+
+  let logicalX = fromCenterX;
+  switch(orientation){
+    case "180deg":
+      logicalX = -fromCenterX;
+      break;
+    case "90deg":
+      logicalX = fromCenterY;
+      break;
+    case "-90deg":
+      logicalX = -fromCenterY;
+      break;
+    default:
+      logicalX = fromCenterX;
+      break;
+  }
+
+  return logicalX < 0 ? -1 : 1;
+}
+
 cards.forEach(card=>{
   const playerId = String(card.dataset.player);
   committedLife[playerId] = parseInt(document.getElementById("life-" + playerId)?.textContent || "40", 10);
   saltButtonPressState[playerId] = { timer: null, handled: false, pointerId: null };
-
-  const isTop = card.classList.contains("top-card");
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
     if(e.target.closest(".player-name, .status-strip-btn, .salt-dispenser-btn, .center-pass-btn")) return;
     e.preventDefault();
 
-    const rect = card.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    let delta;
-    if(card.classList.contains("p3-slot-3")){
-      // 3-player right panel uses vertical tap zones: top = up, bottom = down.
-      delta = (y < rect.height / 2) ? 1 : -1;
-    }else{
-      delta = (x < rect.width / 2) ? -1 : 1;
-      if(isTop) delta = -delta;
-    }
+    const delta = getLifeDeltaFromTap(card, e.clientX, e.clientY);
 
     queueLifeChange(playerId, delta);
   });
