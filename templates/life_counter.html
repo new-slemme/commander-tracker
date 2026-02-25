@@ -1059,17 +1059,17 @@ function getLifeDeltaFromTap(playerCard, clientX, clientY){
 
   const fromCenterX = localX - centerX;
   const fromCenterY = localY - centerY;
-  const orientation = getPlayerCardOrientation(playerCard);
+  const orientationToken = getPlayerCardOrientationToken(playerCard);
 
   let logicalX = fromCenterX;
-  switch(orientation){
-    case "180deg":
+  switch(orientationToken){
+    case "top":
       logicalX = -fromCenterX;
       break;
-    case "90deg":
+    case "left":
       logicalX = fromCenterY;
       break;
-    case "-90deg":
+    case "right":
       logicalX = -fromCenterY;
       break;
     default:
@@ -1119,6 +1119,8 @@ const CARD_ORIENTATION_ROTATION_MAP = {
   bottom: "0deg"
 };
 
+const QUARTER_TURN_ORIENTATION_TOKENS = new Set(["left", "right"]);
+
 function getPlayerCardOrientationToken(playerCard){
   return playerCard?.dataset?.orientation || "bottom";
 }
@@ -1126,6 +1128,10 @@ function getPlayerCardOrientationToken(playerCard){
 function getPlayerCardOrientation(playerCard){
   const orientationToken = getPlayerCardOrientationToken(playerCard);
   return CARD_ORIENTATION_ROTATION_MAP[orientationToken] || CARD_ORIENTATION_ROTATION_MAP.bottom;
+}
+
+function isQuarterTurnOrientation(orientationToken){
+  return QUARTER_TURN_ORIENTATION_TOKENS.has(orientationToken);
 }
 
 function positionPlayerSaltMenu(anchorButton, playerCard){
@@ -1151,7 +1157,7 @@ function positionPlayerSaltMenu(anchorButton, playerCard){
 
   const flyoutHeight = Math.max(170, Math.min(flyoutEl.scrollHeight || 0, flyoutMaxHeight));
   const flyoutRotation = getPlayerCardOrientation(playerCard);
-  const quarterTurn = flyoutRotation === "90deg" || flyoutRotation === "-90deg";
+  const quarterTurn = isQuarterTurnOrientation(orientationToken);
   const halfFlyoutWidth = flyoutWidth / 2;
   const halfFlyoutHeight = flyoutHeight / 2;
   const halfBoundX = quarterTurn ? halfFlyoutHeight : halfFlyoutWidth;
