@@ -24,6 +24,16 @@
               <div class="form-text">This name will be used to track your games.</div>
             </div>
             <div class="mb-3">
+                <label for="requested_pod_id" class="form-label">Requested Pod</label>
+                <select name="requested_pod_id" id="requested_pod_id" class="form-select" required>
+                    <option value="">Choose a pod...</option>
+                    {% for pod in requestable_pods %}
+                    <option value="{{ pod.id }}" {% if request.form.get('requested_pod_id') == (pod.id|string) %}selected{% endif %}>{{ pod.name }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Pick the pod you want to join after approval.</div>
+            </div>
+            <div class="mb-3">
                 <label for="password" class="form-label">Password</label>
                 <input type="password" name="password" id="password" class="form-control" required>
             </div>
