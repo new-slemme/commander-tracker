@@ -518,6 +518,21 @@ class PodMembership(db.Model):
     )
 
 
+class RegistrationRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    requested_pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    user = db.relationship("User", foreign_keys=[user_id], backref=db.backref("registration_request", uselist=False))
+    requested_pod = db.relationship("Pod", foreign_keys=[requested_pod_id], lazy=True)
+    reviewed_by_user = db.relationship("User", foreign_keys=[reviewed_by_user_id], lazy=True)
+
+
 class GameParticipant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
@@ -1064,6 +1079,37 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('012_game_and_participant_query_indexes')")
+            )
+
+        if "016_registration_requests" not in applied:
+            db.session.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS registration_request (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL UNIQUE,
+                        requested_pod_id INTEGER NOT NULL,
+                        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        reviewed_at DATETIME,
+                        reviewed_by_user_id INTEGER,
+                        FOREIGN KEY(user_id) REFERENCES user (id),
+                        FOREIGN KEY(requested_pod_id) REFERENCES pod (id),
+                        FOREIGN KEY(reviewed_by_user_id) REFERENCES user (id)
+                    )
+                    """
+                )
+            )
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_registration_request_requested_pod_id "
+                    "ON registration_request (requested_pod_id)"
+                )
+            )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('016_registration_requests')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -1671,6 +1717,13 @@ def get_accessible_pods(user):
     )
 
 
+def get_requestable_pods(user):
+    if user and user.is_admin:
+        return Pod.query.order_by(Pod.name.asc()).all()
+
+    return Pod.query.filter_by(is_active=True).order_by(Pod.name.asc()).all()
+
+
 def can_manage_pod(user, pod_id):
     if not user:
         return False
@@ -1757,11 +1810,32 @@ def require_login():
 # -------------------------
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    requestable_pods = get_requestable_pods(None)
+
     if request.method == "POST":
         username = request.form["username"].strip()
         display_name = request.form.get("display_name", "").strip()
         password = request.form["password"]
         confirm = request.form["confirm"]
+        requested_pod_raw = request.form.get("requested_pod_id", "").strip()
+
+        requested_pod = None
+        if not requested_pod_raw:
+            flash("Please choose a pod to request access to.")
+        else:
+            try:
+                requested_pod_id = int(requested_pod_raw)
+            except ValueError:
+                flash("Selected pod is invalid.")
+            else:
+                allowed_pod_ids = {pod.id for pod in requestable_pods}
+                if requested_pod_id not in allowed_pod_ids:
+                    flash("Selected pod is unavailable or retired.")
+                else:
+                    requested_pod = db.session.get(Pod, requested_pod_id)
+
+        if not requested_pod:
+            return render_template("register.html", requestable_pods=requestable_pods)
 
         if not username or not display_name or not password:
             flash("Username, display name, and password required")
@@ -1775,7 +1849,7 @@ def register():
             password_error = validate_password_rules(password)
             if password_error:
                 flash(password_error)
-                return render_template("register.html")
+                return render_template("register.html", requestable_pods=requestable_pods)
 
             hashed = generate_password_hash(password)
             user = User(
@@ -1785,15 +1859,22 @@ def register():
                 is_active=False,
                 is_admin=False
             )
-        
+
             db.session.add(user)
+            db.session.flush()
+            db.session.add(
+                RegistrationRequest(
+                    user_id=user.id,
+                    requested_pod_id=requested_pod.id,
+                    status="pending",
+                )
+            )
             db.session.commit()
-        
-            flash("Registration submitted! Your account is pending admin approval.")
+
+            flash(f"Registration submitted for {requested_pod.name}; pending approval.")
             return redirect(url_for("login"))
 
-
-    return render_template("register.html")
+    return render_template("register.html", requestable_pods=requestable_pods)
 
 
 @app.route("/login", methods=["GET", "POST"])
