@@ -226,6 +226,8 @@
           <img src="/static/icons/back.png" alt="Back to game" />
         </button>
       </div>
+
+      <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls"></div>
     </div>
   </div>
 
@@ -359,6 +361,8 @@ const saltRevealTimers = {};
 let playerFlagTargetId = null;
 let playerSaltFlyoutOpen = false;
 let playerFlagAnchorButton = null;
+let mountedCardLogicPanel = null;
+let mountedCardLogicOwnerId = null;
 const participantFlagsByPlayer = {};
 const perTurnStatsByPlayer = {};
 let monarchHolderByPlayer = {};
@@ -443,7 +447,7 @@ function renderCardStateForPlayer(playerId){
 
   const state = getCardState(pid);
 
-  playerCard.querySelectorAll('.counter-chip').forEach((counterEl)=>{
+  document.querySelectorAll(`.counter-chip[data-player="${pid}"]`).forEach((counterEl)=>{
     const counterId = String(counterEl.dataset.counterId || "");
     if(!counterId) return;
     const value = getCounterValue(pid, counterId);
@@ -452,7 +456,7 @@ function renderCardStateForPlayer(playerId){
     counterEl.classList.toggle('is-active', value > 0);
   });
 
-  playerCard.querySelectorAll('.status-chip').forEach((statusButton)=>{
+  document.querySelectorAll(`.status-chip[data-player="${pid}"]`).forEach((statusButton)=>{
     const statusId = String(statusButton.dataset.logicId || "");
     const isActive = !!state.statuses[statusId];
     statusButton.classList.toggle('is-active', isActive);
@@ -462,7 +466,7 @@ function renderCardStateForPlayer(playerId){
   const commanderDamageEl = document.getElementById(`commander-damage-total-${pid}`);
   const commanderDamageTotal = getCommanderDamageTotal(pid);
   if(commanderDamageEl) commanderDamageEl.textContent = String(commanderDamageTotal);
-  const commanderDamageChip = playerCard.querySelector('.commander-damage-chip');
+  const commanderDamageChip = document.querySelector(`.commander-damage-chip[data-player="${pid}"]`);
   const threshold = Math.max(1, Number(cardLogicCatalog?.commander_damage_threshold || 21));
   commanderDamageChip?.classList.toggle('is-active', commanderDamageTotal > 0);
   commanderDamageChip?.classList.toggle('is-danger', commanderDamageTotal >= threshold);
@@ -470,6 +474,26 @@ function renderCardStateForPlayer(playerId){
   const poisonValue = getCounterValue(pid, 'poison');
   poisonCountersByPlayer[pid] = poisonValue;
   updateStatusStripState(pid);
+}
+
+function unmountPlayerCardLogicPanel(){
+  if(!mountedCardLogicPanel || !mountedCardLogicOwnerId) return;
+  const ownerCard = document.querySelector(`.life-card[data-player="${mountedCardLogicOwnerId}"]`);
+  ownerCard?.appendChild(mountedCardLogicPanel);
+  mountedCardLogicPanel = null;
+  mountedCardLogicOwnerId = null;
+}
+
+function mountPlayerCardLogicPanel(playerId){
+  const flyoutLogicSlot = document.getElementById("playerSaltCardLogic");
+  const ownerCard = document.querySelector(`.life-card[data-player="${playerId}"]`);
+  const panel = ownerCard?.querySelector('.card-logic-panel');
+  if(!flyoutLogicSlot || !panel || !ownerCard) return;
+
+  unmountPlayerCardLogicPanel();
+  flyoutLogicSlot.appendChild(panel);
+  mountedCardLogicPanel = panel;
+  mountedCardLogicOwnerId = String(playerId);
 }
 
 function initializeCardLogicState(){
@@ -1158,6 +1182,7 @@ function closePlayerSaltMenu(){
   flyoutEl.classList.remove("is-open");
   flyoutEl.setAttribute("aria-hidden", "true");
   activeCard?.classList.remove("flag-menu-open");
+  unmountPlayerCardLogicPanel();
   if(HIDE_SALT_BUTTON_BY_DEFAULT && activeCard){
     activeCard.classList.remove("salt-controls-revealed");
   }
@@ -1166,6 +1191,9 @@ function closePlayerSaltMenu(){
 }
 
 function openPlayerSaltMenu(playerId, anchorButton){
+  if(playerSaltFlyoutOpen){
+    unmountPlayerCardLogicPanel();
+  }
   playerFlagTargetId = String(playerId);
   playerFlagAnchorButton = anchorButton || null;
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
@@ -1197,6 +1225,9 @@ function openPlayerSaltMenu(playerId, anchorButton){
   document.querySelectorAll(".life-card.flag-menu-open").forEach((card)=>card.classList.remove("flag-menu-open"));
   playerCard?.classList.add("flag-menu-open");
   revealSaltButtonForCard(playerCard, 4000);
+
+  mountPlayerCardLogicPanel(playerFlagTargetId);
+  renderCardStateForPlayer(playerFlagTargetId);
 
   positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 

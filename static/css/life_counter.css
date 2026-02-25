@@ -1181,13 +1181,22 @@ body.sigtaara-ui .h4 {
 }
 
 /* --- standardized card logic panel --- */
-.card-logic-panel{
+.life-card .card-logic-panel{
+  display:none;
+}
+
+.player-salt-card-logic{
+  border-top:1px solid rgba(255,255,255,.16);
+  padding-top:.55rem;
+}
+
+.player-salt-card-logic .card-logic-panel{
   display:flex;
   flex-wrap:wrap;
   justify-content:center;
   align-items:center;
   gap:.35rem;
-  padding:.3rem .45rem .45rem;
+  padding:.2rem .1rem .1rem;
 }
 
 .card-logic-statuses,
