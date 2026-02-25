@@ -28,15 +28,26 @@
           <tr>
             <th>Username</th>
             <th>Display name</th>
+            <th class="text-nowrap">Requested pod</th>
             <th class="text-nowrap">Created</th>
             <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for u in pending %}
+            {% set req = pending_requests_by_user_id.get(u.id) %}
             <tr>
               <td class="fw-semibold text-white">{{ u.username }}</td>
               <td>{{ u.display_name }}</td>
+              <td class="text-nowrap">
+                {% if req and req.requested_pod %}
+                  {{ req.requested_pod.name }}{% if not req.requested_pod.is_active %} <span class="app-badge alert">Inactive</span>{% endif %}
+                {% elif req %}
+                  <span class="text-warning">Unknown pod (ID {{ req.requested_pod_id }})</span>
+                {% else %}
+                  <span class="text-warning">No request data</span>
+                {% endif %}
+              </td>
               <td class="text-muted text-nowrap">{{ u.created_at }}</td>
               <td class="text-end">
                 <div class="d-inline-flex gap-2 flex-wrap justify-content-end">

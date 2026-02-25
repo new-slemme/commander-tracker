@@ -1727,6 +1727,11 @@ def get_requestable_pods(user):
 def can_manage_pod(user, pod_id):
     if not user:
         return False
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod or not pod.is_active:
+        return False
+
     if user.is_admin:
         return True
     if not user.player:
@@ -1755,6 +1760,11 @@ def can_access_registration_request_queue(user):
 def can_approve_registration_request(user, registration_request):
     if not user or not registration_request:
         return False
+
+    requested_pod = db.session.get(Pod, registration_request.requested_pod_id)
+    if requested_pod and not requested_pod.is_active:
+        return False
+
     if user.is_admin:
         return True
     return can_manage_pod(user, registration_request.requested_pod_id)
@@ -1770,6 +1780,77 @@ def ensure_membership(pod_id, player_id, role="member"):
     membership = PodMembership(pod_id=pod_id, player_id=player_id, role=role)
     db.session.add(membership)
     return membership
+
+
+def resolve_requested_pod_for_approval(registration_request):
+    if not registration_request:
+        return None, "missing_request"
+
+    requested_pod = db.session.get(Pod, registration_request.requested_pod_id)
+    if requested_pod and requested_pod.is_active:
+        return requested_pod, "requested"
+
+    if requested_pod and not requested_pod.is_active:
+        app.logger.warning(
+            "Registration request %s targeted inactive pod %s; refusing assignment.",
+            registration_request.id,
+            requested_pod.id,
+        )
+        return None, "inactive_requested_pod"
+
+    fallback_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG, is_active=True).first()
+    app.logger.warning(
+        "Registration request %s targeted missing pod_id %s; falling back to default pod %s.",
+        registration_request.id,
+        registration_request.requested_pod_id,
+        getattr(fallback_pod, "id", None),
+    )
+    flash("Requested pod could not be validated. Assigned user to the default pod instead.")
+    return fallback_pod, "fallback_default"
+
+
+
+def approve_user_from_registration_request(registration_request, reviewer_user_id):
+    if not registration_request:
+        return "missing_request", None
+
+    u = registration_request.user
+    if not u:
+        return "missing_user", None
+
+    if registration_request.status != "pending" or u.is_active:
+        return "not_pending", u
+
+    existing_player = Player.query.filter_by(name=u.display_name).first()
+    if existing_player and (not u.player or existing_player.id != u.player.id):
+        return "name_collision", u
+
+    if not u.player:
+        u.player = Player(name=u.display_name)
+        db.session.flush()
+    elif u.player.name != u.display_name:
+        u.player.name = u.display_name
+        db.session.flush()
+
+    target_pod, resolution = resolve_requested_pod_for_approval(registration_request)
+    if not target_pod:
+        if resolution == "inactive_requested_pod":
+            return "inactive_pod", u
+        app.logger.warning(
+            "Registration request %s could not resolve a valid target pod and has no fallback default pod.",
+            registration_request.id,
+        )
+        return "missing_pod", u
+
+    ensure_membership(target_pod.id, u.player.id, role="member")
+
+    u.is_active = True
+    u.approved_at = datetime.utcnow()
+    registration_request.status = "approved"
+    registration_request.reviewed_at = datetime.utcnow()
+    registration_request.reviewed_by_user_id = reviewer_user_id
+    db.session.commit()
+    return "approved", u
 
 
 @app.context_processor
@@ -2059,7 +2140,16 @@ def art(filename):
 def admin_users():
     pending = User.query.filter_by(is_active=False).order_by(User.created_at.asc()).all()
     active = User.query.filter_by(is_active=True).order_by(User.created_at.desc()).all()
-    return render_template("admin_users.html", pending=pending, active=active)
+    pending_requests_by_user_id = {
+        req.user_id: req
+        for req in RegistrationRequest.query.filter_by(status="pending").all()
+    }
+    return render_template(
+        "admin_users.html",
+        pending=pending,
+        active=active,
+        pending_requests_by_user_id=pending_requests_by_user_id,
+    )
 
 
 @app.route("/registration_requests")
@@ -2101,33 +2191,23 @@ def approve_registration_request(request_id):
     if not can_approve_registration_request(me, registration_request):
         abort(403)
 
-    u = registration_request.user
-    if not u:
+    status, approved_user = approve_user_from_registration_request(registration_request, me.id if me else None)
+    if status in {"missing_request", "missing_user"}:
         abort(404)
-
-    if registration_request.status != "pending" or u.is_active:
+    if status == "not_pending":
         flash("Registration request is no longer pending.")
         return redirect(url_for("registration_requests"))
-
-    existing_player = Player.query.filter_by(name=u.display_name).first()
-    if existing_player:
-        flash(f"Can't approve: display name '{u.display_name}' is already used by a Player.")
+    if status == "name_collision":
+        flash(f"Can't approve: display name '{approved_user.display_name}' is already used by a Player.")
+        return redirect(url_for("registration_requests"))
+    if status == "inactive_pod":
+        flash("Can't approve: requested pod is inactive.")
+        return redirect(url_for("registration_requests"))
+    if status == "missing_pod":
+        flash("Can't approve: no valid pod is available for this registration request.")
         return redirect(url_for("registration_requests"))
 
-    if not u.player:
-        u.player = Player(name=u.display_name)
-        db.session.flush()
-
-    ensure_membership(registration_request.requested_pod_id, u.player.id)
-
-    u.is_active = True
-    u.approved_at = datetime.utcnow()
-    registration_request.status = "approved"
-    registration_request.reviewed_at = datetime.utcnow()
-    registration_request.reviewed_by_user_id = me.id if me else None
-
-    db.session.commit()
-    flash(f"Approved {u.display_name}")
+    flash(f"Approved {approved_user.display_name}")
     return redirect(url_for("registration_requests"))
 
 
@@ -2135,11 +2215,31 @@ def approve_registration_request(request_id):
 @app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
 @admin_required
 def admin_approve_user(user_id):
+    me = get_current_user()
     registration_request = RegistrationRequest.query.filter_by(user_id=user_id).first()
     if not registration_request:
         flash("No pending registration request found for that user.")
         return redirect(url_for("admin_users"))
-    return approve_registration_request(registration_request.id)
+
+    status, approved_user = approve_user_from_registration_request(registration_request, me.id if me else None)
+    if status in {"missing_request", "missing_user"}:
+        flash("No pending registration request found for that user.")
+        return redirect(url_for("admin_users"))
+    if status == "not_pending":
+        flash("Registration request is no longer pending.")
+        return redirect(url_for("admin_users"))
+    if status == "name_collision":
+        flash(f"Can't approve: display name '{approved_user.display_name}' is already used by a Player.")
+        return redirect(url_for("admin_users"))
+    if status == "inactive_pod":
+        flash("Can't approve: requested pod is inactive.")
+        return redirect(url_for("admin_users"))
+    if status == "missing_pod":
+        flash("Can't approve: no valid pod is available for this registration request.")
+        return redirect(url_for("admin_users"))
+
+    flash(f"Approved {approved_user.display_name}")
+    return redirect(url_for("admin_users"))
 
 @app.route("/saltmine")
 @login_required

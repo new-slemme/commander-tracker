@@ -28,7 +28,11 @@
             <tr>
               <td class="text-nowrap">{{ req.user.username }}</td>
               <td class="text-nowrap">{{ req.user.display_name }}</td>
-              <td class="text-nowrap">{{ req.requested_pod.name if req.requested_pod else "Unknown pod" }}</td>
+              <td class="text-nowrap">{% if req.requested_pod %}
+                  {{ req.requested_pod.name }}{% if not req.requested_pod.is_active %} <span class="app-badge alert">Inactive</span>{% endif %}
+                {% else %}
+                  <span class="text-warning">Unknown pod (ID {{ req.requested_pod_id }})</span>
+                {% endif %}</td>
               <td class="text-muted text-nowrap">{{ req.created_at }}</td>
               <td class="text-end text-nowrap">
                 <form method="POST" action="{{ url_for('approve_registration_request', request_id=req.id) }}" class="d-inline">
