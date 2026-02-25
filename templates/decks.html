@@ -123,6 +123,20 @@
     </div>
   </div>
 
+  {% if show_tags_refresh_banner %}
+    <div class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2" role="alert">
+      <div>
+        <strong>Deck tags refresh recommended:</strong>
+        {{ stale_deck_count }} deck{{ '' if stale_deck_count == 1 else 's' }} use older tag rules (target version {{ deck_tags_version }}).
+        Consider bulk retagging to keep life-counter mechanics accurate.
+      </div>
+      <form method="post" action="{{ url_for('dismiss_deck_tags_banner') }}" class="m-0">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <button type="submit" class="btn btn-sm btn-outline-dark">Dismiss</button>
+      </form>
+    </div>
+  {% endif %}
+
   {% if decks|length == 0 %}
     <div class="card p-3">
       <div class="muted">No decks found.</div>
@@ -170,6 +184,9 @@
                 {% endif %}
                 {% if d.decklist_text %}
                   <span class="deck-list-pill">Decklist</span>
+                {% endif %}
+                {% if deck_tags_stale.get(d.id) %}
+                  <span class="deck-retired-pill" title="Deck tags are missing or stale for the current rules version">Retag recommended</span>
                 {% endif %}
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
               </div>

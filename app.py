@@ -77,6 +77,9 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
 
 MAX_PER_PLAYER_TURN_STATS = 500
 
+DECK_TAGS_VERSION = 2
+TRUST_LEGACY_DECK_TAGS = False
+
 CANONICAL_WIN_TYPES = {
     "combat",
     "combo",
@@ -435,6 +438,8 @@ class Deck(db.Model):
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
     decklist_text = db.Column(db.Text)
     tags_json = db.Column(db.Text, nullable=False, default="{}")
+    tags_version = db.Column(db.Integer, nullable=True)
+    tags_computed_at = db.Column(db.DateTime, nullable=True)
 
     @property
     def commander_art_url(self):
@@ -1081,6 +1086,33 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('012_game_and_participant_query_indexes')")
             )
 
+        if "017_deck_tags_versioning" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "tags_version" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN tags_version INTEGER"))
+            if "tags_computed_at" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN tags_computed_at DATETIME"))
+
+            if TRUST_LEGACY_DECK_TAGS:
+                db.session.execute(
+                    text(
+                        """
+                        UPDATE deck
+                        SET tags_version = 1
+                        WHERE tags_version IS NULL
+                          AND tags_json IS NOT NULL
+                          AND TRIM(tags_json) != ''
+                          AND TRIM(tags_json) != '{}'
+                        """
+                    )
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('017_deck_tags_versioning')")
+            )
+
         if "016_registration_requests" not in applied:
             db.session.execute(
                 text(
@@ -1323,6 +1355,16 @@ def compute_deck_tags_from_text(decklist_text: str | None) -> dict:
 
     parsed = parse_plaintext_decklist(raw_text).as_dict()
     return compute_deck_tags(extract_decklist_card_names(parsed))
+
+
+def apply_deck_tags(deck: "Deck", tags: dict) -> None:
+    deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
+    deck.tags_version = DECK_TAGS_VERSION
+    deck.tags_computed_at = datetime.utcnow()
+
+
+def is_deck_tags_stale(deck: "Deck") -> bool:
+    return (deck.tags_version is None) or (deck.tags_version < DECK_TAGS_VERSION)
 
 
 def _split_commander_names(value: str) -> list[str]:
@@ -3386,9 +3428,16 @@ def decks():
         stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate}
 
     deck_can_delete = {}
+    deck_tags_stale = {}
     for d in decks_list:
         used = GameParticipant.query.filter_by(deck_id=d.id).count()
         deck_can_delete[d.id] = (used == 0)
+        deck_tags_stale[d.id] = bool(d.decklist_text and is_deck_tags_stale(d))
+
+    stale_deck_count = sum(1 for stale in deck_tags_stale.values() if stale)
+    show_tags_refresh_banner = bool(
+        u and u.is_admin and stale_deck_count > 0 and not session.get("deck_tags_banner_dismissed")
+    )
 
     return render_template(
         "decks.html",
@@ -3397,9 +3446,25 @@ def decks():
         selected_player_id=player_id,
         deck_stats=stats,
         deck_can_delete=deck_can_delete,
+        deck_tags_stale=deck_tags_stale,
+        stale_deck_count=stale_deck_count,
+        show_tags_refresh_banner=show_tags_refresh_banner,
+        deck_tags_version=DECK_TAGS_VERSION,
         show_retired=show_retired,
         is_admin=bool(u and u.is_admin),
     )
+
+
+@app.route("/decks/dismiss-tags-banner", methods=["POST"])
+@login_required
+def dismiss_deck_tags_banner():
+    u = get_current_user()
+    if not (u and u.is_admin):
+        return "Forbidden", 403
+
+    session["deck_tags_banner_dismissed"] = True
+    session.modified = True
+    return redirect(request.form.get("next") or url_for("decks"))
 
 
 @app.route("/deck/<int:deck_id>")
@@ -3614,7 +3679,7 @@ def add_deck():
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
         tags = compute_deck_tags(extract_decklist_card_names(parsed_import))
-        deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
+        apply_deck_tags(deck, tags)
 
     commander_meta = resolve_commander_metadata(commander_to_set)
     deck.commander = commander_meta["commander"] or commander_to_set
@@ -3680,7 +3745,7 @@ def retag_deck(deck_id):
         flash(f"Retag failed: {exc}")
         return redirect(next_url)
 
-    deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
+    apply_deck_tags(deck, tags)
     db.session.commit()
     flash(f"Retagged deck: {deck.name}")
     return redirect(next_url)
@@ -3767,6 +3832,8 @@ def update_deck(deck_id):
     old_custom_card_art_local = deck.custom_card_art_local
     old_color_identity = deck.color_identity
     old_tags_json = deck.tags_json
+    old_tags_version = deck.tags_version
+    old_tags_computed_at = deck.tags_computed_at
 
     parsed_import = None
     imported_from = None
@@ -3809,7 +3876,7 @@ def update_deck(deck_id):
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
         tags = compute_deck_tags(extract_decklist_card_names(parsed_import))
-        deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
+        apply_deck_tags(deck, tags)
 
     if u.is_admin:
         owner_id = request.form.get("player_id", type=int)
@@ -3851,6 +3918,8 @@ def update_deck(deck_id):
         deck.custom_card_art_local = old_custom_card_art_local
         deck.color_identity = old_color_identity
         deck.tags_json = old_tags_json
+        deck.tags_version = old_tags_version
+        deck.tags_computed_at = old_tags_computed_at
 
         flash(f"Failed to update deck: {exc}")
         return redirect(request.form.get("next") or url_for("decks"))
