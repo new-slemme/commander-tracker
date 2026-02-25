@@ -76,6 +76,9 @@
             Welcome, {{ session.get("display_name") or session.get("username") }}
           </span>
           <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
+          {% if can_access_registration_requests %}
+            <a class="nav-link" href="{{ url_for('registration_requests') }}">Requests</a>
+          {% endif %}
           {% if session.get("is_admin") %}
             <a class="nav-link" href="{{ url_for('admin_users') }}">Admin</a>
           {% endif %}
@@ -120,6 +123,9 @@
         <div class="drawer-divider"></div>
 
         <a class="drawer-item" href="{{ url_for('profile') }}">Profile</a>
+        {% if can_access_registration_requests %}
+          <a class="drawer-item" href="{{ url_for('registration_requests') }}">Requests</a>
+        {% endif %}
         {% if session.get("is_admin") %}
           <a class="drawer-item" href="{{ url_for('admin_users') }}">Admin</a>
         {% endif %}
