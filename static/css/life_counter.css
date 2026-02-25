@@ -647,10 +647,13 @@ body.sigtaara-ui .h4 {
       min-height:52px;
       align-items:flex-start;
       justify-content:center;
+      padding-inline:max(14px, var(--safe-left), var(--safe-right));
+      padding-bottom:max(6px, var(--safe-bottom));
     }
     .players-3 .life-card.p3-slot-3 .player-name{
       width:100%;
-      max-width:100%;
+      max-width:calc(100% - 8px);
+      margin-inline:auto;
       text-align:center;
       white-space:normal;
       display:-webkit-box;
