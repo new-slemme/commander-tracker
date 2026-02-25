@@ -1948,6 +1948,36 @@ def can_approve_registration_request(user, registration_request):
     return can_manage_pod(user, registration_request.requested_pod_id)
 
 
+def can_deny_registration_request(user, registration_request):
+    if not user or not registration_request:
+        return False
+
+    if user.is_admin:
+        return True
+
+    requested_pod = db.session.get(Pod, registration_request.requested_pod_id)
+    if not requested_pod or not requested_pod.is_active:
+        return False
+
+    return can_manage_pod(user, registration_request.requested_pod_id)
+
+
+def deny_registration_request_permission_message(user, registration_request):
+    if not user or not registration_request:
+        return "You don't have permission to deny this registration request."
+
+    if user.is_admin:
+        return None
+
+    requested_pod = db.session.get(Pod, registration_request.requested_pod_id)
+    if not requested_pod:
+        return "Only admins can deny requests for missing pods."
+    if not requested_pod.is_active:
+        return "Only admins can deny requests for inactive pods."
+
+    return "You don't have permission to deny this registration request."
+
+
 def ensure_membership(pod_id, player_id, role="member"):
     membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=player_id).first()
     if membership:
@@ -2661,8 +2691,9 @@ def deny_registration_request(request_id):
     registration_request = db.session.get(RegistrationRequest, request_id)
     if not registration_request:
         abort(404)
-    if not can_approve_registration_request(me, registration_request):
-        abort(403)
+    if not can_deny_registration_request(me, registration_request):
+        flash(deny_registration_request_permission_message(me, registration_request))
+        return redirect(url_for("registration_requests"))
 
     u = registration_request.user
     if not u:
