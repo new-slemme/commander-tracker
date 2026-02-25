@@ -189,6 +189,12 @@
             </div>
 
             <div class="deck-actions-row">
+              {% if d.decklist_text %}
+                <form method="post" action="{{ url_for('retag_deck', deck_id=d.id) }}" style="display:inline;">
+                  <input type="hidden" name="next" value="{{ request.full_path }}">
+                  <button type="submit" class="btn btn-sm btn-outline-info" title="Recompute deck tags from decklist">Retag</button>
+                </form>
+              {% endif %}
               {% if deck_can_delete.get(d.id) %}
                 <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
                       onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"

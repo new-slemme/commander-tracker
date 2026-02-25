@@ -130,12 +130,15 @@
             </div>
             <div class="card-logic-counters" role="group" aria-label="Standard counters">
               {% for counter in card_logic_catalog.counters %}
+              {% set counter_visible = (counter.id == 'poison' and active_mechanics.poison) or (counter.id == 'energy' and p.mechanics.energy) or (counter.id == 'experience' and p.mechanics.experience) %}
+              {% if counter_visible %}
               <div class="counter-chip" data-player="{{ p.player_id }}" data-counter-id="{{ counter.id }}" data-counter-step="{{ counter.step }}" data-counter-min="{{ counter.min }}" {% if counter.max is defined %}data-counter-max="{{ counter.max }}"{% endif %}>
                 <button type="button" class="counter-chip-btn" data-counter-action="decrement" aria-label="Decrease {{ counter.label }} for {{ p.player_name }}">−</button>
                 <span class="counter-chip-label" title="{{ counter.label }}">{{ counter.icon }}</span>
                 <span class="counter-chip-value" id="counter-{{ p.player_id }}-{{ counter.id }}">0</span>
                 <button type="button" class="counter-chip-btn" data-counter-action="increment" aria-label="Increase {{ counter.label }} for {{ p.player_name }}">+</button>
               </div>
+              {% endif %}
               {% endfor %}
             </div>
             <button
