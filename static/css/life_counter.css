@@ -630,7 +630,8 @@ body.sigtaara-ui .h4 {
       align-items:flex-start;
       justify-content:space-between;
       min-height:54px;
-      padding-top:2px;
+      padding-top:10px;
+      padding-inline:10px;
     }
     .players-3 .life-card.p3-slot-3 .player-timer{
       order:-1;
@@ -639,7 +640,7 @@ body.sigtaara-ui .h4 {
     }
     .players-3 .life-card.p3-slot-3 .status-strip{
       margin-inline-start:auto;
-      margin-inline-end:0;
+      margin-inline-end:8px;
       align-self:flex-end;
     }
     .players-3 .life-card.p3-slot-3 .card-lane-bottom{
