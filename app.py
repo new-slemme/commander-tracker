@@ -1,3 +1,4 @@
+from __future__ import annotations
 from flask import (
     Flask,
     Response,
@@ -1347,9 +1348,10 @@ def analyze_scryfall_card(card_json: dict) -> dict:
     }
 
 
-def compute_deck_tags(decklist_cards: list[str]) -> dict:
+def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
     tags = {key: False for key in KNOWN_DECK_TAG_KEYS}
     seen_names: set[str] = set()
+    unresolved_cards: list[str] = []
 
     for raw_name in decklist_cards:
         name = (raw_name or "").strip()
@@ -1361,12 +1363,25 @@ def compute_deck_tags(decklist_cards: list[str]) -> dict:
             continue
         seen_names.add(lowered)
 
-        card_json = scryfall_named_exact(name)
-        card_tags = analyze_scryfall_card(card_json)
+        try:
+            card_json = scryfall_named_exact(name)
+            if not card_json:
+                unresolved_cards.append(name)
+                continue
+
+            card_tags = analyze_scryfall_card(card_json)
+        except Exception:
+            unresolved_cards.append(name)
+            continue
+
         for key in tags:
             tags[key] = tags[key] or card_tags.get(key, False)
 
-    return tags
+    diagnostics = {
+        "unresolved_count": len(unresolved_cards),
+        "unresolved_cards": unresolved_cards,
+    }
+    return tags, diagnostics
 
 
 def extract_decklist_card_names(parsed: dict) -> list[str]:
@@ -1378,13 +1393,29 @@ def extract_decklist_card_names(parsed: dict) -> list[str]:
     ]
 
 
-def compute_deck_tags_from_text(decklist_text: str | None) -> dict:
+def compute_deck_tags_from_text(decklist_text: str | None) -> tuple[dict, dict]:
     raw_text = (decklist_text or "").strip()
     if not raw_text:
-        return {}
+        return {}, {"unresolved_count": 0, "unresolved_cards": []}
 
     parsed = parse_plaintext_decklist(raw_text).as_dict()
     return compute_deck_tags(extract_decklist_card_names(parsed))
+
+
+def flash_unresolved_tag_warning(tag_diagnostics: dict | None) -> None:
+    if not isinstance(tag_diagnostics, dict):
+        return
+
+    unresolved_cards = [str(name) for name in (tag_diagnostics.get("unresolved_cards") or []) if str(name).strip()]
+    unresolved_count = int(tag_diagnostics.get("unresolved_count") or len(unresolved_cards))
+    if unresolved_count <= 0:
+        return
+
+    preview = ", ".join(unresolved_cards[:5])
+    extra = unresolved_count - min(len(unresolved_cards), 5)
+    suffix = f", +{extra} more" if extra > 0 else ""
+    details = f": {preview}{suffix}" if preview else ""
+    flash(f"Deck tags were partially computed; {unresolved_count} card lookup(s) could not be resolved{details}.")
 
 
 def parse_tags_json(raw: str | None) -> dict[str, bool]:
@@ -3801,6 +3832,7 @@ def add_deck():
 
     parsed_import = None
     imported_from = None
+    tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
     try:
         raw_import, imported_from = _extract_deck_import_text()
         if raw_import:
@@ -3835,7 +3867,7 @@ def add_deck():
     deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
-        tags = compute_deck_tags(extract_decklist_card_names(parsed_import))
+        tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
         apply_deck_tags(deck, tags)
 
     commander_meta = resolve_commander_metadata(commander_to_set)
@@ -3866,6 +3898,7 @@ def add_deck():
         )
     else:
         flash("Deck added.")
+    flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(url_for("decks"))
 
 
@@ -3897,7 +3930,7 @@ def retag_deck(deck_id):
         return redirect(next_url)
 
     try:
-        tags = compute_deck_tags_from_text(deck.decklist_text)
+        tags, tag_diagnostics = compute_deck_tags_from_text(deck.decklist_text)
     except DeckParserError as exc:
         flash(f"Retag failed: {exc}")
         return redirect(next_url)
@@ -3905,6 +3938,7 @@ def retag_deck(deck_id):
     apply_deck_tags(deck, tags)
     db.session.commit()
     flash(f"Retagged deck: {deck.name}")
+    flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(next_url)
 
 
@@ -3994,6 +4028,7 @@ def update_deck(deck_id):
 
     parsed_import = None
     imported_from = None
+    tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
     try:
         raw_import, imported_from = _extract_deck_import_text()
         if raw_import:
@@ -4032,7 +4067,7 @@ def update_deck(deck_id):
     deck.custom_card_art_local = custom_card_art_local
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
-        tags = compute_deck_tags(extract_decklist_card_names(parsed_import))
+        tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
         apply_deck_tags(deck, tags)
 
     if u.is_admin:
@@ -4099,6 +4134,7 @@ def update_deck(deck_id):
         )
     else:
         flash(f"Updated deck: {deck.name}")
+    flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(request.form.get("next") or url_for("decks"))
 
 
