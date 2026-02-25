@@ -363,6 +363,41 @@ def participant_flags_snapshot(gp: "GameParticipant") -> dict[str, bool | int]:
     }
 
 
+def compute_game_mechanic_activation(parts: list["GameParticipant"]) -> dict[str, bool]:
+    """Compute per-game mechanic activation/capability for index analytics."""
+    monarch_activated = False
+    poison_activated = False
+    monarch_capable_present = False
+    poison_capable_present = False
+
+    for participant in parts:
+        flags = parse_participant_flags(getattr(participant, "flags_json", None))
+
+        if flags.get("monarch") is True:
+            monarch_activated = True
+
+        poison_raw = flags.get("poison", 0)
+        poison_count = poison_raw if isinstance(poison_raw, int) and not isinstance(poison_raw, bool) else 0
+        if poison_count > 0:
+            poison_activated = True
+
+        mechanics = getattr(participant, "deck_mechanics", None)
+        if not isinstance(mechanics, dict):
+            mechanics = derive_deck_mechanics({})
+
+        if mechanics.get("monarch"):
+            monarch_capable_present = True
+        if mechanics.get("poison"):
+            poison_capable_present = True
+
+    return {
+        "monarch_activated": monarch_activated,
+        "poison_activated": poison_activated,
+        "monarch_capable_present": monarch_capable_present,
+        "poison_capable_present": poison_capable_present,
+    }
+
+
 def validate_password_rules(password: str) -> str | None:
     if len(password) < 8:
         return "Password must be at least 8 characters long."
@@ -2712,34 +2747,47 @@ def index():
         for key in mechanic_keys
     }
     activation_correlation_denominators = {
-        key: {
-            "participant_uses": 0,
-            "games_with_capability": 0,
-        }
-        for key in mechanic_keys
+        key: {"activated_games_with_capability": 0, "games_with_capability": 0}
+        for key in ("monarch", "poison")
     }
 
-    game_capability_presence = {
-        key: set()
-        for key in mechanic_keys
-    }
+    participants_by_game_id: dict[int, list[GameParticipant]] = {}
 
     for gp in scoped_participants:
         mechanics = deck_mechanics_by_id.get(gp.deck_id)
         if not mechanics:
             continue
 
+        gp.deck_mechanics = mechanics
+        participants_by_game_id.setdefault(gp.game_id, []).append(gp)
+
         for key in mechanic_keys:
             if not mechanics[key]:
                 continue
             capability_uses_wins[key]["uses"] += 1
-            activation_correlation_denominators[key]["participant_uses"] += 1
-            game_capability_presence[key].add(gp.game_id)
             if gp.game and gp.game.winner_id == gp.player_id:
                 capability_uses_wins[key]["wins"] += 1
 
-    for key in mechanic_keys:
-        activation_correlation_denominators[key]["games_with_capability"] = len(game_capability_presence[key])
+    for participants in participants_by_game_id.values():
+        game_activation = compute_game_mechanic_activation(participants)
+
+        if game_activation["monarch_capable_present"]:
+            activation_correlation_denominators["monarch"]["games_with_capability"] += 1
+            if game_activation["monarch_activated"]:
+                activation_correlation_denominators["monarch"]["activated_games_with_capability"] += 1
+
+        if game_activation["poison_capable_present"]:
+            activation_correlation_denominators["poison"]["games_with_capability"] += 1
+            if game_activation["poison_activated"]:
+                activation_correlation_denominators["poison"]["activated_games_with_capability"] += 1
+
+    for key, counts in activation_correlation_denominators.items():
+        games_with_capability = counts["games_with_capability"]
+        if games_with_capability > 0:
+            ratio = counts["activated_games_with_capability"] / games_with_capability
+            counts["activation_given_capability"] = round(ratio * 100, 1)
+        else:
+            counts["activation_given_capability"] = 0.0
 
     return render_template(
         "index.html",
