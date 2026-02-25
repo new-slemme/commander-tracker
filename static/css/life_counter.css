@@ -821,11 +821,11 @@ body.sigtaara-ui .h4 {
 
     .mode-6p .turn-pill{
       top:50%;
-      left:max(8px, var(--safe-left));
+      left:calc(max(12px, var(--safe-left)) + 28px);
       right:auto;
       bottom:auto;
-      transform:translateY(-50%) rotate(-90deg);
-      transform-origin:left center;
+      transform:translate(-50%, -50%) rotate(-90deg);
+      transform-origin:center;
       z-index:170;
       padding:8px 12px;
       min-width:100px;
@@ -834,10 +834,10 @@ body.sigtaara-ui .h4 {
     .mode-6p .turn-pill.bottom{
       top:50%;
       left:auto;
-      right:max(8px, var(--safe-right));
+      right:calc(max(12px, var(--safe-right)) + 28px);
       bottom:auto;
-      transform:translateY(-50%) rotate(90deg);
-      transform-origin:right center;
+      transform:translate(50%, -50%) rotate(90deg);
+      transform-origin:center;
     }
 
     /* Rotate each player's UI to face them */
