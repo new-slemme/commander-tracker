@@ -1274,11 +1274,19 @@ def analyze_scryfall_card(card_json: dict) -> dict:
         "monarch": "monarch" in oracle_text,
         "poison": "poison" in oracle_text,
         "proliferate": "proliferate" in oracle_text,
+        "energy": "{e}" in oracle_text,
+        "experience": "experience counter" in oracle_text,
     }
 
 
 def compute_deck_tags(decklist_cards: list[str]) -> dict:
-    tags = {"monarch": False, "poison": False, "proliferate": False}
+    tags = {
+        "monarch": False,
+        "poison": False,
+        "proliferate": False,
+        "energy": False,
+        "experience": False,
+    }
     seen_names: set[str] = set()
 
     for raw_name in decklist_cards:
@@ -1297,6 +1305,24 @@ def compute_deck_tags(decklist_cards: list[str]) -> dict:
             tags[key] = tags[key] or card_tags.get(key, False)
 
     return tags
+
+
+def extract_decklist_card_names(parsed: dict) -> list[str]:
+    parsed_sections = parsed.get("sections", {}) or {}
+    return [
+        entry.get("name", "")
+        for entries in parsed_sections.values()
+        for entry in (entries or [])
+    ]
+
+
+def compute_deck_tags_from_text(decklist_text: str | None) -> dict:
+    raw_text = (decklist_text or "").strip()
+    if not raw_text:
+        return {}
+
+    parsed = parse_plaintext_decklist(raw_text).as_dict()
+    return compute_deck_tags(extract_decklist_card_names(parsed))
 
 
 def _split_commander_names(value: str) -> list[str]:
@@ -3587,13 +3613,7 @@ def add_deck():
     deck.planned = bool(request.form.get("planned"))
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
-        parsed_sections = parsed_import.get("sections", {}) or {}
-        decklist_cards = [
-            entry.get("name", "")
-            for entries in parsed_sections.values()
-            for entry in (entries or [])
-        ]
-        tags = compute_deck_tags(decklist_cards)
+        tags = compute_deck_tags(extract_decklist_card_names(parsed_import))
         deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
 
     commander_meta = resolve_commander_metadata(commander_to_set)
@@ -3635,6 +3655,35 @@ def api_card_art():
 
     image = cache_card_art_by_name(card_name)
     return jsonify({"image": image})
+
+
+@app.route("/deck/<int:deck_id>/retag", methods=["POST"])
+@login_required
+def retag_deck(deck_id):
+    u = get_current_user()
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        return "Deck not found", 404
+
+    if not (u and u.is_admin) and (not u or not u.player or deck.player_id != u.player.id):
+        return "Forbidden", 403
+
+    next_url = request.form.get("next") or request.referrer or url_for("decks")
+
+    if not (deck.decklist_text or "").strip():
+        flash("Cannot retag deck without a decklist.")
+        return redirect(next_url)
+
+    try:
+        tags = compute_deck_tags_from_text(deck.decklist_text)
+    except DeckParserError as exc:
+        flash(f"Retag failed: {exc}")
+        return redirect(next_url)
+
+    deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
+    db.session.commit()
+    flash(f"Retagged deck: {deck.name}")
+    return redirect(next_url)
 
 
 @app.route("/api/deck-import-preview", methods=["POST"])
@@ -3759,13 +3808,7 @@ def update_deck(deck_id):
     deck.custom_card_art_local = custom_card_art_local
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
-        parsed_sections = parsed_import.get("sections", {}) or {}
-        decklist_cards = [
-            entry.get("name", "")
-            for entries in parsed_sections.values()
-            for entry in (entries or [])
-        ]
-        tags = compute_deck_tags(decklist_cards)
+        tags = compute_deck_tags(extract_decklist_card_names(parsed_import))
         deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
 
     if u.is_admin:
@@ -4045,8 +4088,16 @@ def life_counter():
             except (TypeError, ValueError):
                 tags = {}
 
-        active_mechanics["monarch"] = active_mechanics["monarch"] or bool(tags.get("monarch"))
-        active_mechanics["poison"] = active_mechanics["poison"] or bool(tags.get("poison")) or bool(tags.get("proliferate"))
+        mechanics = {
+            "monarch": bool(tags.get("monarch")),
+            "poison": bool(tags.get("poison")) or bool(tags.get("proliferate")),
+            "energy": bool(tags.get("energy")),
+            "experience": bool(tags.get("experience")),
+        }
+        p["mechanics"] = mechanics
+
+        active_mechanics["monarch"] = active_mechanics["monarch"] or mechanics["monarch"]
+        active_mechanics["poison"] = active_mechanics["poison"] or mechanics["poison"]
 
     current_user = get_current_user()
     debug_ui_enabled = app.debug and request.args.get("debug_ui") == "1"
