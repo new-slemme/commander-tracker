@@ -78,6 +78,7 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
 MAX_PER_PLAYER_TURN_STATS = 500
 
 DECK_TAGS_VERSION = 2
+KNOWN_DECK_TAG_KEYS = ("monarch", "poison", "proliferate", "energy", "experience")
 TRUST_LEGACY_DECK_TAGS = False
 
 CANONICAL_WIN_TYPES = {
@@ -1347,13 +1348,7 @@ def analyze_scryfall_card(card_json: dict) -> dict:
 
 
 def compute_deck_tags(decklist_cards: list[str]) -> dict:
-    tags = {
-        "monarch": False,
-        "poison": False,
-        "proliferate": False,
-        "energy": False,
-        "experience": False,
-    }
+    tags = {key: False for key in KNOWN_DECK_TAG_KEYS}
     seen_names: set[str] = set()
 
     for raw_name in decklist_cards:
@@ -1390,6 +1385,44 @@ def compute_deck_tags_from_text(decklist_text: str | None) -> dict:
 
     parsed = parse_plaintext_decklist(raw_text).as_dict()
     return compute_deck_tags(extract_decklist_card_names(parsed))
+
+
+def parse_tags_json(raw: str | None) -> dict[str, bool]:
+    if not raw:
+        return {}
+
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+
+    if not isinstance(parsed, dict):
+        return {}
+
+    return {
+        key: bool(parsed.get(key))
+        for key in KNOWN_DECK_TAG_KEYS
+        if key in parsed
+    }
+
+
+def get_deck_parsed_tags(deck: "Deck" | None, cache: dict[int, dict[str, bool]] | None = None) -> dict[str, bool]:
+    if not deck:
+        return {}
+
+    deck_id = getattr(deck, "id", None)
+    if cache is not None and deck_id is not None and deck_id in cache:
+        return cache[deck_id]
+
+    parsed_tags = getattr(deck, "_parsed_tags", None)
+    if not isinstance(parsed_tags, dict):
+        parsed_tags = parse_tags_json(deck.tags_json)
+        deck._parsed_tags = parsed_tags
+
+    if cache is not None and deck_id is not None:
+        cache[deck_id] = parsed_tags
+
+    return parsed_tags
 
 
 def derive_deck_mechanics(tags: dict) -> dict:
@@ -2723,16 +2756,10 @@ def index():
         .all()
     )
 
+    deck_tags_cache: dict[int, dict[str, bool]] = {}
     deck_mechanics_by_id = {}
     for d in decks:
-        tags = {}
-        if d.tags_json:
-            try:
-                loaded_tags = json.loads(d.tags_json)
-                if isinstance(loaded_tags, dict):
-                    tags = loaded_tags
-            except (TypeError, ValueError):
-                tags = {}
+        tags = get_deck_parsed_tags(d, cache=deck_tags_cache)
         deck_mechanics_by_id[d.id] = derive_deck_mechanics(tags)
 
     mechanic_keys = ("monarch", "poison", "energy", "experience")
@@ -3535,6 +3562,10 @@ def decks():
 
     decks_list = q.order_by(Deck.retired.asc(), Deck.planned.asc(), Deck.name.asc()).all()
 
+    deck_tags_cache: dict[int, dict[str, bool]] = {}
+    for d in decks_list:
+        get_deck_parsed_tags(d, cache=deck_tags_cache)
+
     # Stats
     stats = {}
     for d in decks_list:
@@ -3689,6 +3720,10 @@ def deck_detail(deck_id):
 
     decklist_data = _load_decklist_data(deck)
 
+    deck_tags_cache: dict[int, dict[str, bool]] = {}
+    deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
+    deck_mechanics = derive_deck_mechanics(deck_tags)
+
     return render_template(
         "deck_detail.html",
         deck=deck,
@@ -3700,6 +3735,7 @@ def deck_detail(deck_id):
         matchups=matchups,
         deck_matchups=deck_matchup_rows,
         decklist_data=decklist_data,
+        deck_mechanics=deck_mechanics,
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
     )
@@ -4261,6 +4297,8 @@ def life_counter():
 
     active_mechanics = {"monarch": False, "poison": False}
 
+    deck_tags_cache: dict[int, dict[str, bool]] = {}
+
     for i, p in enumerate(participants, 1):
         p["index"] = i
         p["color"] = colors[(i - 1) % len(colors)]
@@ -4269,15 +4307,7 @@ def life_counter():
         p["commander_art"] = deck.commander_art_url if deck else None
         p["commander_art_scale"] = deck.commander_art_scale if deck else "cover"
 
-        tags = {}
-        if deck and deck.tags_json:
-            try:
-                loaded_tags = json.loads(deck.tags_json)
-                if isinstance(loaded_tags, dict):
-                    tags = loaded_tags
-            except (TypeError, ValueError):
-                tags = {}
-
+        tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
         mechanics = derive_deck_mechanics(tags)
         p["mechanics"] = mechanics
 
