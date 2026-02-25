@@ -19,25 +19,32 @@
 
     <div class="life-grid players-{{ n }}" id="lifeGrid">
       {% for p in participants %}
-      {% set is_left = (n == 2 and loop.index0 == 0) %}
-      {% set is_right = (n == 2 and loop.index0 == 1) %}
-
-      {# NOTE: do NOT mark 2P as top-card anymore #}
-      {% set is_top =
+            {% set is_top =
           (n == 3 and loop.index0 == 0) or
           (n == 4 and loop.index0 < 2) or
           (n == 5 and loop.index0 < 3) or
           (n == 6 and loop.index0 < 3)
       %}
 
+      {% set orientation_token = 'bottom' %}
+      {% if n == 2 %}
+        {% if loop.index0 == 0 %}
+          {% set orientation_token = 'left' %}
+        {% else %}
+          {% set orientation_token = 'right' %}
+        {% endif %}
+      {% elif n == 3 and loop.index0 == 2 %}
+        {% set orientation_token = 'right' %}
+      {% elif is_top %}
+        {% set orientation_token = 'top' %}
+      {% endif %}
+
       <div
         class="life-card
-               {% if is_top %}top-card{% endif %}
-               {% if is_left %}left-card{% endif %}
-               {% if is_right %}right-card{% endif %}
                {% if n == 3 %}p3-slot-{{ loop.index }}{% endif %}
                {% if n == 5 %}p5-slot-{{ loop.index }}{% endif %}"
         data-player="{{ p.player_id }}"
+        data-orientation="{{ orientation_token }}"
         style="
           {% if p.commander_art %}
             --bg-image:url('{{ p.commander_art }}');
@@ -53,9 +60,6 @@
             --bg-layer-active:var(--bg-layer);
             --bg-size:cover;
           {% endif %}
-          {# CRITICAL: only set bg rotation inline for TOP cards.
-             For others, leave it alone so CSS can control (2P needs this). #}
-          {% if is_top %}--bg-rotate:rotate(180deg);{% endif %}
         "
       >
         <button
@@ -68,7 +72,7 @@
           <span aria-hidden="true">🧂</span>
         </button>
 
-        <div class="card-inner h-100 w-100" style="{% if is_top %}transform:rotate(180deg);{% endif %}">
+        <div class="card-inner h-100 w-100">
           <div class="card-lane card-lane-top">
             {% if active_mechanics.monarch or active_mechanics.poison %}
             <div class="status-strip" data-player="{{ p.player_id }}">
@@ -1108,19 +1112,20 @@ function openMenu(){
   modal.show();
 }
 
+const CARD_ORIENTATION_ROTATION_MAP = {
+  top: "180deg",
+  left: "90deg",
+  right: "-90deg",
+  bottom: "0deg"
+};
+
+function getPlayerCardOrientationToken(playerCard){
+  return playerCard?.dataset?.orientation || "bottom";
+}
+
 function getPlayerCardOrientation(playerCard){
-  if(!playerCard) return "0deg";
-  if(playerCard.classList.contains("top-card")) return "180deg";
-
-  const lifeGrid = document.getElementById("lifeGrid");
-  if(lifeGrid?.classList.contains("players-2")){
-    if(playerCard.classList.contains("left-card")) return "90deg";
-    if(playerCard.classList.contains("right-card")) return "-90deg";
-  }
-
-  if(lifeGrid?.classList.contains("players-3") && playerCard.classList.contains("p3-slot-3")) return "-90deg";
-
-  return "0deg";
+  const orientationToken = getPlayerCardOrientationToken(playerCard);
+  return CARD_ORIENTATION_ROTATION_MAP[orientationToken] || CARD_ORIENTATION_ROTATION_MAP.bottom;
 }
 
 function positionPlayerSaltMenu(anchorButton, playerCard){
@@ -1131,8 +1136,8 @@ function positionPlayerSaltMenu(anchorButton, playerCard){
   const cardPadding = 8;
   const anchorRect = anchorButton.getBoundingClientRect();
   const cardRect = playerCard.getBoundingClientRect();
-  const lifeGrid = document.getElementById("lifeGrid");
-  const player3SideCard = lifeGrid?.classList.contains("players-3") && playerCard.classList.contains("p3-slot-3");
+  const orientationToken = getPlayerCardOrientationToken(playerCard);
+  const player3SideCard = orientationToken === "right";
 
   const cardAvailableWidth = Math.max(220, cardRect.width - (cardPadding * 2));
   const viewportAvailableWidth = Math.max(220, window.innerWidth - (viewportPadding * 2));

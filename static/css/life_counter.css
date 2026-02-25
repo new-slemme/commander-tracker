@@ -272,24 +272,15 @@ body.sigtaara-ui .h4 {
   box-shadow:0 0 0 4px rgba(53,120,255,0.6), 0 6px 16px rgba(0,0,0,0.42);
 }
 
-.life-card.top-card .status-strip{
+ .life-card[data-orientation="top"] .status-strip,
+.life-card[data-orientation="right"] .status-strip{
   margin-inline-start:auto;
   margin-inline-end:0;
 }
 
-.players-2 .life-card.left-card .status-strip{
+.life-card[data-orientation="left"] .status-strip{
   margin-inline-start:0;
   margin-inline-end:auto;
-}
-
-.players-2 .life-card.right-card .status-strip{
-  margin-inline-start:auto;
-  margin-inline-end:0;
-}
-
-.players-3 .life-card.p3-slot-3 .status-strip{
-  margin-inline-start:auto;
-  margin-inline-end:0;
 }
 
     .salt-dispenser-btn{
@@ -329,37 +320,36 @@ body.sigtaara-ui .h4 {
   transform:rotate(0deg);
 }
 
-.life-card.top-card .salt-dispenser-btn > span{
+.life-card[data-orientation="top"] .salt-dispenser-btn > span{
   transform:rotate(180deg);
 }
 
-.players-2 .life-card.left-card .salt-dispenser-btn{
+.life-card[data-orientation="left"] .salt-dispenser-btn{
   top:50%;
   left:var(--ui-pad-side);
   right:auto;
   transform:translateY(-50%);
 }
 
-.players-2 .life-card.right-card .salt-dispenser-btn{
+.life-card[data-orientation="right"] .salt-dispenser-btn{
   top:50%;
   left:auto;
   right:var(--ui-pad-side);
   transform:translateY(-50%);
 }
 
-.players-3 .life-card.p3-slot-3 .salt-dispenser-btn{
+.players-3 .life-card[data-orientation="right"] .salt-dispenser-btn{
   top:var(--ui-pad-top);
   left:auto;
   right:var(--ui-pad-side);
   transform:none;
 }
 
-.players-2 .life-card.left-card .salt-dispenser-btn > span{
+.life-card[data-orientation="left"] .salt-dispenser-btn > span{
   transform:rotate(90deg);
 }
 
-.players-2 .life-card.right-card .salt-dispenser-btn > span,
-.players-3 .life-card.p3-slot-3 .salt-dispenser-btn > span{
+.life-card[data-orientation="right"] .salt-dispenser-btn > span{
   transform:rotate(-90deg);
 }
 
@@ -622,35 +612,33 @@ body.sigtaara-ui .h4 {
     }
     .players-3 .life-card.p3-slot-1{ grid-area:p1; }
     .players-3 .life-card.p3-slot-2{ grid-area:p2; }
-    .players-3 .life-card.p3-slot-3{ grid-area:p3; }
-    .players-3 .life-card.p3-slot-3 .card-inner{ transform:rotate(-90deg); transform-origin:center; }
-    .players-3 .life-card.p3-slot-3{ --bg-rotate: rotate(-90deg); }
-.players-3 .life-card.p3-slot-3 .player-name{ transform-origin:center; }
-    .players-3 .life-card.p3-slot-3 .card-lane-top{
+    .players-3 .life-card[data-orientation="right"]{ grid-area:p3; }
+     .players-3 .life-card[data-orientation="right"] .player-name{ transform-origin:center; }
+    .players-3 .life-card[data-orientation="right"] .card-lane-top{
       align-items:flex-start;
       justify-content:space-between;
       min-height:54px;
       padding-top:10px;
       padding-inline:10px;
     }
-    .players-3 .life-card.p3-slot-3 .player-timer{
+    .players-3 .life-card[data-orientation="right"] .player-timer{
       order:-1;
       margin-inline-end:auto;
       align-self:flex-start;
     }
-    .players-3 .life-card.p3-slot-3 .status-strip{
+    .players-3 .life-card[data-orientation="right"] .status-strip{
       margin-inline-start:auto;
       margin-inline-end:8px;
       align-self:flex-end;
     }
-    .players-3 .life-card.p3-slot-3 .card-lane-bottom{
+    .players-3 .life-card[data-orientation="right"] .card-lane-bottom{
       min-height:58px;
       align-items:flex-start;
       justify-content:center;
       padding-inline:max(18px, var(--safe-left), var(--safe-right));
       padding-bottom:max(12px, var(--safe-bottom));
     }
-    .players-3 .life-card.p3-slot-3 .player-name{
+    .players-3 .life-card[data-orientation="right"] .player-name{
       width:100%;
       max-width:calc(100% - 18px);
       margin-inline:auto;
@@ -806,7 +794,7 @@ body.sigtaara-ui .h4 {
       transition:opacity .16s ease;
     }
 
-    .mode-6p .life-card.top-card .salt-dispenser-btn{
+    .mode-6p .life-card[data-orientation="top"] .salt-dispenser-btn{
       left:auto;
       right:var(--ui-pad-side);
     }
@@ -846,12 +834,13 @@ body.sigtaara-ui .h4 {
     }
 
     /* Rotate each player's UI to face them */
-    .players-2 .life-card.left-card  .card-inner{ transform:rotate(90deg);  transform-origin:center; }
-    .players-2 .life-card.right-card .card-inner{ transform:rotate(-90deg); transform-origin:center; }
+    .life-card[data-orientation="top"] .card-inner{ transform:rotate(180deg); transform-origin:center; }
+    .life-card[data-orientation="left"] .card-inner{ transform:rotate(90deg); transform-origin:center; }
+    .life-card[data-orientation="right"] .card-inner{ transform:rotate(-90deg); transform-origin:center; }
 
-    /* Background rotation per side (must be CSS-controlled; inline only for top-cards) */
-    .players-2 .life-card.left-card  { --bg-rotate: rotate(90deg); }
-    .players-2 .life-card.right-card { --bg-rotate: rotate(-90deg); }
+    .life-card[data-orientation="top"]{ --bg-rotate: rotate(180deg); }
+    .life-card[data-orientation="left"]{ --bg-rotate: rotate(90deg); }
+    .life-card[data-orientation="right"]{ --bg-rotate: rotate(-90deg); }
 
 
 
