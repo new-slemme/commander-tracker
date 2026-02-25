@@ -176,11 +176,8 @@
 
   <!-- Player flag fly-out -->
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
-  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="playerFlagTitle" aria-describedby="playerFlagSubtitle" tabindex="-1">
+  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Player salt actions" tabindex="-1">
     <div class="player-salt-flyout__content">
-      <div class="player-salt-flyout__header" id="playerFlagTitle">Player Salt Actions</div>
-      <div class="player-salt-flyout__subtitle" id="playerFlagSubtitle">Salt actions for selected player.</div>
-
       <div class="player-salt-actions" role="group" aria-label="Player salt actions">
         <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
           <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
@@ -1028,11 +1025,6 @@ function openPlayerSaltMenu(playerId, anchorButton){
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
   const misplayedSaltValue = Math.max(0, Number(saltActionValues?.misplayed ?? 1) || 0);
-
-  const titleEl = document.getElementById("playerFlagTitle");
-  const subtitleEl = document.getElementById("playerFlagSubtitle");
-  if(titleEl) titleEl.textContent = `Player Salt Actions: ${playerLabel}`;
-  if(subtitleEl) subtitleEl.textContent = `Salt actions for ${playerLabel}.`;
 
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   updatePlayerFlagButtonState(
