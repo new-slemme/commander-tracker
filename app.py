@@ -1357,6 +1357,17 @@ def compute_deck_tags_from_text(decklist_text: str | None) -> dict:
     return compute_deck_tags(extract_decklist_card_names(parsed))
 
 
+def derive_deck_mechanics(tags: dict) -> dict:
+    """Derive gameplay mechanics from deck tags; poison also keys off proliferate for consistency."""
+    tags = tags if isinstance(tags, dict) else {}
+    return {
+        "monarch": bool(tags.get("monarch")),
+        "poison": bool(tags.get("poison")) or bool(tags.get("proliferate")),
+        "energy": bool(tags.get("energy")),
+        "experience": bool(tags.get("experience")),
+    }
+
+
 def apply_deck_tags(deck: "Deck", tags: dict) -> None:
     deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
     deck.tags_version = DECK_TAGS_VERSION
@@ -2671,6 +2682,65 @@ def index():
         best_candidates.sort(key=lambda t: (t[0], t[1]), reverse=True)
         best_deck = best_candidates[0][3]
 
+    scoped_participants = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(Game.id.in_(game_ids_subquery))
+        .all()
+    )
+
+    deck_mechanics_by_id = {}
+    for d in decks:
+        tags = {}
+        if d.tags_json:
+            try:
+                loaded_tags = json.loads(d.tags_json)
+                if isinstance(loaded_tags, dict):
+                    tags = loaded_tags
+            except (TypeError, ValueError):
+                tags = {}
+        deck_mechanics_by_id[d.id] = derive_deck_mechanics(tags)
+
+    mechanic_keys = ("monarch", "poison", "energy", "experience")
+    tag_presence_counts = {key: 0 for key in mechanic_keys}
+    for mechanics in deck_mechanics_by_id.values():
+        for key in mechanic_keys:
+            if mechanics[key]:
+                tag_presence_counts[key] += 1
+
+    capability_uses_wins = {
+        key: {"uses": 0, "wins": 0}
+        for key in mechanic_keys
+    }
+    activation_correlation_denominators = {
+        key: {
+            "participant_uses": 0,
+            "games_with_capability": 0,
+        }
+        for key in mechanic_keys
+    }
+
+    game_capability_presence = {
+        key: set()
+        for key in mechanic_keys
+    }
+
+    for gp in scoped_participants:
+        mechanics = deck_mechanics_by_id.get(gp.deck_id)
+        if not mechanics:
+            continue
+
+        for key in mechanic_keys:
+            if not mechanics[key]:
+                continue
+            capability_uses_wins[key]["uses"] += 1
+            activation_correlation_denominators[key]["participant_uses"] += 1
+            game_capability_presence[key].add(gp.game_id)
+            if gp.game and gp.game.winner_id == gp.player_id:
+                capability_uses_wins[key]["wins"] += 1
+
+    for key in mechanic_keys:
+        activation_correlation_denominators[key]["games_with_capability"] = len(game_capability_presence[key])
+
     return render_template(
         "index.html",
         player_stats=player_stats,
@@ -2680,6 +2750,9 @@ def index():
         top_players=top_players,
         best_deck=best_deck,
         last_winning_deck=last_winning_deck,
+        tag_presence_counts=tag_presence_counts,
+        capability_uses_wins=capability_uses_wins,
+        activation_correlation_denominators=activation_correlation_denominators,
         scope=scope,
         active_pod=active_pod,
         available_pods=available_pods,
@@ -4157,12 +4230,7 @@ def life_counter():
             except (TypeError, ValueError):
                 tags = {}
 
-        mechanics = {
-            "monarch": bool(tags.get("monarch")),
-            "poison": bool(tags.get("poison")) or bool(tags.get("proliferate")),
-            "energy": bool(tags.get("energy")),
-            "experience": bool(tags.get("experience")),
-        }
+        mechanics = derive_deck_mechanics(tags)
         p["mechanics"] = mechanics
 
         active_mechanics["monarch"] = active_mechanics["monarch"] or mechanics["monarch"]
