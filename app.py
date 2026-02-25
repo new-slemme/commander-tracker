@@ -71,6 +71,7 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "monarch",
     "poison",
     "salt_count",
+    "card_state",
     "turn_stats",
 }
 
@@ -165,6 +166,64 @@ def parse_participant_flags(raw_flags: str | None) -> dict[str, bool | int]:
         parsed_flags["salt_count"] = 1 if loaded["salted"] else 0
 
     return parsed_flags
+
+
+def sanitize_card_state_payload(raw_card_state, valid_player_ids: set[int]) -> dict | None:
+    if not isinstance(raw_card_state, dict):
+        return None
+
+    raw_counters = raw_card_state.get("counters")
+    sanitized_counters = {}
+    if isinstance(raw_counters, dict):
+        for key, value in raw_counters.items():
+            if not isinstance(key, str):
+                continue
+            normalized_key = key.strip().lower()
+            if not normalized_key:
+                continue
+            if not isinstance(value, int) or isinstance(value, bool):
+                continue
+            if value < 0:
+                continue
+            sanitized_counters[normalized_key] = min(value, 999)
+
+    raw_commander_damage = raw_card_state.get("commander_damage")
+    sanitized_commander_damage = {}
+    if isinstance(raw_commander_damage, dict):
+        for source_player_id_raw, damage in raw_commander_damage.items():
+            try:
+                source_player_id = int(source_player_id_raw)
+            except (TypeError, ValueError):
+                continue
+
+            if source_player_id not in valid_player_ids:
+                continue
+            if not isinstance(damage, int) or isinstance(damage, bool):
+                continue
+            if damage < 0:
+                continue
+            sanitized_commander_damage[str(source_player_id)] = min(damage, 99)
+
+    raw_statuses = raw_card_state.get("statuses")
+    sanitized_statuses = {}
+    if isinstance(raw_statuses, dict):
+        for status_name, status_value in raw_statuses.items():
+            if not isinstance(status_name, str):
+                continue
+            normalized_status_name = status_name.strip().lower()
+            if not normalized_status_name:
+                continue
+            if isinstance(status_value, bool):
+                sanitized_statuses[normalized_status_name] = status_value
+
+    if not sanitized_counters and not sanitized_commander_damage and not sanitized_statuses:
+        return None
+
+    return {
+        "counters": sanitized_counters,
+        "commander_damage": sanitized_commander_damage,
+        "statuses": sanitized_statuses,
+    }
 
 
 def participant_salt_count(parsed_flags: dict[str, bool | int] | None) -> int:
@@ -3707,6 +3766,21 @@ def life_counter():
         "misplayed": max(0, int(getattr(current_user, "misplayed_salt_value", 1) or 0)),
     }
 
+    card_logic_catalog = {
+        "statuses": [
+            {"id": "monarch", "label": "Monarch", "icon": "👑", "kind": "exclusive"},
+            {"id": "initiative", "label": "Initiative", "icon": "⚔️", "kind": "exclusive"},
+            {"id": "citys_blessing", "label": "City's Blessing", "icon": "🏙️", "kind": "toggle"},
+            {"id": "shroud", "label": "Shroud", "icon": "🛡️", "kind": "toggle"},
+        ],
+        "counters": [
+            {"id": "energy", "label": "Energy", "icon": "⚡", "step": 1, "min": 0},
+            {"id": "experience", "label": "Experience", "icon": "✨", "step": 1, "min": 0},
+            {"id": "poison", "label": "Poison", "icon": "☠️", "step": 1, "min": 0, "max": 10},
+        ],
+        "commander_damage_threshold": 21,
+    }
+
     return render_template(
         "life_counter.html",
         participants=participants,
@@ -3716,6 +3790,7 @@ def life_counter():
         turn_number=session.get("turn_number", 1),
         salt_action_values=salt_action_values,
         active_mechanics=active_mechanics,
+        card_logic_catalog=card_logic_catalog,
         debug_ui_enabled=debug_ui_enabled,
     )
 
@@ -3905,6 +3980,10 @@ def end_game():
                         )
 
                     sanitized_player_flags[flag_key] = sanitized_turn_stats
+                elif flag_key == "card_state":
+                    sanitized_card_state = sanitize_card_state_payload(flag_value, valid_player_ids)
+                    if sanitized_card_state:
+                        sanitized_player_flags[flag_key] = sanitized_card_state
 
             if sanitized_player_flags:
                 participant_flags_by_player[player_id] = json.dumps(

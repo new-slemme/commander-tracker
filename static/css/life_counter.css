@@ -1179,3 +1179,90 @@ body.sigtaara-ui .h4 {
   font-size:clamp(.74rem, 1.35vw, .94rem);
   padding:2px 8px;
 }
+
+/* --- standardized card logic panel --- */
+.card-logic-panel{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:center;
+  align-items:center;
+  gap:.35rem;
+  padding:.3rem .45rem .45rem;
+}
+
+.card-logic-statuses,
+.card-logic-counters{
+  display:flex;
+  align-items:center;
+  gap:.3rem;
+}
+
+.card-logic-chip,
+.counter-chip{
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(0,0,0,.45);
+  color:#fff;
+  border-radius:999px;
+  min-height:1.55rem;
+  font-size:.76rem;
+}
+
+.card-logic-chip{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:.2rem;
+  min-width:1.7rem;
+  padding:0 .48rem;
+}
+
+.card-logic-chip.is-active,
+.counter-chip.is-active{
+  background:rgba(106, 193, 255, .28);
+  border-color:rgba(138, 214, 255, .85);
+}
+
+.card-logic-chip.is-danger{
+  background:rgba(220, 53, 69, .3);
+  border-color:rgba(255, 120, 138, .95);
+}
+
+.counter-chip{
+  display:inline-flex;
+  align-items:center;
+  gap:.18rem;
+  padding:0 .2rem;
+}
+
+.counter-chip-btn{
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color:#fff;
+  width:1.2rem;
+  height:1.2rem;
+  line-height:1;
+  font-weight:700;
+}
+
+.counter-chip-value{
+  min-width:1.1rem;
+  text-align:center;
+  font-weight:700;
+}
+
+.counter-chip-label{ opacity:.92; }
+
+.mode-6p .card-logic-panel,
+.players-5 .card-logic-panel{
+  gap:.2rem;
+  padding:.15rem .3rem .25rem;
+}
+
+.mode-6p .card-logic-chip,
+.mode-6p .counter-chip,
+.players-5 .card-logic-chip,
+.players-5 .counter-chip{
+  min-height:1.3rem;
+  font-size:.67rem;
+}

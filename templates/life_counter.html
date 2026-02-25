@@ -109,6 +109,41 @@
             <div class="player-name" title="{{ p.player_name }}">{{ p.player_name }}</div>
           </div>
 
+          <div class="card-logic-panel" data-player="{{ p.player_id }}" aria-label="Card state controls for {{ p.player_name }}">
+            <div class="card-logic-statuses" role="group" aria-label="Standard statuses">
+              {% for status in card_logic_catalog.statuses %}
+              <button
+                type="button"
+                class="card-logic-chip status-chip"
+                data-player="{{ p.player_id }}"
+                data-logic-group="status"
+                data-logic-id="{{ status.id }}"
+                data-logic-kind="{{ status.kind }}"
+                aria-pressed="false"
+                title="{{ status.label }}"
+              ><span aria-hidden="true">{{ status.icon }}</span></button>
+              {% endfor %}
+            </div>
+            <div class="card-logic-counters" role="group" aria-label="Standard counters">
+              {% for counter in card_logic_catalog.counters %}
+              <div class="counter-chip" data-player="{{ p.player_id }}" data-counter-id="{{ counter.id }}" data-counter-step="{{ counter.step }}" data-counter-min="{{ counter.min }}" {% if counter.max is defined %}data-counter-max="{{ counter.max }}"{% endif %}>
+                <button type="button" class="counter-chip-btn" data-counter-action="decrement" aria-label="Decrease {{ counter.label }} for {{ p.player_name }}">−</button>
+                <span class="counter-chip-label" title="{{ counter.label }}">{{ counter.icon }}</span>
+                <span class="counter-chip-value" id="counter-{{ p.player_id }}-{{ counter.id }}">0</span>
+                <button type="button" class="counter-chip-btn" data-counter-action="increment" aria-label="Increase {{ counter.label }} for {{ p.player_name }}">+</button>
+              </div>
+              {% endfor %}
+            </div>
+            <button
+              type="button"
+              class="card-logic-chip commander-damage-chip"
+              data-player="{{ p.player_id }}"
+              data-logic-group="commander-damage"
+              aria-label="Cycle commander damage source for {{ p.player_name }}"
+              title="Commander damage"
+            >⚔️ <span class="commander-damage-value" id="commander-damage-total-{{ p.player_id }}">0</span></button>
+          </div>
+
           <div class="active-corner-badge" aria-hidden="true"></div>
         </div>
 
@@ -333,6 +368,117 @@ const manaFuckedAudio = new Audio("/static/sounds/elotrix-oh-nein.mp3");
 const ACTIVE_TURN_BADGE_PREF_KEY = "life_counter_show_active_corner_badge";
 const ACTIVE_TURN_BADGE_DEFAULT = true;
 const DEBUG_UI_ENABLED = {{ debug_ui_enabled|default(false, true)|tojson }};
+const cardLogicCatalog = {{ card_logic_catalog|default({}, true)|tojson }};
+const cardStateByPlayer = {};
+
+function getDefaultCardState(){
+  return {
+    statuses: {},
+    counters: {},
+    commander_damage: {},
+  };
+}
+
+function getCardState(playerId){
+  const pid = String(playerId);
+  if(!cardStateByPlayer[pid]){
+    cardStateByPlayer[pid] = getDefaultCardState();
+  }
+  return cardStateByPlayer[pid];
+}
+
+function getCounterDefinition(counterId){
+  return (cardLogicCatalog?.counters || []).find((counter)=>String(counter.id) === String(counterId)) || null;
+}
+
+function getCounterValue(playerId, counterId){
+  const state = getCardState(playerId);
+  return Math.max(0, Number(state.counters?.[counterId] || 0));
+}
+
+function setCounterValue(playerId, counterId, nextRawValue){
+  const state = getCardState(playerId);
+  const counterDef = getCounterDefinition(counterId);
+  const minValue = Math.max(0, Number(counterDef?.min ?? 0));
+  const maxRaw = counterDef?.max;
+  const hasMax = Number.isFinite(Number(maxRaw));
+  let nextValue = Math.max(minValue, Number(nextRawValue) || 0);
+  if(hasMax) nextValue = Math.min(nextValue, Number(maxRaw));
+  state.counters[counterId] = nextValue;
+  renderCardStateForPlayer(playerId);
+}
+
+function setStatusValue(playerId, statusId, enabled){
+  const state = getCardState(playerId);
+  state.statuses[statusId] = !!enabled;
+  renderCardStateForPlayer(playerId);
+}
+
+function cycleCommanderDamageSource(playerId){
+  const pid = String(playerId);
+  const state = getCardState(pid);
+  const sourceIds = cards.map((card)=>String(card.dataset.player)).filter((source)=>source !== pid);
+  if(sourceIds.length === 0) return;
+
+  const currentSource = sourceIds.find((source)=>Number(state.commander_damage?.[source] || 0) > 0) || sourceIds[0];
+  const sourceIndex = sourceIds.indexOf(currentSource);
+  const nextSource = sourceIds[(sourceIndex + 1) % sourceIds.length];
+
+  if(!state.commander_damage[currentSource]) state.commander_damage[currentSource] = 0;
+  state.commander_damage[currentSource] = Math.max(0, Number(state.commander_damage[currentSource]) + 1);
+  if(currentSource !== nextSource && !state.commander_damage[nextSource]) state.commander_damage[nextSource] = 0;
+
+  renderCardStateForPlayer(pid);
+}
+
+function getCommanderDamageTotal(playerId){
+  const state = getCardState(playerId);
+  return Object.values(state.commander_damage || {}).reduce((sum, value)=>sum + Math.max(0, Number(value) || 0), 0);
+}
+
+function renderCardStateForPlayer(playerId){
+  const pid = String(playerId);
+  const playerCard = cards.find((card)=>String(card.dataset.player) === pid);
+  if(!playerCard) return;
+
+  const state = getCardState(pid);
+
+  playerCard.querySelectorAll('.counter-chip').forEach((counterEl)=>{
+    const counterId = String(counterEl.dataset.counterId || "");
+    if(!counterId) return;
+    const value = getCounterValue(pid, counterId);
+    const valueEl = counterEl.querySelector('.counter-chip-value');
+    if(valueEl) valueEl.textContent = String(value);
+    counterEl.classList.toggle('is-active', value > 0);
+  });
+
+  playerCard.querySelectorAll('.status-chip').forEach((statusButton)=>{
+    const statusId = String(statusButton.dataset.logicId || "");
+    const isActive = !!state.statuses[statusId];
+    statusButton.classList.toggle('is-active', isActive);
+    statusButton.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+
+  const commanderDamageEl = document.getElementById(`commander-damage-total-${pid}`);
+  const commanderDamageTotal = getCommanderDamageTotal(pid);
+  if(commanderDamageEl) commanderDamageEl.textContent = String(commanderDamageTotal);
+  const commanderDamageChip = playerCard.querySelector('.commander-damage-chip');
+  const threshold = Math.max(1, Number(cardLogicCatalog?.commander_damage_threshold || 21));
+  commanderDamageChip?.classList.toggle('is-active', commanderDamageTotal > 0);
+  commanderDamageChip?.classList.toggle('is-danger', commanderDamageTotal >= threshold);
+
+  const poisonValue = getCounterValue(pid, 'poison');
+  poisonCountersByPlayer[pid] = poisonValue;
+  updateStatusStripState(pid);
+}
+
+function initializeCardLogicState(){
+  cards.forEach((card)=>{
+    const pid = String(card.dataset.player);
+    getCardState(pid);
+    renderCardStateForPlayer(pid);
+  });
+}
 
 function initializeDebugUiOverlays(){
   if(!DEBUG_UI_ENABLED) return;
@@ -1311,9 +1457,70 @@ document.querySelectorAll(".status-strip-btn").forEach((button)=>{
     }
 
     if(button.dataset.mechanic === "poison") {
-      setPoisonCounter(playerId, getPoisonCounter(playerId) + 1);
-      updateStatusStripState(playerId);
+      setCounterValue(playerId, 'poison', getPoisonCounter(playerId) + 1);
     }
+  });
+});
+
+document.querySelectorAll('.counter-chip-btn').forEach((button)=>{
+  button.addEventListener('pointerdown', (event)=>event.stopPropagation());
+  button.addEventListener('click', (event)=>{
+    event.stopPropagation();
+    const counterEl = button.closest('.counter-chip');
+    if(!counterEl) return;
+    const playerId = String(counterEl.dataset.player || '');
+    const counterId = String(counterEl.dataset.counterId || '');
+    if(!playerId || !counterId) return;
+
+    const step = Math.max(1, Number(counterEl.dataset.counterStep || 1));
+    const delta = button.dataset.counterAction === 'decrement' ? -step : step;
+    const nextValue = getCounterValue(playerId, counterId) + delta;
+    setCounterValue(playerId, counterId, nextValue);
+  });
+});
+
+document.querySelectorAll('.status-chip').forEach((button)=>{
+  button.addEventListener('pointerdown', (event)=>event.stopPropagation());
+  button.addEventListener('click', (event)=>{
+    event.stopPropagation();
+    const playerId = String(button.dataset.player || '');
+    const statusId = String(button.dataset.logicId || '');
+    const kind = String(button.dataset.logicKind || 'toggle');
+    if(!playerId || !statusId) return;
+
+    const state = getCardState(playerId);
+    const nextValue = !state.statuses[statusId];
+
+    if(kind === 'exclusive' && nextValue){
+      (cardLogicCatalog?.statuses || []).forEach((status)=>{
+        if(String(status.kind) === 'exclusive'){
+          state.statuses[String(status.id)] = false;
+        }
+      });
+    }
+
+    state.statuses[statusId] = nextValue;
+
+    if(statusId === 'monarch'){
+      if(nextValue){
+        setMonarchHolder(playerId);
+      }else{
+        clearMonarchHolder(playerId);
+      }
+      cards.forEach((card)=>updateStatusStripState(String(card.dataset.player)));
+    }
+
+    renderCardStateForPlayer(playerId);
+  });
+});
+
+document.querySelectorAll('.commander-damage-chip').forEach((button)=>{
+  button.addEventListener('pointerdown', (event)=>event.stopPropagation());
+  button.addEventListener('click', (event)=>{
+    event.stopPropagation();
+    const playerId = String(button.dataset.player || '');
+    if(!playerId) return;
+    cycleCommanderDamageSource(playerId);
   });
 });
 
@@ -1352,6 +1559,7 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
     const participantIds = new Set(cards.map((card)=>String(card.dataset.player)));
     Object.keys(participantFlagsByPlayer).forEach((playerId)=>participantIds.add(String(playerId)));
     Object.keys(perTurnStatsByPlayer).forEach((playerId)=>participantIds.add(String(playerId)));
+    Object.keys(cardStateByPlayer).forEach((playerId)=>participantIds.add(String(playerId)));
 
     [...participantIds].forEach((playerId)=>{
       const flags = getPlayerFlagState(playerId);
@@ -1361,6 +1569,13 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
         monarch: !!monarchHolderByPlayer[playerId],
         poison: getPoisonCounter(playerId),
         salt_count: Math.max(0, Number(flags.salt_count ?? (flags.salted ? 1 : 0)) || 0),
+      };
+
+      const cardState = getCardState(playerId);
+      const normalizedCardState = {
+        statuses: Object.fromEntries(Object.entries(cardState.statuses || {}).map(([key, value])=>[String(key), !!value])),
+        counters: Object.fromEntries(Object.entries(cardState.counters || {}).map(([key, value])=>[String(key), Math.max(0, Number(value) || 0)])),
+        commander_damage: Object.fromEntries(Object.entries(cardState.commander_damage || {}).map(([sourceId, damage])=>[String(sourceId), Math.max(0, Number(damage) || 0)])),
       };
 
       const turnStatsMap = perTurnStatsByPlayer[playerId] || {};
@@ -1374,9 +1589,11 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
         .sort((a, b)=>a.turn - b.turn);
 
       const hasTruthyFlag = normalizedFlags.mana_fucked || normalizedFlags.misplayed || normalizedFlags.monarch || normalizedFlags.poison > 0 || normalizedFlags.salt_count > 0;
-      if(hasTruthyFlag || turnStats.length > 0){
+      const hasCardState = Object.keys(normalizedCardState.statuses).length > 0 || Object.keys(normalizedCardState.counters).length > 0 || Object.keys(normalizedCardState.commander_damage).length > 0;
+      if(hasTruthyFlag || hasCardState || turnStats.length > 0){
         payload[playerId] = {
           ...normalizedFlags,
+          card_state: normalizedCardState,
           turn_stats: turnStats,
         };
       }
@@ -1435,6 +1652,7 @@ if(cards.length){
   initializeTimers();
   updateTurnPills();
   initializeStatusStripState();
+  initializeCardLogicState();
 }
 
 setInterval(tickTimers, 250);
