@@ -1736,6 +1736,30 @@ def can_manage_pod(user, pod_id):
     return bool(membership and membership.role == "podmaster")
 
 
+def can_access_registration_request_queue(user):
+    if not user:
+        return False
+    if user.is_admin:
+        return True
+    if not user.player:
+        return False
+
+    podmaster_membership = (
+        PodMembership.query
+        .filter_by(player_id=user.player.id, role="podmaster")
+        .first()
+    )
+    return bool(podmaster_membership)
+
+
+def can_approve_registration_request(user, registration_request):
+    if not user or not registration_request:
+        return False
+    if user.is_admin:
+        return True
+    return can_manage_pod(user, registration_request.requested_pod_id)
+
+
 def ensure_membership(pod_id, player_id, role="member"):
     membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=player_id).first()
     if membership:
@@ -1762,6 +1786,7 @@ def inject_pod_context():
         "nav_active_pod": get_active_pod(),
         "nav_available_pods": get_accessible_pods(user),
         "use_sigtaara": bool(user.use_sigtaara),
+        "can_access_registration_requests": can_access_registration_request_queue(user),
     }
 
 
@@ -2037,38 +2062,84 @@ def admin_users():
     return render_template("admin_users.html", pending=pending, active=active)
 
 
-@app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
-@admin_required
-def admin_approve_user(user_id):
-    u = db.session.get(User, user_id)
+@app.route("/registration_requests")
+@login_required
+def registration_requests():
+    me = get_current_user()
+    if not can_access_registration_request_queue(me):
+        abort(403)
+
+    pending_query = (
+        RegistrationRequest.query
+        .join(User, RegistrationRequest.user_id == User.id)
+        .filter(
+            RegistrationRequest.status == "pending",
+            User.is_active == False,  # noqa: E712
+        )
+    )
+
+    if not me.is_admin:
+        manageable_pod_ids = {
+            m.pod_id
+            for m in PodMembership.query.filter_by(player_id=me.player.id, role="podmaster").all()
+        }
+        pending_query = pending_query.filter(
+            RegistrationRequest.requested_pod_id.in_(manageable_pod_ids if manageable_pod_ids else [-1])
+        )
+
+    pending = pending_query.order_by(RegistrationRequest.created_at.asc()).all()
+    return render_template("registration_requests.html", pending=pending)
+
+
+@app.route("/registration_requests/<int:request_id>/approve", methods=["POST"])
+@login_required
+def approve_registration_request(request_id):
+    me = get_current_user()
+    registration_request = db.session.get(RegistrationRequest, request_id)
+    if not registration_request:
+        abort(404)
+    if not can_approve_registration_request(me, registration_request):
+        abort(403)
+
+    u = registration_request.user
     if not u:
         abort(404)
 
-    if u.is_active:
-        flash("User is already active.")
-        return redirect(url_for("admin_users"))
+    if registration_request.status != "pending" or u.is_active:
+        flash("Registration request is no longer pending.")
+        return redirect(url_for("registration_requests"))
 
-    # Before approving, ensure display_name won't collide with an existing Player
     existing_player = Player.query.filter_by(name=u.display_name).first()
     if existing_player:
         flash(f"Can't approve: display name '{u.display_name}' is already used by a Player.")
-        return redirect(url_for("admin_users"))
+        return redirect(url_for("registration_requests"))
 
-    # Create linked player if missing
     if not u.player:
         u.player = Player(name=u.display_name)
         db.session.flush()
 
-    default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
-    if default_pod:
-        ensure_membership(default_pod.id, u.player.id)
+    ensure_membership(registration_request.requested_pod_id, u.player.id)
 
     u.is_active = True
     u.approved_at = datetime.utcnow()
+    registration_request.status = "approved"
+    registration_request.reviewed_at = datetime.utcnow()
+    registration_request.reviewed_by_user_id = me.id if me else None
 
     db.session.commit()
     flash(f"Approved {u.display_name}")
-    return redirect(url_for("admin_users"))
+    return redirect(url_for("registration_requests"))
+
+
+
+@app.route("/admin/users/<int:user_id>/approve", methods=["POST"])
+@admin_required
+def admin_approve_user(user_id):
+    registration_request = RegistrationRequest.query.filter_by(user_id=user_id).first()
+    if not registration_request:
+        flash("No pending registration request found for that user.")
+        return redirect(url_for("admin_users"))
+    return approve_registration_request(registration_request.id)
 
 @app.route("/saltmine")
 @login_required
@@ -2305,28 +2376,47 @@ def fix_art_paths():
     db.session.commit()
     return f"Fixed {changed} decks"
 
-@app.route("/admin/users/<int:user_id>/deny", methods=["POST"])
-@admin_required
-def admin_deny_user(user_id):
-    u = db.session.get(User, user_id)
+@app.route("/registration_requests/<int:request_id>/deny", methods=["POST"])
+@login_required
+def deny_registration_request(request_id):
+    me = get_current_user()
+    registration_request = db.session.get(RegistrationRequest, request_id)
+    if not registration_request:
+        abort(404)
+    if not can_approve_registration_request(me, registration_request):
+        abort(403)
+
+    u = registration_request.user
     if not u:
         abort(404)
 
-    # Only allow denying inactive (pending) users
-    if u.is_active:
+    if registration_request.status != "pending" or u.is_active:
         flash("Only pending users can be denied.")
-        return redirect(url_for("admin_users"))
+        return redirect(url_for("registration_requests"))
 
-    # Delete linked player first (if exists)
+    registration_request.status = "denied"
+    registration_request.reviewed_at = datetime.utcnow()
+    registration_request.reviewed_by_user_id = me.id if me else None
+
     if u.player:
         db.session.delete(u.player)
-
     db.session.delete(u)
     db.session.commit()
 
     flash(f"Denied and removed user '{u.username}'.")
-    return redirect(url_for("admin_users"))
+    return redirect(url_for("registration_requests"))
 
+
+
+
+@app.route("/admin/users/<int:user_id>/deny", methods=["POST"])
+@admin_required
+def admin_deny_user(user_id):
+    registration_request = RegistrationRequest.query.filter_by(user_id=user_id).first()
+    if not registration_request:
+        flash("No pending registration request found for that user.")
+        return redirect(url_for("admin_users"))
+    return deny_registration_request(registration_request.id)
 
 @app.route("/")
 def index():

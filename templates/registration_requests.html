@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="app-hero mb-4">
+  <div class="app-hero__title">Registration Requests</div>
+  <div class="app-hero__sub">Review pending registration requests for your managed pods.</div>
+</div>
+
+<div class="card p-3 mb-4 admin-card">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="mb-0">Pending approvals</h5>
+    <span class="app-badge mid">Pending: <b>{{ pending|length }}</b></span>
+  </div>
+
+  {% if pending %}
+    <div class="table-responsive">
+      <table class="table table-dark table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Display name</th>
+            <th>Requested pod</th>
+            <th>Submitted</th>
+            <th class="text-end">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in pending %}
+            <tr>
+              <td class="text-nowrap">{{ req.user.username }}</td>
+              <td class="text-nowrap">{{ req.user.display_name }}</td>
+              <td class="text-nowrap">{{ req.requested_pod.name if req.requested_pod else "Unknown pod" }}</td>
+              <td class="text-muted text-nowrap">{{ req.created_at }}</td>
+              <td class="text-end text-nowrap">
+                <form method="POST" action="{{ url_for('approve_registration_request', request_id=req.id) }}" class="d-inline">
+                  <button class="btn btn-sm btn-success" type="submit">Approve</button>
+                </form>
+                <form method="POST" action="{{ url_for('deny_registration_request', request_id=req.id) }}" class="d-inline">
+                  <button class="btn btn-sm btn-outline-danger" type="submit"
+                      onclick="return confirm('Deny this registration and permanently delete the user?')">
+                    Deny
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-muted">No pending requests in your review scope.</div>
+  {% endif %}
+</div>
+{% endblock %}
