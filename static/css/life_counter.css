@@ -8,7 +8,6 @@
 
     :root{
       /* default background transform unless overridden */
-      --bg-rotate:none;
       --safe-top:env(safe-area-inset-top, 0px);
       --safe-right:env(safe-area-inset-right, 0px);
       --safe-bottom:env(safe-area-inset-bottom, 0px);
@@ -139,11 +138,28 @@ body.sigtaara-ui .h4 {
     }
 
     .life-card{
+      --card-rotation:0deg;
+      --salt-icon-rotation:0deg;
       position:relative;
       overflow:hidden;
       background:#000;
       /* needed for the active frame layer */
       isolation:isolate;
+    }
+
+    .life-card[data-orientation="top"]{
+      --card-rotation:180deg;
+      --salt-icon-rotation:180deg;
+    }
+
+    .life-card[data-orientation="left"]{
+      --card-rotation:90deg;
+      --salt-icon-rotation:90deg;
+    }
+
+    .life-card[data-orientation="right"]{
+      --card-rotation:-90deg;
+      --salt-icon-rotation:-90deg;
     }
 
     .life-card::before{
@@ -153,7 +169,7 @@ body.sigtaara-ui .h4 {
       background-image:var(--bg-layer);
       background-size:var(--bg-size, cover);
       background-position:center;
-      transform:var(--bg-rotate);
+      transform:rotate(var(--card-rotation));
       transform-origin:center;
     }
 
@@ -317,11 +333,7 @@ body.sigtaara-ui .h4 {
 
 .salt-dispenser-btn > span{
   display:inline-block;
-  transform:rotate(0deg);
-}
-
-.life-card[data-orientation="top"] .salt-dispenser-btn > span{
-  transform:rotate(180deg);
+  transform:rotate(var(--salt-icon-rotation));
 }
 
 .life-card[data-orientation="left"] .salt-dispenser-btn{
@@ -345,13 +357,6 @@ body.sigtaara-ui .h4 {
   transform:none;
 }
 
-.life-card[data-orientation="left"] .salt-dispenser-btn > span{
-  transform:rotate(90deg);
-}
-
-.life-card[data-orientation="right"] .salt-dispenser-btn > span{
-  transform:rotate(-90deg);
-}
 
     .life-display{
       position:relative;
@@ -834,13 +839,7 @@ body.sigtaara-ui .h4 {
     }
 
     /* Rotate each player's UI to face them */
-    .life-card[data-orientation="top"] .card-inner{ transform:rotate(180deg); transform-origin:center; }
-    .life-card[data-orientation="left"] .card-inner{ transform:rotate(90deg); transform-origin:center; }
-    .life-card[data-orientation="right"] .card-inner{ transform:rotate(-90deg); transform-origin:center; }
-
-    .life-card[data-orientation="top"]{ --bg-rotate: rotate(180deg); }
-    .life-card[data-orientation="left"]{ --bg-rotate: rotate(90deg); }
-    .life-card[data-orientation="right"]{ --bg-rotate: rotate(-90deg); }
+    .life-card .card-inner{ transform:rotate(var(--card-rotation)); transform-origin:center; }
 
 
 
