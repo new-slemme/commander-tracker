@@ -176,8 +176,10 @@
 
   <!-- Player flag fly-out -->
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
-  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true">
+  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="playerFlagTitle" aria-describedby="playerFlagSubtitle" tabindex="-1">
     <div class="player-salt-flyout__content">
+      <div class="player-salt-flyout__header" id="playerFlagTitle">Player Salt Actions</div>
+      <div class="player-salt-flyout__subtitle" id="playerFlagSubtitle">Salt actions for selected player.</div>
 
       <div class="player-salt-actions" role="group" aria-label="Player salt actions">
         <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
@@ -312,6 +314,7 @@ const timerConfig = {{ timer_config|tojson }};
 const saltActionValues = {{ salt_action_values|default({}, true)|tojson }};
 const gameStartedAt = Number({{ game_started_at|tojson }} || 0);
 const playerNames = {};
+let lastFlyoutFocusedElement = null;
 let longPressTimer = null;
 let longPressTriggered = false;
 const LONG_PRESS_MS = 450;
@@ -1015,6 +1018,7 @@ function closePlayerSaltMenu(){
   if(HIDE_SALT_BUTTON_BY_DEFAULT && activeCard){
     activeCard.classList.remove("salt-controls-revealed");
   }
+  lastFlyoutFocusedElement?.focus?.();
   resumeTimers("player-flag");
 }
 
@@ -1059,9 +1063,20 @@ function openPlayerSaltMenu(playerId, anchorButton){
   positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 
   pauseTimers("player-flag");
+  lastFlyoutFocusedElement = document.activeElement;
   flyoutEl.classList.add("is-open");
   flyoutEl.setAttribute("aria-hidden", "false");
   playerSaltFlyoutOpen = true;
+
+  const focusable = getFlyoutFocusableElements();
+  (focusable[0] || flyoutEl).focus();
+}
+
+function getFlyoutFocusableElements(){
+  const flyoutEl = document.getElementById("playerSaltFlyout");
+  if(!flyoutEl) return [];
+  return [...flyoutEl.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((el)=>el.offsetParent !== null);
 }
 
 
@@ -1084,11 +1099,65 @@ window.addEventListener("resize", ()=>{
   positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
 });
 
+function closeAnyOpenModal(){
+  ["quickMenuModal", "menuModal"].forEach((id)=>{
+    const modalEl = document.getElementById(id);
+    if(modalEl?.classList.contains("show")){
+      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    }
+  });
+}
+
+["quickMenuModal", "menuModal"].forEach((modalId)=>{
+  const modalEl = document.getElementById(modalId);
+  modalEl?.addEventListener("keydown", (event)=>{
+    if(event.key !== "Escape") return;
+    event.preventDefault();
+    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+  });
+});
+
 document.addEventListener("keydown", (e)=>{
   if(e.key === "Escape"){
-    closePlayerSaltMenu();
+    if(playerSaltFlyoutOpen){
+      e.preventDefault();
+      closePlayerSaltMenu();
+      return;
+    }
+
+    closeAnyOpenModal();
+    return;
   }
-});
+
+  if(e.key === "Tab" && playerSaltFlyoutOpen){
+    const focusable = getFlyoutFocusableElements();
+    if(!focusable.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if(e.shiftKey && document.activeElement === first){
+      e.preventDefault();
+      last.focus();
+      return;
+    }
+
+    if(!e.shiftKey && document.activeElement === last){
+      e.preventDefault();
+      first.focus();
+    }
+  }
+}, true);
+
+document.addEventListener("keyup", (e)=>{
+  if(e.key !== "Escape") return;
+  if(playerSaltFlyoutOpen) closePlayerSaltMenu();
+  closeAnyOpenModal();
+}, true);
+window.addEventListener("keydown", (e)=>{
+  if(e.key !== "Escape") return;
+  if(playerSaltFlyoutOpen) closePlayerSaltMenu();
+  closeAnyOpenModal();
+}, true);
 
 document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
@@ -1219,6 +1288,13 @@ document.querySelectorAll(".salt-dispenser-btn").forEach((saltBtn)=>{
     event.preventDefault();
     event.stopPropagation();
   });
+
+  saltBtn.addEventListener("keydown", (event)=>{
+    if(event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    incrementSaltForPlayer(playerId);
+  });
 });
 
 document.querySelectorAll(".status-strip-btn").forEach((button)=>{
@@ -1346,6 +1422,16 @@ if(centerPassBtn){
     longPressTriggered = false;
   });
   centerPassBtn.addEventListener("contextmenu", (e)=>e.preventDefault());
+  centerPassBtn.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter" || e.key === " "){
+      e.preventDefault();
+      nextPlayer();
+    }
+    if(e.key === "m" || e.key === "M"){
+      e.preventDefault();
+      openMenu();
+    }
+  });
 }
 
 /* ---------- INIT ---------- */
