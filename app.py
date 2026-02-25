@@ -2626,6 +2626,22 @@ def pods():
     active_pod = get_active_pod()
     manageable_pod_ids = {pod.id for pod in pods_list if can_manage_pod(me, pod.id)}
 
+    pending_request_count = 0
+    if can_access_registration_request_queue(me):
+        pending_query = (
+            RegistrationRequest.query
+            .join(User, RegistrationRequest.user_id == User.id)
+            .filter(
+                RegistrationRequest.status == "pending",
+                User.is_active == False,  # noqa: E712
+            )
+        )
+        if not me.is_admin:
+            pending_query = pending_query.filter(
+                RegistrationRequest.requested_pod_id.in_(manageable_pod_ids if manageable_pod_ids else [-1])
+            )
+        pending_request_count = pending_query.count()
+
     selected_pod_id = request.args.get("pod_id", type=int)
     selected_pod = db.session.get(Pod, selected_pod_id) if selected_pod_id else active_pod
     if selected_pod and selected_pod not in pods_list and not me.is_admin:
@@ -2653,6 +2669,8 @@ def pods():
         all_players=all_players,
         can_manage_selected=bool(selected_pod and can_manage_pod(me, selected_pod.id)),
         is_admin=bool(me and me.is_admin),
+        can_access_registration_requests=can_access_registration_request_queue(me),
+        pending_request_count=pending_request_count,
     )
 
 

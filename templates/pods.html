@@ -9,6 +9,20 @@
   </div>
 </div>
 
+{% if can_access_registration_requests %}
+<div class="card pods-card p-3 mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <div class="fw-semibold">Registration requests</div>
+      <div class="pods-muted small">Review pending user onboarding requests for pods you can manage.</div>
+    </div>
+    <a class="btn btn-outline-light" href="{{ url_for('registration_requests') }}">
+      Open requests{% if pending_request_count %} ({{ pending_request_count }}){% endif %}
+    </a>
+  </div>
+</div>
+{% endif %}
+
 <div class="row g-3 pods-shell">
   <div class="col-xl-7">
     <div class="card pods-card p-3 h-100">
