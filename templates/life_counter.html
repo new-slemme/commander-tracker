@@ -116,6 +116,14 @@
           <div class="card-logic-panel" data-player="{{ p.player_id }}" aria-label="Card state controls for {{ p.player_name }}">
             <div class="card-logic-statuses" role="group" aria-label="Standard statuses">
               {% for status in card_logic_catalog.statuses %}
+              {% set status_short_label = status.short_label or status.label %}
+              {% if status.id == 'initiative' %}
+                {% set status_short_label = 'Init' %}
+              {% elif status.id == 'citys_blessing' %}
+                {% set status_short_label = 'City' %}
+              {% elif status.id == 'shroud' %}
+                {% set status_short_label = 'Shroud' %}
+              {% endif %}
               <button
                 type="button"
                 class="card-logic-chip status-chip"
@@ -124,8 +132,9 @@
                 data-logic-id="{{ status.id }}"
                 data-logic-kind="{{ status.kind }}"
                 aria-pressed="false"
+                aria-label="Toggle {{ status.label }} for {{ p.player_name }}"
                 title="{{ status.label }}"
-              ><span aria-hidden="true">{{ status.icon }}</span></button>
+              ><span class="status-chip-icon" aria-hidden="true">{{ status.icon }}</span><span class="status-chip-text">{{ status_short_label }}</span></button>
               {% endfor %}
             </div>
             <div class="card-logic-counters" role="group" aria-label="Standard counters">
@@ -234,7 +243,9 @@
         </button>
       </div>
 
-      <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls"></div>
+      <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls">
+        <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · 🏙️ City’s Blessing · 🛡️ Shroud</div>
+      </div>
     </div>
   </div>
 

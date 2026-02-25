@@ -1218,6 +1218,29 @@ body.sigtaara-ui .h4 {
   padding:0 .48rem;
 }
 
+.status-chip{
+  justify-content:flex-start;
+}
+
+.status-chip-icon{
+  line-height:1;
+}
+
+.status-chip-text{
+  font-size:clamp(.58rem, 1.6vw, .72rem);
+  letter-spacing:.01em;
+  font-weight:600;
+}
+
+.player-salt-card-logic-legend{
+  width:100%;
+  text-align:center;
+  color:rgba(255,255,255,.86);
+  font-size:.72rem;
+  letter-spacing:.01em;
+  margin:0 0 .35rem;
+}
+
 .card-logic-chip.is-active,
 .counter-chip.is-active{
   background:rgba(106, 193, 255, .28);
@@ -1267,4 +1290,16 @@ body.sigtaara-ui .h4 {
 .players-5 .counter-chip{
   min-height:1.3rem;
   font-size:.67rem;
+}
+
+.mode-6p .status-chip-text,
+.players-5 .status-chip-text{
+  font-size:clamp(.52rem, 1.2vw, .62rem);
+}
+
+
+@media (max-width: 360px){
+  .status-chip-text{
+    display:none;
+  }
 }
