@@ -457,6 +457,7 @@ body.sigtaara-ui .h4 {
     /* Combined pass/menu button in center */
     .center-pass-btn{
       --center-pass-size:88px;
+      --center-pass-hit-size:calc(var(--center-pass-size) - 16px);
       position:fixed;
       top:50%;
       left:50%;
@@ -476,7 +477,11 @@ body.sigtaara-ui .h4 {
     .center-pass-hit-area{
       width:100%;
       height:100%;
+      width:var(--center-pass-hit-size);
+      height:var(--center-pass-hit-size);
+      margin:auto;
       border-radius:999px;
+      clip-path:circle(50%);
       display:grid;
       place-items:center;
       pointer-events:auto;

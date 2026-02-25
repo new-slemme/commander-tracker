@@ -1087,7 +1087,7 @@ cards.forEach(card=>{
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
-    if(e.target.closest(".player-name, .status-strip-btn, .salt-dispenser-btn, .center-pass-btn")) return;
+    if(e.target.closest(".player-name, .status-strip-btn, .salt-dispenser-btn, .center-pass-hit-area, .card-logic-panel")) return;
     e.preventDefault();
 
     const delta = getLifeDeltaFromTap(card, e.clientX, e.clientY);
@@ -1096,7 +1096,7 @@ cards.forEach(card=>{
   });
 
   card.addEventListener("contextmenu", (event)=>{
-    if(event.target.closest(".status-strip-btn, .center-pass-btn")) return;
+    if(event.target.closest(".status-strip-btn, .center-pass-hit-area, .card-logic-panel")) return;
     event.preventDefault();
     event.stopPropagation();
     const saltBtn = card.querySelector(".salt-dispenser-btn");

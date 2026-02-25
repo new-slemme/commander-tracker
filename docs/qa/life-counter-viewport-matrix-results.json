@@ -5,7 +5,7 @@
     "clipping_pass": true,
     "overlap_pass": true,
     "tap_pass": false,
-    "center_interference_pass": false
+    "center_interference_pass": true
   },
   {
     "profile": "Standard phone",
@@ -13,7 +13,7 @@
     "clipping_pass": true,
     "overlap_pass": true,
     "tap_pass": false,
-    "center_interference_pass": false
+    "center_interference_pass": true
   },
   {
     "profile": "Notched phone",
@@ -21,7 +21,7 @@
     "clipping_pass": true,
     "overlap_pass": true,
     "tap_pass": false,
-    "center_interference_pass": false
+    "center_interference_pass": true
   },
   {
     "profile": "Tablet portrait",
@@ -29,7 +29,7 @@
     "clipping_pass": true,
     "overlap_pass": true,
     "tap_pass": true,
-    "center_interference_pass": false
+    "center_interference_pass": true
   },
   {
     "profile": "Tablet landscape",
@@ -37,6 +37,6 @@
     "clipping_pass": true,
     "overlap_pass": true,
     "tap_pass": true,
-    "center_interference_pass": false
+    "center_interference_pass": true
   }
 ]
