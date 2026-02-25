@@ -644,23 +644,24 @@ body.sigtaara-ui .h4 {
       align-self:flex-end;
     }
     .players-3 .life-card.p3-slot-3 .card-lane-bottom{
-      min-height:52px;
+      min-height:58px;
       align-items:flex-start;
       justify-content:center;
-      padding-inline:max(14px, var(--safe-left), var(--safe-right));
-      padding-bottom:max(6px, var(--safe-bottom));
+      padding-inline:max(18px, var(--safe-left), var(--safe-right));
+      padding-bottom:max(12px, var(--safe-bottom));
     }
     .players-3 .life-card.p3-slot-3 .player-name{
       width:100%;
-      max-width:calc(100% - 8px);
+      max-width:calc(100% - 18px);
       margin-inline:auto;
       text-align:center;
-      white-space:normal;
-      display:-webkit-box;
-      -webkit-line-clamp:2;
-      -webkit-box-orient:vertical;
-      line-clamp:2;
-      min-height:2.4em;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      display:block;
+      line-height:1.35;
+      padding-block:6px;
+      min-height:0;
     }
     .players-3 .life-card.p3-slot-1,
     .players-3 .life-card.p3-slot-2{ border-right:1px solid rgba(255,255,255,0.18); }
