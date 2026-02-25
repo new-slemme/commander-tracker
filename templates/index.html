@@ -342,6 +342,46 @@
       {% endfor %}
     </div>
   {% endif %}
+
+  <!-- =========================
+      MECHANIC ACTIVATION
+      ========================== -->
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+    <h2 class="m-0">Mechanic Activation</h2>
+  </div>
+
+  <div class="stats-card mb-5">
+    <div class="stats-card-head">
+      <div class="muted">
+        Activation given capability (games where at least one capable deck was present).
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0 stats-table">
+        <thead>
+          <tr>
+            <th>Mechanic</th>
+            <th class="text-end">Activation Given Capability</th>
+            <th class="text-end">Activated/Capable Games</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for key, label in [('monarch', 'Monarch'), ('poison', 'Poison')] %}
+            {% set counts = activation_correlation_denominators[key] %}
+            <tr>
+              <td>{{ label }}</td>
+              <td class="text-end">{{ counts.activation_given_capability }}%</td>
+              <td class="text-end">
+                {{ counts.activated_games_with_capability }}/{{ counts.games_with_capability }}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </div>
 
 {% endblock %}
