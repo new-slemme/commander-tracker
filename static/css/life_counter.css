@@ -461,6 +461,18 @@ body.sigtaara-ui .h4 {
       pointer-events:none;
     }
 
+    .center-pass-btn:focus-visible{
+      outline:none;
+    }
+
+    .center-pass-btn:focus-visible .center-pass-hit-area{
+      outline:3px solid rgba(255,255,255,0.95);
+      outline-offset:3px;
+      box-shadow:0 0 0 5px rgba(53,120,255,0.6), 0 10px 26px rgba(0,0,0,0.45);
+      opacity:1;
+      filter:none;
+    }
+
 
 .transient-notice-container{
   position:fixed;
