@@ -4403,8 +4403,6 @@ def life_counter():
     active_mechanics = {"monarch": False, "poison": False}
 
     deck_tags_cache: dict[int, dict[str, bool]] = {}
-    participant_salt_action_visibility: dict[str, dict[str, bool]] = {}
-
     for i, p in enumerate(participants, 1):
         p["index"] = i
         p["color"] = colors[(i - 1) % len(colors)]
@@ -4414,11 +4412,6 @@ def life_counter():
         p["commander_art_scale"] = deck.commander_art_scale if deck else "cover"
 
         tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
-        p["salt_action_visibility"] = {
-            "mana_fucked": bool(tags.get("mana_fucked")),
-            "misplayed": bool(tags.get("misplayed")),
-        }
-        participant_salt_action_visibility[str(p["player_id"])] = dict(p["salt_action_visibility"])
         mechanics = derive_deck_mechanics(tags)
         p["mechanics"] = mechanics
 
@@ -4455,7 +4448,6 @@ def life_counter():
         game_started_at=session.get("game_started_at"),
         turn_number=session.get("turn_number", 1),
         salt_action_values=salt_action_values,
-        participant_salt_action_visibility=participant_salt_action_visibility,
         active_mechanics=active_mechanics,
         card_logic_catalog=card_logic_catalog,
         debug_ui_enabled=debug_ui_enabled,
