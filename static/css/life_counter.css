@@ -963,6 +963,33 @@ body.sigtaara-ui .h4 {
   gap:10px;
 }
 
+
+.player-action-section{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.player-action-section + .player-action-section{
+  margin-top:8px;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,0.12);
+}
+
+.player-action-section__title{
+  font-size:.78rem;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:rgba(234,240,255,0.82);
+  font-weight:700;
+}
+
+.player-action-section__hint{
+  text-transform:none;
+  letter-spacing:0;
+  font-weight:500;
+  color:rgba(234,240,255,0.7);
+}
 .player-salt-actions{
   display:flex;
   align-items:center;

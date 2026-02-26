@@ -229,23 +229,28 @@
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
   <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Player salt actions" tabindex="-1">
     <div class="player-salt-flyout__content">
-      <div class="player-salt-actions" role="group" aria-label="Player salt actions">
-        <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
-          <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
-        </button>
+      <div class="player-action-section" aria-label="Salt Actions section">
+        <div class="player-action-section__title">Salt Actions <span class="player-action-section__hint">(not deck tag dependent)</span></div>
+        <div class="player-salt-actions" role="group" aria-label="Player salt actions">
+          <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
+            <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
+          </button>
 
-        <button class="player-salt-action-btn" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
-          <img src="/static/icons/misplayed.png" alt="Misplayed status" />
-        </button>
+          <button class="player-salt-action-btn" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
+            <img src="/static/icons/misplayed.png" alt="Misplayed status" />
+          </button>
 
-        <button class="player-salt-action-btn" id="playerFlagCloseBtn" type="button" aria-label="Back to game">
-          <img src="/static/icons/back.png" alt="Back to game" />
-        </button>
+          <button class="player-salt-action-btn" id="playerFlagCloseBtn" type="button" aria-label="Back to game">
+            <img src="/static/icons/back.png" alt="Back to game" />
+          </button>
+        </div>
       </div>
 
-      <p class="small text-secondary mb-2" id="playerSaltNoActionsMsg" hidden>No salt actions available for this deck.</p>
-      <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls">
-        <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · 🏙️ City’s Blessing</div>
+      <div class="player-action-section" aria-label="Tag Actions section">
+        <div class="player-action-section__title">Tag Actions <span class="player-action-section__hint">(deck tag based in-game actions)</span></div>
+        <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls">
+          <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · 🏙️ City’s Blessing</div>
+        </div>
       </div>
     </div>
   </div>
@@ -383,7 +388,6 @@ let playerFlagAnchorButton = null;
 let mountedCardLogicPanel = null;
 let mountedCardLogicOwnerId = null;
 const participantFlagsByPlayer = {};
-const participantSaltActionVisibilityByPlayer = {{ participant_salt_action_visibility|default({}, true)|tojson }};
 const perTurnStatsByPlayer = {};
 let monarchHolderByPlayer = {};
 const poisonCountersByPlayer = {};
@@ -667,10 +671,9 @@ function updatePlayerFlagButtonState(buttonId, enabled, ariaLabels){
 }
 
 function getSaltActionVisibility(playerId){
-  const visibility = participantSaltActionVisibilityByPlayer?.[String(playerId)] || {};
   return {
-    mana_fucked: !!visibility.mana_fucked,
-    misplayed: !!visibility.misplayed,
+    mana_fucked: true,
+    misplayed: true,
   };
 }
 
@@ -1293,12 +1296,6 @@ function openPlayerSaltMenu(playerId, anchorButton){
 
   setSaltActionControlVisibility("playerFlagManaBtn", saltActionVisibility.mana_fucked);
   setSaltActionControlVisibility("playerFlagMisplayedBtn", saltActionVisibility.misplayed);
-  const noActionsMsgEl = document.getElementById("playerSaltNoActionsMsg");
-  const noActionsAvailable = !saltActionVisibility.mana_fucked && !saltActionVisibility.misplayed;
-  if(noActionsMsgEl){
-    noActionsMsgEl.hidden = !noActionsAvailable;
-  }
-
   const flyoutEl = document.getElementById("playerSaltFlyout");
   if(!flyoutEl) return;
 
