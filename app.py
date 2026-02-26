@@ -4430,7 +4430,6 @@ def life_counter():
             {"id": "monarch", "label": "Monarch", "icon": "👑", "kind": "exclusive"},
             {"id": "initiative", "label": "Initiative", "icon": "⚔️", "kind": "exclusive"},
             {"id": "citys_blessing", "label": "City's Blessing", "icon": "🏙️", "kind": "toggle"},
-            {"id": "shroud", "label": "Shroud", "icon": "🛡️", "kind": "toggle"},
         ],
         "counters": [
             {"id": "energy", "label": "Energy", "icon": "⚡", "step": 1, "min": 0},
