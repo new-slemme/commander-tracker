@@ -243,6 +243,7 @@
         </button>
       </div>
 
+      <p class="small text-secondary mb-2" id="playerSaltNoActionsMsg" hidden>No salt actions available for this deck.</p>
       <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls">
         <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · 🏙️ City’s Blessing</div>
       </div>
@@ -382,6 +383,7 @@ let playerFlagAnchorButton = null;
 let mountedCardLogicPanel = null;
 let mountedCardLogicOwnerId = null;
 const participantFlagsByPlayer = {};
+const participantSaltActionVisibilityByPlayer = {{ participant_salt_action_visibility|default({}, true)|tojson }};
 const perTurnStatsByPlayer = {};
 let monarchHolderByPlayer = {};
 const poisonCountersByPlayer = {};
@@ -662,6 +664,21 @@ function updatePlayerFlagButtonState(buttonId, enabled, ariaLabels){
   if(ariaLabels){
     btn.setAttribute("aria-label", enabled ? ariaLabels.active : ariaLabels.inactive);
   }
+}
+
+function getSaltActionVisibility(playerId){
+  const visibility = participantSaltActionVisibilityByPlayer?.[String(playerId)] || {};
+  return {
+    mana_fucked: !!visibility.mana_fucked,
+    misplayed: !!visibility.misplayed,
+  };
+}
+
+function setSaltActionControlVisibility(buttonId, isVisible){
+  const btn = document.getElementById(buttonId);
+  if(!btn) return;
+  btn.hidden = !isVisible;
+  btn.disabled = !isVisible;
 }
 
 const cards = [...document.querySelectorAll(".life-card")];
@@ -1254,6 +1271,7 @@ function openPlayerSaltMenu(playerId, anchorButton){
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
   const misplayedSaltValue = Math.max(0, Number(saltActionValues?.misplayed ?? 1) || 0);
+  const saltActionVisibility = getSaltActionVisibility(playerFlagTargetId);
 
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   updatePlayerFlagButtonState(
@@ -1272,6 +1290,14 @@ function openPlayerSaltMenu(playerId, anchorButton){
       active: `Unmark ${playerLabel} as misplayed (-${misplayedSaltValue} salt)`,
     }
   );
+
+  setSaltActionControlVisibility("playerFlagManaBtn", saltActionVisibility.mana_fucked);
+  setSaltActionControlVisibility("playerFlagMisplayedBtn", saltActionVisibility.misplayed);
+  const noActionsMsgEl = document.getElementById("playerSaltNoActionsMsg");
+  const noActionsAvailable = !saltActionVisibility.mana_fucked && !saltActionVisibility.misplayed;
+  if(noActionsMsgEl){
+    noActionsMsgEl.hidden = !noActionsAvailable;
+  }
 
   const flyoutEl = document.getElementById("playerSaltFlyout");
   if(!flyoutEl) return;
@@ -1385,6 +1411,7 @@ window.addEventListener("keydown", (e)=>{
 
 document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
+  if(!getSaltActionVisibility(playerFlagTargetId).mana_fucked) return;
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   const nextValue = !playerFlags.mana_fucked;
   const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
@@ -1409,6 +1436,7 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
 
 document.getElementById("playerFlagMisplayedBtn")?.addEventListener("click", ()=>{
   if(!playerFlagTargetId) return;
+  if(!getSaltActionVisibility(playerFlagTargetId).misplayed) return;
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   const nextValue = !playerFlags.misplayed;
   const misplayedSaltValue = Math.max(0, Number(saltActionValues?.misplayed ?? 1) || 0);
