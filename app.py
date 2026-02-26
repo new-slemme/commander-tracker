@@ -2061,6 +2061,26 @@ def approve_user_from_registration_request(registration_request, reviewer_user_i
     return "approved", u
 
 
+def deny_user_from_registration_request(registration_request, reviewer_user_id):
+    if not registration_request:
+        return "missing_request", None
+
+    u = registration_request.user
+    if not u:
+        return "missing_user", None
+
+    if registration_request.status != "pending" or u.is_active:
+        return "not_pending", u
+
+    # Keep both user and request rows for auditability and referential integrity.
+    u.is_active = False
+    registration_request.status = "denied"
+    registration_request.reviewed_at = datetime.utcnow()
+    registration_request.reviewed_by_user_id = reviewer_user_id
+    db.session.commit()
+    return "denied", u
+
+
 @app.context_processor
 def inject_pod_context():
     user = get_current_user()
@@ -2699,20 +2719,14 @@ def deny_registration_request(request_id):
     if not u:
         abort(404)
 
-    if registration_request.status != "pending" or u.is_active:
+    status, denied_user = deny_user_from_registration_request(registration_request, me.id if me else None)
+    if status == "missing_user":
+        abort(404)
+    if status == "not_pending":
         flash("Only pending users can be denied.")
         return redirect(url_for("registration_requests"))
 
-    registration_request.status = "denied"
-    registration_request.reviewed_at = datetime.utcnow()
-    registration_request.reviewed_by_user_id = me.id if me else None
-
-    if u.player:
-        db.session.delete(u.player)
-    db.session.delete(u)
-    db.session.commit()
-
-    flash(f"Denied and removed user '{u.username}'.")
+    flash(f"Denied registration request for '{denied_user.username}'.")
     return redirect(url_for("registration_requests"))
 
 
@@ -2721,11 +2735,25 @@ def deny_registration_request(request_id):
 @app.route("/admin/users/<int:user_id>/deny", methods=["POST"])
 @admin_required
 def admin_deny_user(user_id):
+    me = get_current_user()
     registration_request = RegistrationRequest.query.filter_by(user_id=user_id).first()
     if not registration_request:
         flash("No pending registration request found for that user.")
         return redirect(url_for("admin_users"))
-    return deny_registration_request(registration_request.id)
+
+    if not can_deny_registration_request(me, registration_request):
+        flash(deny_registration_request_permission_message(me, registration_request))
+        return redirect(url_for("admin_users"))
+
+    status, denied_user = deny_user_from_registration_request(registration_request, me.id if me else None)
+    if status == "missing_user":
+        abort(404)
+    if status == "not_pending":
+        flash("Only pending users can be denied.")
+        return redirect(url_for("admin_users"))
+
+    flash(f"Denied registration request for '{denied_user.username}'.")
+    return redirect(url_for("admin_users"))
 
 @app.route("/")
 def index():
