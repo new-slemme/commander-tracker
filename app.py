@@ -81,6 +81,8 @@ MAX_PER_PLAYER_TURN_STATS = 500
 DECK_TAGS_VERSION = 2
 KNOWN_DECK_TAG_KEYS = (
     "monarch",
+    "initiative",
+    "citys_blessing",
     "poison",
     "proliferate",
     "energy",
@@ -1349,6 +1351,8 @@ def analyze_scryfall_card(card_json: dict) -> dict:
     oracle_text = extract_oracle_text(card_json)
     return {
         "monarch": "monarch" in oracle_text,
+        "initiative": "initiative" in oracle_text,
+        "citys_blessing": ("city's blessing" in oracle_text) or ("city’s blessing" in oracle_text),
         "poison": "poison" in oracle_text,
         "proliferate": "proliferate" in oracle_text,
         "energy": "{e}" in oracle_text,
@@ -1471,6 +1475,8 @@ def derive_deck_mechanics(tags: dict) -> dict:
     tags = tags if isinstance(tags, dict) else {}
     return {
         "monarch": bool(tags.get("monarch")),
+        "initiative": bool(tags.get("initiative")),
+        "citys_blessing": bool(tags.get("citys_blessing")),
         "poison": bool(tags.get("poison")) or bool(tags.get("proliferate")),
         "energy": bool(tags.get("energy")),
         "experience": bool(tags.get("experience")),
@@ -4400,7 +4406,12 @@ def life_counter():
 
     colors = ["--blue", "--red", "--green", "--purple", "--orange", "--yellow"]
 
-    active_mechanics = {"monarch": False, "poison": False}
+    active_mechanics = {
+        "monarch": False,
+        "initiative": False,
+        "citys_blessing": False,
+        "poison": False,
+    }
 
     deck_tags_cache: dict[int, dict[str, bool]] = {}
     for i, p in enumerate(participants, 1):
@@ -4416,6 +4427,8 @@ def life_counter():
         p["mechanics"] = mechanics
 
         active_mechanics["monarch"] = active_mechanics["monarch"] or mechanics["monarch"]
+        active_mechanics["initiative"] = active_mechanics["initiative"] or mechanics["initiative"]
+        active_mechanics["citys_blessing"] = active_mechanics["citys_blessing"] or mechanics["citys_blessing"]
         active_mechanics["poison"] = active_mechanics["poison"] or mechanics["poison"]
 
     current_user = get_current_user()
@@ -4438,6 +4451,11 @@ def life_counter():
         ],
         "commander_damage_threshold": 21,
     }
+    card_logic_catalog["statuses"] = [
+        status
+        for status in card_logic_catalog["statuses"]
+        if status.get("always_available") or active_mechanics.get(status.get("id"), True)
+    ]
 
     return render_template(
         "life_counter.html",
