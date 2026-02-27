@@ -195,6 +195,36 @@ class DenyRegistrationRequestTests(unittest.TestCase):
             self.assertEqual(app.User.query.filter_by(id=denied_by_admin.id).count(), 1)
             self.assertEqual(app.User.query.filter_by(id=denied_by_podmaster.id).count(), 1)
 
+    def test_admin_users_excludes_denied_requests_from_pending_list(self):
+        with app.app.app_context():
+            active_pod = app.Pod(name="Queue Pod", slug="queue-pod", is_active=True)
+            app.db.session.add(active_pod)
+            admin_user = self._create_user("admin3", "Admin Three", is_admin=True, is_active=True)
+
+            pending_user, _ = self._create_pending_registration(
+                "still-pending", "Still Pending", active_pod
+            )
+            denied_user, denied_request = self._create_pending_registration(
+                "already-denied", "Already Denied", active_pod
+            )
+            denied_request.status = "denied"
+            denied_request.reviewed_by_user_id = admin_user.id
+            denied_request.reviewed_at = app.datetime.utcnow()
+            app.db.session.commit()
+
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = admin_user.id
+
+            response = client.get("/admin/users")
+            self.assertEqual(response.status_code, 200)
+
+            html = response.get_data(as_text=True)
+            self.assertIn(pending_user.username, html)
+            self.assertNotIn(denied_user.username, html)
+            self.assertIn(f"Pending: <b>{1}</b>", html)
+
+
 
 if __name__ == "__main__":
     unittest.main()
