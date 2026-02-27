@@ -2382,11 +2382,21 @@ def art(filename):
 @app.route("/admin/users")
 @admin_required
 def admin_users():
-    pending = User.query.filter_by(is_active=False).order_by(User.created_at.asc()).all()
+    pending_requests = (
+        RegistrationRequest.query
+        .join(User, RegistrationRequest.user_id == User.id)
+        .filter(
+            RegistrationRequest.status == "pending",
+            User.is_active == False,  # noqa: E712
+        )
+        .order_by(RegistrationRequest.created_at.asc())
+        .all()
+    )
+    pending = [req.user for req in pending_requests if req.user]
     active = User.query.filter_by(is_active=True).order_by(User.created_at.desc()).all()
     pending_requests_by_user_id = {
         req.user_id: req
-        for req in RegistrationRequest.query.filter_by(status="pending").all()
+        for req in pending_requests
     }
     return render_template(
         "admin_users.html",
