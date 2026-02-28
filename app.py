@@ -2694,6 +2694,33 @@ def admin_deactivate_user(user_id):
     return redirect(url_for("admin_users"))
 
 
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@admin_required
+def admin_delete_user(user_id):
+    u = db.session.get(User, user_id)
+    if not u:
+        abort(404)
+
+    me = get_current_user()
+    if me and me.id == u.id:
+        flash("You can't delete your own account.")
+        return redirect(url_for("admin_users"))
+
+    linked_player = u.player
+    if linked_player:
+        linked_player.user_id = None
+
+    RegistrationRequest.query.filter_by(reviewed_by_user_id=u.id).update(
+        {RegistrationRequest.reviewed_by_user_id: None},
+        synchronize_session=False,
+    )
+    RegistrationRequest.query.filter_by(user_id=u.id).delete()
+    db.session.delete(u)
+    db.session.commit()
+    flash("User account deleted.")
+    return redirect(url_for("admin_users"))
+
+
 @app.route("/admin/users/<int:user_id>/toggle_admin", methods=["POST"])
 @admin_required
 def admin_toggle_admin(user_id):
