@@ -225,6 +225,72 @@ class DenyRegistrationRequestTests(unittest.TestCase):
             self.assertIn(f"Pending: <b>{1}</b>", html)
 
 
+    def test_admin_delete_user_removes_account_but_keeps_player_history(self):
+        with app.app.app_context():
+            admin_user = self._create_user("admin-delete", "Admin Delete", is_admin=True, is_active=True)
+            target_user = self._create_user("target-user", "Target User", is_admin=False, is_active=True)
+            target_user.player = app.Player(name="Target User")
+            app.db.session.flush()
+
+            deck = app.Deck(
+                name="Target Deck",
+                commander="Target Commander",
+                player_id=target_user.player.id,
+            )
+            app.db.session.add(deck)
+            app.db.session.flush()
+
+            game = app.Game(winner=target_user.player)
+            app.db.session.add(game)
+            app.db.session.flush()
+            app.db.session.add(
+                app.GameParticipant(
+                    game_id=game.id,
+                    player_id=target_user.player.id,
+                    deck_id=deck.id,
+                    seat_position=1,
+                )
+            )
+            pod = app.Pod(name="Delete Flow Pod", slug="delete-flow-pod", is_active=True)
+            app.db.session.add(pod)
+            app.db.session.flush()
+            request_record = app.RegistrationRequest(
+                user_id=target_user.id,
+                requested_pod_id=pod.id,
+                status="pending",
+            )
+            app.db.session.add(request_record)
+            app.db.session.commit()
+
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = admin_user.id
+
+            response = client.post(f"/admin/users/{target_user.id}/delete")
+            self.assertEqual(response.status_code, 302)
+            self.assertIn("/admin/users", response.headers["Location"])
+
+            self.assertIsNone(app.db.session.get(app.User, target_user.id))
+            persisted_player = app.Player.query.filter_by(name="Target User").first()
+            self.assertIsNotNone(persisted_player)
+            self.assertIsNone(persisted_player.user_id)
+            self.assertEqual(app.Game.query.filter_by(winner_id=persisted_player.id).count(), 1)
+            self.assertEqual(app.RegistrationRequest.query.filter_by(user_id=target_user.id).count(), 0)
+
+    def test_admin_delete_user_cannot_delete_self(self):
+        with app.app.app_context():
+            admin_user = self._create_user("self-admin", "Self Admin", is_admin=True, is_active=True)
+            app.db.session.commit()
+
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = admin_user.id
+
+            response = client.post(f"/admin/users/{admin_user.id}/delete")
+            self.assertEqual(response.status_code, 302)
+            self.assertIn("/admin/users", response.headers["Location"])
+            self.assertEqual(app.User.query.filter_by(id=admin_user.id).count(), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
