@@ -456,7 +456,7 @@ body.sigtaara-ui .h4 {
 
     /* Combined pass/menu button in center */
     .center-pass-btn{
-      --center-pass-size:88px;
+      --center-pass-size:101px;
       --center-pass-hit-size:calc(var(--center-pass-size) - 16px);
       position:fixed;
       top:50%;
@@ -546,7 +546,7 @@ body.sigtaara-ui .h4 {
 }
 
 @media (max-height: 600px){
-  .center-pass-btn{ --center-pass-size:72px; }
+  .center-pass-btn{ --center-pass-size:83px; }
 
   .transient-notice-container{
     bottom:var(--ui-pad-bottom);
@@ -704,7 +704,7 @@ body.sigtaara-ui .h4 {
       inset:auto;
       transform:none;
       z-index:145;
-      --center-pass-size:74px;
+      --center-pass-size:85px;
     }
 
     .center-pass-btn--in-tile:active .center-pass-hit-area{
@@ -1169,14 +1169,14 @@ body.sigtaara-ui .h4 {
 
     @media (max-width:576px){
       .life-display{ font-size:clamp(2.8rem, 15vh, 7.5rem); }
-      .center-pass-btn{ --center-pass-size:84px; }
+      .center-pass-btn{ --center-pass-size:97px; }
       .turn-pill{ padding:8px 12px; font-size:.8rem; }
       .turn-timer-pill{ padding:9px 14px; min-width:96px; }
       .player-name{ padding:10px 10px; font-size:.9rem; }
     }
 
     @media (max-width:576px) and (max-height:720px){
-      .center-pass-btn{ --center-pass-size:76px; }
+      .center-pass-btn{ --center-pass-size:87px; }
     }
 @media (max-width:576px){
   .life-pending{
