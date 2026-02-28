@@ -117,6 +117,12 @@
 
     <div class="fs-5 banner-subtitle">{{ deck.commander_name or deck.commander }}</div>
 
+    <div class="mt-2">
+      <span class="badge rounded-pill text-bg-dark" title="Estimated from decklist card names">
+        Commander Bracket {{ commander_bracket.bracket }}
+      </span>
+    </div>
+
     {% if deck.color_identity %}
       <div class="mana-icons" aria-label="Color identity">
         {% for c in deck.color_identity %}
