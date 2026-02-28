@@ -92,6 +92,38 @@ KNOWN_DECK_TAG_KEYS = (
 )
 TRUST_LEGACY_DECK_TAGS = False
 
+COMMANDER_BRACKET_FAST_MANA = {
+    "mana crypt",
+    "jeweled lotus",
+    "mox diamond",
+    "chrome mox",
+    "mox opal",
+    "lion's eye diamond",
+    "grim monolith",
+}
+
+COMMANDER_BRACKET_TUTORS = {
+    "demonic tutor",
+    "vampiric tutor",
+    "imperial seal",
+    "mystical tutor",
+    "enlightened tutor",
+    "worldly tutor",
+    "gamble",
+    "diabolic intent",
+    "wishclaw talisman",
+}
+
+COMMANDER_BRACKET_CEDH_COMBOS = {
+    "thassa's oracle",
+    "demonic consultation",
+    "tainted pact",
+    "underworld breach",
+    "ad nauseam",
+    "necrotic ooze",
+    "protean hulk",
+}
+
 CANONICAL_WIN_TYPES = {
     "combat",
     "combo",
@@ -1362,6 +1394,55 @@ def analyze_scryfall_card(card_json: dict) -> dict:
     }
 
 
+
+
+def compute_commander_bracket(decklist_cards: list[str]) -> dict:
+    """Heuristic Commander bracket estimate from card names only.
+
+    Returns a dict with `bracket` (1..5), `score`, and feature counts.
+    """
+    unique_cards = {(name or "").strip().lower() for name in (decklist_cards or []) if (name or "").strip()}
+
+    fast_mana_hits = sorted(name for name in unique_cards if name in COMMANDER_BRACKET_FAST_MANA)
+    tutor_hits = sorted(name for name in unique_cards if name in COMMANDER_BRACKET_TUTORS)
+    combo_hits = sorted(name for name in unique_cards if name in COMMANDER_BRACKET_CEDH_COMBOS)
+
+    score = (len(fast_mana_hits) * 2) + len(tutor_hits) + (len(combo_hits) * 2)
+
+    if len(combo_hits) >= 2 and len(fast_mana_hits) >= 1:
+        bracket = 5
+    elif score >= 7:
+        bracket = 5
+    elif score >= 4:
+        bracket = 4
+    elif score >= 2:
+        bracket = 3
+    else:
+        bracket = 2 if unique_cards else 1
+
+    return {
+        "bracket": bracket,
+        "score": score,
+        "signals": {
+            "fast_mana_count": len(fast_mana_hits),
+            "tutor_count": len(tutor_hits),
+            "combo_piece_count": len(combo_hits),
+        },
+        "matched_cards": {
+            "fast_mana": fast_mana_hits,
+            "tutors": tutor_hits,
+            "combo_pieces": combo_hits,
+        },
+    }
+
+
+def compute_commander_bracket_from_text(decklist_text: str | None) -> dict:
+    raw_text = (decklist_text or "").strip()
+    if not raw_text:
+        return {"bracket": 1, "score": 0, "signals": {"fast_mana_count": 0, "tutor_count": 0, "combo_piece_count": 0}, "matched_cards": {"fast_mana": [], "tutors": [], "combo_pieces": []}}
+
+    parsed = parse_plaintext_decklist(raw_text).as_dict()
+    return compute_commander_bracket(extract_decklist_card_names(parsed))
 def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
     tags = {key: False for key in KNOWN_DECK_TAG_KEYS}
     seen_names: set[str] = set()
@@ -3863,6 +3944,8 @@ def deck_detail(deck_id):
 
     decklist_data = _load_decklist_data(deck)
 
+    commander_bracket = compute_commander_bracket_from_text(deck.decklist_text)
+
     deck_tags_cache: dict[int, dict[str, bool]] = {}
     deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
     deck_mechanics = derive_deck_mechanics(deck_tags)
@@ -3878,6 +3961,7 @@ def deck_detail(deck_id):
         matchups=matchups,
         deck_matchups=deck_matchup_rows,
         decklist_data=decklist_data,
+        commander_bracket=commander_bracket,
         deck_mechanics=deck_mechanics,
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
@@ -4052,6 +4136,21 @@ def retag_deck(deck_id):
     flash(f"Retagged deck: {deck.name}")
     flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(next_url)
+
+
+@app.route("/api/commander-bracket", methods=["POST"])
+def api_commander_bracket():
+    payload = request.get_json(silent=True) or {}
+
+    cards = payload.get("cards")
+    if isinstance(cards, list):
+        return jsonify(compute_commander_bracket([str(card) for card in cards]))
+
+    decklist_text = payload.get("decklist_text")
+    if isinstance(decklist_text, str):
+        return jsonify(compute_commander_bracket_from_text(decklist_text))
+
+    return jsonify({"error": "Provide either 'cards' (array) or 'decklist_text' (string)."}), 400
 
 
 @app.route("/api/deck-import-preview", methods=["POST"])
