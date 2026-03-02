@@ -305,6 +305,7 @@ def parse_participant_turn_stats(raw_flags: str | None) -> list[dict[str, int | 
         life_delta = entry.get("life_delta")
         mana_fucked = entry.get("mana_fucked")
         misplayed = entry.get("misplayed")
+        turn_seconds = entry.get("turn_seconds", 0)
 
         if not isinstance(turn, int) or isinstance(turn, bool) or turn < 1:
             continue
@@ -314,6 +315,8 @@ def parse_participant_turn_stats(raw_flags: str | None) -> list[dict[str, int | 
             continue
         if not isinstance(misplayed, bool):
             continue
+        if not isinstance(turn_seconds, int) or isinstance(turn_seconds, bool) or turn_seconds < 0:
+            continue
 
         parsed_stats.append(
             {
@@ -321,6 +324,7 @@ def parse_participant_turn_stats(raw_flags: str | None) -> list[dict[str, int | 
                 "life_delta": life_delta,
                 "mana_fucked": mana_fucked,
                 "misplayed": misplayed,
+                "turn_seconds": turn_seconds,
             }
         )
 
@@ -4767,6 +4771,7 @@ def end_game():
                         life_delta = turn_entry.get("life_delta")
                         mana_fucked = turn_entry.get("mana_fucked")
                         misplayed = turn_entry.get("misplayed")
+                        turn_seconds = turn_entry.get("turn_seconds", 0)
 
                         if not isinstance(turn, int) or isinstance(turn, bool) or turn < 1 or turn > 500:
                             return "turn_stats.turn must be an integer between 1 and 500", 400
@@ -4781,6 +4786,13 @@ def end_game():
                             return "turn_stats.mana_fucked must be boolean", 400
                         if not isinstance(misplayed, bool):
                             return "turn_stats.misplayed must be boolean", 400
+                        if (
+                            not isinstance(turn_seconds, int)
+                            or isinstance(turn_seconds, bool)
+                            or turn_seconds < 0
+                            or turn_seconds > 172800
+                        ):
+                            return "turn_stats.turn_seconds must be an integer between 0 and 172800", 400
 
                         sanitized_turn_stats.append(
                             {
@@ -4788,6 +4800,7 @@ def end_game():
                                 "life_delta": life_delta,
                                 "mana_fucked": mana_fucked,
                                 "misplayed": misplayed,
+                                "turn_seconds": turn_seconds,
                             }
                         )
 

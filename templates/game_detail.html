@@ -96,9 +96,10 @@
       {% set d = gp.deck %}
       {% set art = d.commander_art_url %}
       {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
-      {% set ns = namespace(life_delta=0, mana_fucked_turns=0, misplayed_turns=0) %}
+      {% set ns = namespace(life_delta=0, turn_seconds=0, mana_fucked_turns=0, misplayed_turns=0) %}
       {% for ts in gp.turn_stats %}
         {% set ns.life_delta = ns.life_delta + ts.life_delta %}
+        {% set ns.turn_seconds = ns.turn_seconds + ts.turn_seconds %}
         {% if ts.mana_fucked %}{% set ns.mana_fucked_turns = ns.mana_fucked_turns + 1 %}{% endif %}
         {% if ts.misplayed %}{% set ns.misplayed_turns = ns.misplayed_turns + 1 %}{% endif %}
       {% endfor %}
@@ -132,6 +133,10 @@
               <div class="mini-stat">
                 <p class="mini-label">Life delta</p>
                 <p class="mini-value {% if ns.life_delta < 0 %}danger{% elif ns.life_delta > 0 %}success{% endif %}">{{ "%+d"|format(ns.life_delta) }}</p>
+              </div>
+              <div class="mini-stat">
+                <p class="mini-label">Turn time</p>
+                <p class="mini-value">{{ (ns.turn_seconds // 60) }}m {{ (ns.turn_seconds % 60) }}s</p>
               </div>
               <div class="mini-stat">
                 <p class="mini-label">Mana screwed turns</p>
@@ -172,6 +177,7 @@
                         <th scope="col">Life Δ</th>
                         <th scope="col">Mana</th>
                         <th scope="col">Misplay</th>
+                        <th scope="col">Turn time</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -181,6 +187,7 @@
                           <td>{{ "%+d"|format(ts.life_delta) }}</td>
                           <td>{{ 'Yes' if ts.mana_fucked else 'No' }}</td>
                           <td>{{ 'Yes' if ts.misplayed else 'No' }}</td>
+                          <td>{{ (ts.turn_seconds // 60) }}m {{ (ts.turn_seconds % 60) }}s</td>
                         </tr>
                       {% endfor %}
                     </tbody>
