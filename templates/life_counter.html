@@ -387,6 +387,7 @@ let mountedCardLogicPanel = null;
 let mountedCardLogicOwnerId = null;
 const participantFlagsByPlayer = {};
 const perTurnStatsByPlayer = {};
+const turnStartedAtMsByPlayer = {};
 let monarchHolderByPlayer = {};
 const poisonCountersByPlayer = {};
 const turnChangeAudio = new Audio("/static/sounds/turn_change.mp3");
@@ -584,6 +585,7 @@ function getPerTurnEntry(playerId, turnNumber){
       life_delta: 0,
       mana_fucked: !!currentFlags.mana_fucked,
       misplayed: !!currentFlags.misplayed,
+      turn_seconds: 0,
     };
   }
   return perTurnStatsByPlayer[pid][t];
@@ -604,6 +606,24 @@ function snapshotCurrentFlagsForTurn(turnNumber){
     entry.mana_fucked = !!flags.mana_fucked;
     entry.misplayed = !!flags.misplayed;
   });
+}
+
+function finalizeActiveTurnDuration(){
+  const pid = String(active || "");
+  if(!pid) return;
+  const startedAt = Number(turnStartedAtMsByPlayer[pid] || 0);
+  if(!startedAt) return;
+
+  const elapsedMs = Math.max(0, performance.now() - startedAt);
+  const elapsedSeconds = Math.round(elapsedMs / 1000);
+  const entry = getPerTurnEntry(pid, turn);
+  entry.turn_seconds = Math.max(0, elapsedSeconds);
+}
+
+function markTurnStart(playerId){
+  const pid = String(playerId || "");
+  if(!pid) return;
+  turnStartedAtMsByPlayer[pid] = performance.now();
 }
 
 function setMonarchHolder(playerId){
@@ -912,6 +932,8 @@ function nextPlayer(){
 
   if(aliveIds.length <= 1) return;
 
+  finalizeActiveTurnDuration();
+
   passed = new Set([...passed].filter(id => aliveIds.includes(id)));
   if(aliveIds.includes(previousActive)){
     passed.add(previousActive);
@@ -942,6 +964,7 @@ function nextPlayer(){
   }
 
   setActive(nextActive);
+  markTurnStart(nextActive);
   if(timerState.mode === "turn_timer"){
     timerState.ropeRemainingMs = timerState.ropeDurationMs;
   }
@@ -1635,6 +1658,7 @@ document.querySelectorAll('.commander-damage-chip').forEach((button)=>{
 
 document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
   cards.forEach((card)=>applyPendingLife(String(card.dataset.player)));
+  finalizeActiveTurnDuration();
   snapshotCurrentFlagsForTurn(turn);
 
   const timedModeInput = document.getElementById("timed_mode_input");
@@ -1694,6 +1718,7 @@ document.getElementById("endGameForm")?.addEventListener("submit", ()=>{
           life_delta: Number(entry.life_delta) || 0,
           mana_fucked: !!entry.mana_fucked,
           misplayed: !!entry.misplayed,
+          turn_seconds: Math.max(0, Number(entry.turn_seconds) || 0),
         }))
         .sort((a, b)=>a.turn - b.turn);
 
@@ -1758,6 +1783,7 @@ if(cards.length){
   const starting = "{{ starting_player_id|default('', true) }}";
   const initialActive = ids.includes(String(starting)) ? String(starting) : ids[0];
   setActive(initialActive);
+  markTurnStart(initialActive);
   initializeTimers();
   updateTurnPills();
   initializeStatusStripState();
