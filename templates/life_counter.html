@@ -574,6 +574,26 @@ function setPlayerFlagState(playerId, nextFlags){
   };
 }
 
+function syncTurnFlagsFromPlayerState(playerId, turnNumber = turn){
+  const pid = String(playerId);
+  const flags = getPlayerFlagState(pid);
+  const entry = getPerTurnEntry(pid, turnNumber);
+  entry.mana_fucked = !!flags.mana_fucked;
+  entry.misplayed = !!flags.misplayed;
+}
+
+function resetPlayerTurnFlags(playerId){
+  const pid = String(playerId || "");
+  if(!pid) return;
+  const playerFlags = getPlayerFlagState(pid);
+  if(!playerFlags.mana_fucked && !playerFlags.misplayed) return;
+  setPlayerFlagState(pid, {
+    ...playerFlags,
+    mana_fucked: false,
+    misplayed: false,
+  });
+}
+
 function getPerTurnEntry(playerId, turnNumber){
   const pid = String(playerId);
   const t = Math.max(1, Number(turnNumber) || 1);
@@ -933,6 +953,8 @@ function nextPlayer(){
   if(aliveIds.length <= 1) return;
 
   finalizeActiveTurnDuration();
+  syncTurnFlagsFromPlayerState(previousActive);
+  resetPlayerTurnFlags(previousActive);
 
   passed = new Set([...passed].filter(id => aliveIds.includes(id)));
   if(aliveIds.includes(previousActive)){
@@ -1432,23 +1454,23 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   if(!getSaltActionVisibility(playerFlagTargetId).mana_fucked) return;
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
   const nextValue = !playerFlags.mana_fucked;
+  if(!nextValue){
+    showTransientNotice("Mana-Fucked can only be applied once per turn.");
+    return;
+  }
   const manaFuckedSaltValue = Math.max(0, Number(saltActionValues?.mana_fucked ?? 1) || 0);
-  const nextSaltCount = nextValue
-    ? playerFlags.salt_count + manaFuckedSaltValue
-    : Math.max(0, playerFlags.salt_count - manaFuckedSaltValue);
+  const nextSaltCount = playerFlags.salt_count + manaFuckedSaltValue;
 
   setPlayerFlagState(playerFlagTargetId, {
     ...playerFlags,
     mana_fucked: nextValue,
     salt_count: nextSaltCount,
   });
+  syncTurnFlagsFromPlayerState(playerFlagTargetId);
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
-  const actionText = nextValue ? "flagged as mana fucked" : "unflagged for mana fucked";
-  showTransientNotice(`${playerLabel} was ${actionText} (${nextValue ? "+" : "-"}${manaFuckedSaltValue} salt).`);
-  if(nextValue){
-    playSfx(manaFuckedAudio);
-  }
+  showTransientNotice(`${playerLabel} was flagged as mana fucked (+${manaFuckedSaltValue} salt).`);
+  playSfx(manaFuckedAudio);
   openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
 });
 
@@ -1456,21 +1478,18 @@ document.getElementById("playerFlagMisplayedBtn")?.addEventListener("click", ()=
   if(!playerFlagTargetId) return;
   if(!getSaltActionVisibility(playerFlagTargetId).misplayed) return;
   const playerFlags = getPlayerFlagState(playerFlagTargetId);
-  const nextValue = !playerFlags.misplayed;
   const misplayedSaltValue = Math.max(0, Number(saltActionValues?.misplayed ?? 1) || 0);
-  const nextSaltCount = nextValue
-    ? playerFlags.salt_count + misplayedSaltValue
-    : Math.max(0, playerFlags.salt_count - misplayedSaltValue);
+  const nextSaltCount = playerFlags.salt_count + misplayedSaltValue;
 
   setPlayerFlagState(playerFlagTargetId, {
     ...playerFlags,
-    misplayed: nextValue,
+    misplayed: true,
     salt_count: nextSaltCount,
   });
+  syncTurnFlagsFromPlayerState(playerFlagTargetId);
 
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
-  const actionText = nextValue ? "flagged as misplayed" : "unflagged for misplayed";
-  showTransientNotice(`${playerLabel} was ${actionText} (${nextValue ? "+" : "-"}${misplayedSaltValue} salt).`);
+  showTransientNotice(`${playerLabel} misplayed (+${misplayedSaltValue} salt).`);
   openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
 });
 
