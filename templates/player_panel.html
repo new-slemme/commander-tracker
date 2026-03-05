@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>{{ this_player.player_name }} — Commandersohn</title>
+  <link href="/static/bootstrap.min.css" rel="stylesheet">
+  <link href="/static/css/player_panel.css" rel="stylesheet">
+</head>
+<body>
+
+<div class="panel-life-area">
+  <div class="panel-player-name">{{ this_player.player_name }}</div>
+  <div class="panel-life-total" id="lifeTotal">40</div>
+  <div class="panel-pending empty" id="pendingIndicator"></div>
+</div>
+
+<div class="panel-tap-zones">
+  <button class="panel-tap-btn" id="plusFive" type="button">+5</button>
+  <button class="panel-tap-btn" id="plusOne" type="button">+1</button>
+  <button class="panel-tap-btn" id="minusOne" type="button">−1</button>
+  <button class="panel-tap-btn" id="minusFive" type="button">−5</button>
+</div>
+
+<div class="panel-flags">
+  <button class="panel-flag-btn" id="manaFuckedBtn" type="button">
+    <span>💧</span> Mana Screwed
+  </button>
+  <button class="panel-flag-btn" id="misplayedBtn" type="button">
+    <span>⚡</span> Misplayed
+  </button>
+</div>
+
+<div class="panel-scoreboard">
+  <h2>All Players</h2>
+  <div class="scoreboard-list" id="scoreboardList"></div>
+</div>
+
+<div class="panel-status" id="panelStatus">Connecting...</div>
+
+<script>
+const TOKEN = {{ token|tojson }};
+const MY_PLAYER_ID = {{ player_id|tojson }};
+const MY_PID = String(MY_PLAYER_ID);
+const PARTICIPANTS = {{ participants|tojson }};
+const POLL_INTERVAL_MS = 2000;
+const COMMIT_MS = 650;
+
+let committedLife = Number({{ initial_state.life.get(this_player.player_id|string, 40)|tojson }}) || 40;
+let pendingDelta = 0;
+let pendingTimer = null;
+let lastVersion = -1;
+let flags = { mana_fucked: false, misplayed: false, salt_count: 0 };
+let activePlayerId = null;
+
+function renderLife(){
+  const display = Math.max(0, committedLife + pendingDelta);
+  const el = document.getElementById("lifeTotal");
+  el.textContent = String(display);
+  el.classList.toggle("life-low", display <= 5);
+  el.classList.toggle("life-mid", display > 5 && display <= 10);
+}
+
+function renderPending(){
+  const el = document.getElementById("pendingIndicator");
+  if(!pendingDelta){
+    el.textContent = "";
+    el.className = "panel-pending empty";
+  } else {
+    el.textContent = (pendingDelta > 0 ? "+" : "") + pendingDelta;
+    el.className = "panel-pending" + (pendingDelta < 0 ? " loss" : "");
+  }
+}
+
+function queueDelta(d){
+  pendingDelta += d;
+  renderPending();
+  renderLife();
+  clearTimeout(pendingTimer);
+  pendingTimer = setTimeout(commitLife, COMMIT_MS);
+}
+
+function commitLife(){
+  if(!pendingDelta) return;
+  const delta = pendingDelta;
+  committedLife = Math.max(0, committedLife + delta);
+  pendingDelta = 0;
+  renderPending();
+  renderLife();
+  pushUpdate({ life_delta: delta });
+}
+
+function renderFlags(){
+  document.getElementById("manaFuckedBtn").classList.toggle("is-active", !!flags.mana_fucked);
+  document.getElementById("misplayedBtn").classList.toggle("is-active", !!flags.misplayed);
+}
+
+function renderScoreboard(state){
+  const list = document.getElementById("scoreboardList");
+  if(!list || !PARTICIPANTS) return;
+  list.innerHTML = "";
+  const apid = String(state.active_player_id || "");
+  PARTICIPANTS.forEach((p) => {
+    const pid = String(p.player_id);
+    const life = (state.life || {})[pid] ?? "?";
+    const row = document.createElement("div");
+    row.className = "scoreboard-row" + (pid === apid ? " is-active" : "");
+    row.innerHTML = `<span class="sb-name">${escapeHtml(p.player_name)}</span><span class="sb-life">${life}</span>`;
+    list.appendChild(row);
+  });
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function applyRemoteState(state){
+  if(typeof state.version !== "number" || state.version <= lastVersion) return;
+  lastVersion = state.version;
+
+  // Only update own life if no pending change in flight
+  if(!pendingDelta){
+    const remoteLife = (state.life || {})[MY_PID];
+    if(typeof remoteLife === "number"){
+      committedLife = remoteLife;
+      renderLife();
+    }
+  }
+
+  // Flags
+  const remoteFlags = (state.flags || {})[MY_PID];
+  if(remoteFlags){
+    flags.mana_fucked = !!remoteFlags.mana_fucked;
+    flags.misplayed = !!remoteFlags.misplayed;
+    flags.salt_count = Number(remoteFlags.salt_count) || 0;
+    renderFlags();
+  }
+
+  activePlayerId = state.active_player_id;
+  renderScoreboard(state);
+  document.getElementById("panelStatus").textContent = `Turn ${state.turn || 1}`;
+}
+
+async function pushUpdate(patch){
+  const body = Object.assign({ player_id: MY_PLAYER_ID }, patch);
+  try {
+    const resp = await fetch(`/api/game/${TOKEN}/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if(resp.ok){
+      const data = await resp.json();
+      applyRemoteState(data);
+    }
+  } catch(e){}
+}
+
+async function poll(){
+  try {
+    const resp = await fetch(`/api/game/${TOKEN}/state`);
+    if(resp.status === 404){
+      document.getElementById("panelStatus").textContent = "Game has ended.";
+      clearInterval(pollInterval);
+      return;
+    }
+    if(resp.ok){
+      const data = await resp.json();
+      applyRemoteState(data);
+    }
+  } catch(e){}
+}
+
+// Tap buttons
+document.getElementById("plusFive").addEventListener("click", () => queueDelta(5));
+document.getElementById("plusOne").addEventListener("click", () => queueDelta(1));
+document.getElementById("minusOne").addEventListener("click", () => queueDelta(-1));
+document.getElementById("minusFive").addEventListener("click", () => queueDelta(-5));
+
+document.getElementById("manaFuckedBtn").addEventListener("click", () => {
+  flags.mana_fucked = !flags.mana_fucked;
+  renderFlags();
+  pushUpdate({ flags: { mana_fucked: flags.mana_fucked, misplayed: flags.misplayed, salt_count: flags.salt_count } });
+});
+
+document.getElementById("misplayedBtn").addEventListener("click", () => {
+  flags.misplayed = !flags.misplayed;
+  renderFlags();
+  pushUpdate({ flags: { mana_fucked: flags.mana_fucked, misplayed: flags.misplayed, salt_count: flags.salt_count } });
+});
+
+// Init from server state
+const initState = {{ initial_state|tojson }};
+if(initState && Object.keys(initState).length){
+  applyRemoteState(initState);
+} else {
+  renderLife();
+  renderScoreboard({});
+}
+
+const pollInterval = setInterval(poll, POLL_INTERVAL_MS);
+</script>
+</body>
+</html>
