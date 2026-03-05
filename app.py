@@ -4247,7 +4247,12 @@ def update_deck(deck_id):
     try:
         raw_import, imported_from = _extract_deck_import_text()
         if raw_import:
-            parsed_import = parse_deck_input(raw_import)
+            # Skip re-parsing if the pasted text is identical to the stored decklist
+            if imported_from == "text" and raw_import == (deck.decklist_text or "").strip():
+                raw_import = None
+                imported_from = None
+            else:
+                parsed_import = parse_deck_input(raw_import)
 
         custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
             custom_commander_art_url,
@@ -4351,6 +4356,34 @@ def update_deck(deck_id):
         flash(f"Updated deck: {deck.name}")
     flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(request.form.get("next") or url_for("decks"))
+
+
+@app.route("/deck/<int:deck_id>/remove-decklist", methods=["POST"])
+@login_required
+def remove_deck_decklist(deck_id):
+    u = get_current_user()
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to edit this deck.")
+        return redirect(url_for("deck_detail", deck_id=deck_id))
+
+    deck.decklist_text = None
+    deck.tags_json = "{}"
+    deck.tags_version = None
+    deck.tags_computed_at = None
+
+    try:
+        db.session.commit()
+        flash("Decklist removed.")
+    except Exception as exc:
+        db.session.rollback()
+        flash(f"Failed to remove decklist: {exc}")
+
+    return redirect(url_for("deck_detail", deck_id=deck_id))
 
 
 @app.route("/add_game")

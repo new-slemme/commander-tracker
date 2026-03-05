@@ -98,6 +98,17 @@
           {% endif %}
         </li>
 
+        {% if deck.decklist_text %}
+        <li>
+          <form method="post" action="{{ url_for('remove_deck_decklist', deck_id=deck.id) }}"
+                onsubmit="return confirm('Remove the saved decklist from {{ deck.name }}? This cannot be undone.');">
+            <button type="submit" class="dropdown-item text-warning">
+              Remove decklist
+            </button>
+          </form>
+        </li>
+        {% endif %}
+
         <li>
           <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
                 onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
@@ -474,10 +485,18 @@
               <label class="form-label mt-3">Decklist file (optional)</label>
               <input class="form-control" id="editDecklistFileInput" type="file" name="decklist_file" accept=".txt,.dek,.csv" />
 
-              <label class="form-label mt-3">Paste decklist (optional fallback)</label>
-              <textarea class="form-control" id="editDecklistTextInput" name="decklist_text" rows="5" placeholder="Commander
+              <label class="form-label mt-3">
+                Paste decklist
+                {% if deck.decklist_text %}
+                  <span class="badge rounded-pill text-bg-secondary ms-1">saved</span>
+                {% endif %}
+              </label>
+              <textarea class="form-control font-monospace" id="editDecklistTextInput" name="decklist_text" rows="10" placeholder="Commander
 1 Sol Ring
-1 Arcane Signet"></textarea>
+1 Arcane Signet">{{ deck.decklist_text or '' }}</textarea>
+              <div class="form-text mt-1" style="color: var(--font-base-trans);">
+                Edit the list above, or leave unchanged to keep the existing decklist.
+              </div>
 
               <div class="d-grid mt-3">
                 <button class="btn btn-outline-info" type="button" id="editImportAutofillBtn">Autofill commander(s) from import</button>
