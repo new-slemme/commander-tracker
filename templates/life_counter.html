@@ -153,9 +153,18 @@
               class="card-logic-chip commander-damage-chip"
               data-player="{{ p.player_id }}"
               data-logic-group="commander-damage"
-              aria-label="Cycle commander damage source for {{ p.player_name }}"
+              aria-label="Add 1 commander damage to {{ p.player_name }} from next source"
               title="Commander damage"
             >⚔️ <span class="commander-damage-value" id="commander-damage-total-{{ p.player_id }}">0</span></button>
+            <div class="commander-damage-sources" data-player="{{ p.player_id }}" role="group" aria-label="Commander damage sources for {{ p.player_name }}"></div>
+            <button
+              type="button"
+              class="card-logic-chip commander-damage-reset-all"
+              data-player="{{ p.player_id }}"
+              data-logic-group="commander-damage"
+              aria-label="Reset all commander damage for {{ p.player_name }}"
+              title="Reset all commander damage"
+            >Reset Commander</button>
           </div>
 
           <div class="active-corner-badge" aria-hidden="true"></div>
@@ -466,24 +475,104 @@ function setStatusValue(playerId, statusId, enabled){
 
 function cycleCommanderDamageSource(playerId){
   const pid = String(playerId);
-  const state = getCardState(pid);
-  const sourceIds = cards.map((card)=>String(card.dataset.player)).filter((source)=>source !== pid);
+  const sourceIds = getCommanderSourceIdsForTarget(pid);
   if(sourceIds.length === 0) return;
+
+  const state = getCardState(pid);
 
   const currentSource = sourceIds.find((source)=>Number(state.commander_damage?.[source] || 0) > 0) || sourceIds[0];
   const sourceIndex = sourceIds.indexOf(currentSource);
   const nextSource = sourceIds[(sourceIndex + 1) % sourceIds.length];
 
-  if(!state.commander_damage[currentSource]) state.commander_damage[currentSource] = 0;
-  state.commander_damage[currentSource] = Math.max(0, Number(state.commander_damage[currentSource]) + 1);
-  if(currentSource !== nextSource && !state.commander_damage[nextSource]) state.commander_damage[nextSource] = 0;
-
-  renderCardStateForPlayer(pid);
+  adjustCommanderDamage(pid, currentSource, 1);
+  if(currentSource !== nextSource) setCommanderDamage(pid, nextSource, getCommanderDamageBySource(pid, nextSource));
 }
 
-function getCommanderDamageTotal(playerId){
+function getCommanderSourceIdsForTarget(targetPlayerId){
+  const pid = String(targetPlayerId);
+  return cards
+    .map((card)=>String(card.dataset.player))
+    .filter((source)=>source !== pid);
+}
+
+function getCommanderDamageBySource(targetPlayerId, sourcePlayerId){
+  const state = getCardState(targetPlayerId);
+  return Math.max(0, Number(state.commander_damage?.[String(sourcePlayerId)] || 0));
+}
+
+function setCommanderDamage(targetPlayerId, sourcePlayerId, nextRawValue){
+  const targetId = String(targetPlayerId);
+  const sourceId = String(sourcePlayerId);
+  if(!sourceId || sourceId === targetId) return;
+  const state = getCardState(targetId);
+  const nextValue = Math.max(0, Number(nextRawValue) || 0);
+  if(nextValue === 0){
+    delete state.commander_damage[sourceId];
+  }else{
+    state.commander_damage[sourceId] = nextValue;
+  }
+  renderCardStateForPlayer(targetId);
+}
+
+function adjustCommanderDamage(targetPlayerId, sourcePlayerId, delta){
+  const current = getCommanderDamageBySource(targetPlayerId, sourcePlayerId);
+  setCommanderDamage(targetPlayerId, sourcePlayerId, current + (Number(delta) || 0));
+}
+
+function resetCommanderDamageForPlayer(targetPlayerId){
+  const state = getCardState(targetPlayerId);
+  state.commander_damage = {};
+  renderCardStateForPlayer(targetPlayerId);
+}
+
+function computeCommanderDamageTotal(playerId){
   const state = getCardState(playerId);
   return Object.values(state.commander_damage || {}).reduce((sum, value)=>sum + Math.max(0, Number(value) || 0), 0);
+}
+
+function computeCommanderDamageMaxBySource(playerId){
+  const state = getCardState(playerId);
+  return Object.values(state.commander_damage || {}).reduce((maxVal, value)=>Math.max(maxVal, Math.max(0, Number(value) || 0)), 0);
+}
+
+function renderCommanderDamageSources(playerId){
+  const pid = String(playerId);
+  const sourcesContainer = document.querySelector(`.commander-damage-sources[data-player="${pid}"]`);
+  if(!sourcesContainer) return;
+  const sourceIds = getCommanderSourceIdsForTarget(pid);
+  sourcesContainer.innerHTML = "";
+
+  sourceIds.forEach((sourceId)=>{
+    const sourceCard = cards.find((card)=>String(card.dataset.player) === sourceId);
+    const sourceName = sourceCard?.querySelector('.player-name')?.textContent?.trim() || `Player ${sourceId}`;
+    const value = getCommanderDamageBySource(pid, sourceId);
+
+    const row = document.createElement('div');
+    row.className = 'counter-chip commander-damage-source-row';
+    row.dataset.player = pid;
+    row.dataset.sourcePlayer = sourceId;
+
+    row.innerHTML = `
+      <button type="button" class="counter-chip-btn" data-commander-action="decrement" aria-label="Decrease commander damage to ${sourceName}">−</button>
+      <span class="counter-chip-label" title="Commander damage from ${sourceName}">${sourceName}</span>
+      <span class="counter-chip-value">${value}</span>
+      <button type="button" class="counter-chip-btn" data-commander-action="increment" aria-label="Increase commander damage to ${sourceName}">+</button>
+      <button type="button" class="counter-chip-btn" data-commander-action="reset" aria-label="Reset commander damage from ${sourceName}">↺</button>
+    `;
+
+    row.querySelectorAll('[data-commander-action]').forEach((button)=>{
+      button.addEventListener('pointerdown', (event)=>event.stopPropagation());
+      button.addEventListener('click', (event)=>{
+        event.stopPropagation();
+        const action = button.dataset.commanderAction;
+        if(action === 'increment') adjustCommanderDamage(pid, sourceId, 1);
+        if(action === 'decrement') adjustCommanderDamage(pid, sourceId, -1);
+        if(action === 'reset') setCommanderDamage(pid, sourceId, 0);
+      });
+    });
+
+    sourcesContainer.appendChild(row);
+  });
 }
 
 function renderCardStateForPlayer(playerId){
@@ -510,12 +599,14 @@ function renderCardStateForPlayer(playerId){
   });
 
   const commanderDamageEl = document.getElementById(`commander-damage-total-${pid}`);
-  const commanderDamageTotal = getCommanderDamageTotal(pid);
+  const commanderDamageTotal = computeCommanderDamageTotal(pid);
+  const commanderDamageMax = computeCommanderDamageMaxBySource(pid);
   if(commanderDamageEl) commanderDamageEl.textContent = String(commanderDamageTotal);
   const commanderDamageChip = document.querySelector(`.commander-damage-chip[data-player="${pid}"]`);
   const threshold = Math.max(1, Number(cardLogicCatalog?.commander_damage_threshold || 21));
+  renderCommanderDamageSources(pid);
   commanderDamageChip?.classList.toggle('is-active', commanderDamageTotal > 0);
-  commanderDamageChip?.classList.toggle('is-danger', commanderDamageTotal >= threshold);
+  commanderDamageChip?.classList.toggle('is-danger', commanderDamageTotal >= threshold || commanderDamageMax >= threshold);
 
   const poisonValue = getCounterValue(pid, 'poison');
   poisonCountersByPlayer[pid] = poisonValue;
@@ -1695,6 +1786,16 @@ document.querySelectorAll('.commander-damage-chip').forEach((button)=>{
     const playerId = String(button.dataset.player || '');
     if(!playerId) return;
     cycleCommanderDamageSource(playerId);
+  });
+});
+
+document.querySelectorAll('.commander-damage-reset-all').forEach((button)=>{
+  button.addEventListener('pointerdown', (event)=>event.stopPropagation());
+  button.addEventListener('click', (event)=>{
+    event.stopPropagation();
+    const playerId = String(button.dataset.player || '');
+    if(!playerId) return;
+    resetCommanderDamageForPlayer(playerId);
   });
 });
 
