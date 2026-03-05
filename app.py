@@ -28,7 +28,7 @@ from sqlalchemy.orm import aliased
 from functools import wraps
 from uuid import uuid4
 
-from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist
+from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist, ccauto_named_exact
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
@@ -91,6 +91,8 @@ KNOWN_DECK_TAG_KEYS = (
     "misplayed",
 )
 TRUST_LEGACY_DECK_TAGS = False
+
+CCAUTO_BASE_URL = os.getenv("CCAUTO_BASE_URL", "").rstrip("/")
 
 COMMANDER_BRACKET_FAST_MANA = {
     "mana crypt",
@@ -1339,6 +1341,11 @@ def resolve_custom_art_value(url_value: str, upload, field_label: str) -> tuple[
     return normalized_custom_art_url(url_value), None
 
 
+def _color_identity_from_mana(mana: str) -> str:
+    """Extract WUBRG color identity from a cc-auto mana string like '6WR' or '3UB'."""
+    return "".join(c for c in "WUBRG" if c in (mana or "").upper())
+
+
 def scryfall_named_exact(name: str):
     """Best-effort exact-name lookup. Returns dict or None."""
     if not name:
@@ -1608,6 +1615,29 @@ def resolve_commander_metadata(commander_input: str) -> dict:
             cards.append(card)
 
     if not cards:
+        # Fallback: check Card Conjurer custom sets for the commander card.
+        if CCAUTO_BASE_URL:
+            ccauto_cards = [ccauto_named_exact(n) for n in commander_names]
+            ccauto_cards = [c for c in ccauto_cards if c]
+            if ccauto_cards:
+                combined_color = "".join(
+                    _color_identity_from_mana(c.get("mana", "")) for c in ccauto_cards
+                )
+                color_identity = "".join(c for c in "WUBRG" if c in combined_color)
+                combined_name = " + ".join(
+                    c.get("name") or commander_names[i] for i, c in enumerate(ccauto_cards)
+                )
+                return {
+                    "commander": combined_name,
+                    "commander_name": combined_name,
+                    "commander_scryfall_id": None,
+                    "commander_art_crop_url": None,
+                    "commander_local_art_crop": None,
+                    "commander_local_art_custom": None,
+                    "color_identity": color_identity,
+                    "lookup_ok": True,
+                }
+
         return {
             "commander": " + ".join(commander_names) if commander_names else commander_input.strip(),
             "commander_name": None,

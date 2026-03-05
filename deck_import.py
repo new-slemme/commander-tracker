@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 import re
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
+
+
+# Base URL of the Card Conjurer (cc-auto) instance, e.g. "http://cardconjurer:4242".
+# When set, URLs from that host are recognised as custom-set imports.
+_CCAUTO_BASE_URL = os.getenv("CCAUTO_BASE_URL", "").rstrip("/")
 
 
 class DeckParserError(ValueError):
@@ -60,6 +66,7 @@ _SUPPORTED_DOMAINS = {
 
 _MOXFIELD_PATH_RE = re.compile(r"^/decks/(?P<deck_id>[A-Za-z0-9_-]{6,})/?")
 _ARCHIDEKT_PATH_RE = re.compile(r"^/decks/(?P<deck_id>\d+)(?:/|$)")
+_CCAUTO_SET_PATH_RE = re.compile(r"^/sets/(?P<set_name>[A-Za-z0-9_-]+?)(?:\.json)?/?$")
 
 
 def parse_deck_input(raw_input: str, *, timeout: int = 15) -> dict[str, Any]:
@@ -85,6 +92,16 @@ def parse_deck_input(raw_input: str, *, timeout: int = 15) -> dict[str, Any]:
 
     parsed_url = _safe_parse_url(text)
     if parsed_url:
+        # Check Card Conjurer custom-set URLs before the standard domain table.
+        if _CCAUTO_BASE_URL:
+            ccauto_parsed = _safe_parse_url(_CCAUTO_BASE_URL)
+            if (
+                ccauto_parsed
+                and parsed_url.netloc.lower() == ccauto_parsed.netloc.lower()
+                and _CCAUTO_SET_PATH_RE.match(parsed_url.path)
+            ):
+                return parse_ccauto_set_url(text, timeout=timeout).as_dict()
+
         domain_type = _SUPPORTED_DOMAINS.get(parsed_url.netloc.lower())
         if not domain_type:
             raise DeckParserError(
@@ -221,6 +238,104 @@ def parse_archidekt_url(url: str, *, timeout: int = 15) -> ParsedDeck:
         raise DeckParserError("Archidekt deck did not contain any card entries.")
 
     return ParsedDeck(source="archidekt", commander=commander, commanders=commanders, sections=sections)
+
+
+def parse_ccauto_set_url(url: str, *, timeout: int = 15) -> ParsedDeck:
+    """Import all cards in a Card Conjurer custom set as a mainboard list (1x each)."""
+    parsed = _safe_parse_url(url)
+    if not parsed:
+        raise DeckParserError("Invalid Card Conjurer URL.")
+
+    match = _CCAUTO_SET_PATH_RE.match(parsed.path)
+    if not match:
+        raise DeckParserError("Card Conjurer URL must look like /sets/<set-name>.")
+
+    set_name = match.group("set_name")
+    base = f"{parsed.scheme}://{parsed.netloc}"
+    api_url = f"{base}/sets/{set_name}.json"
+
+    try:
+        response = requests.get(api_url, timeout=timeout)
+    except requests.RequestException as exc:
+        raise DeckParserError(f"Could not reach Card Conjurer: {exc}") from exc
+
+    if response.status_code == 404:
+        raise DeckParserError(
+            f"Card Conjurer set '{set_name}' not found. Check the set name and try again."
+        )
+    if response.status_code != 200:
+        raise DeckParserError(f"Card Conjurer import failed (HTTP {response.status_code}).")
+
+    try:
+        cards = response.json()
+    except ValueError as exc:
+        raise DeckParserError("Card Conjurer returned invalid JSON.") from exc
+
+    if not isinstance(cards, list):
+        raise DeckParserError("Card Conjurer set response is not a card list.")
+
+    section_buckets: dict[str, dict[str, ParsedCardEntry]] = {}
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        name = card.get("name")
+        if not name:
+            continue
+        _add_card(section_buckets, "mainboard", str(name), 1)
+
+    sections = _finalize_sections(section_buckets)
+    if not sections:
+        raise DeckParserError("Card Conjurer set did not contain any cards.")
+
+    return ParsedDeck(source="ccauto", commander=None, commanders=[], sections=sections)
+
+
+def ccauto_named_exact(name: str, *, timeout: int = 5) -> dict | None:
+    """Look up a card by name across all Card Conjurer sets.
+
+    Returns the raw card dict (with 'name', 'mana', 'type', 'rules', etc.) or None.
+    Requires CCAUTO_BASE_URL to be set.
+    """
+    if not _CCAUTO_BASE_URL or not name:
+        return None
+
+    name_lower = name.lower().strip()
+
+    try:
+        index_r = requests.get(f"{_CCAUTO_BASE_URL}/sets/index.json", timeout=timeout)
+        if index_r.status_code != 200:
+            return None
+        sets = index_r.json()
+        if not isinstance(sets, list):
+            return None
+    except (requests.RequestException, ValueError):
+        return None
+
+    for set_info in sets:
+        if not isinstance(set_info, dict):
+            continue
+        set_name = set_info.get("name")
+        if not set_name:
+            continue
+        try:
+            cards_r = requests.get(
+                f"{_CCAUTO_BASE_URL}/sets/{set_name}.json", timeout=timeout
+            )
+            if cards_r.status_code != 200:
+                continue
+            cards = cards_r.json()
+            if not isinstance(cards, list):
+                continue
+            for card in cards:
+                if (
+                    isinstance(card, dict)
+                    and (card.get("name") or "").lower().strip() == name_lower
+                ):
+                    return card
+        except (requests.RequestException, ValueError):
+            continue
+
+    return None
 
 
 def parse_plaintext_decklist(text: str) -> ParsedDeck:
