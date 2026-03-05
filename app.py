@@ -5253,6 +5253,34 @@ def api_game_state(token):
             elif k == "salt_count" and isinstance(v, int) and not isinstance(v, bool) and v >= 0:
                 state["flags"][pid][k] = v
 
+    # Card state (scoped to requested player id for non-host via authorization above)
+    card_state_update = data.get("card_state")
+    if card_state_update is not None:
+        sanitized_card_state = sanitize_card_state_payload(card_state_update, valid_player_ids)
+        if sanitized_card_state:
+            existing_player_card_state = state["card_state"].get(pid)
+            if not isinstance(existing_player_card_state, dict):
+                existing_player_card_state = {}
+
+            merged_player_card_state = {
+                "counters": dict(existing_player_card_state.get("counters", {}))
+                if isinstance(existing_player_card_state.get("counters"), dict)
+                else {},
+                "commander_damage": dict(existing_player_card_state.get("commander_damage", {}))
+                if isinstance(existing_player_card_state.get("commander_damage"), dict)
+                else {},
+                "statuses": dict(existing_player_card_state.get("statuses", {}))
+                if isinstance(existing_player_card_state.get("statuses"), dict)
+                else {},
+            }
+
+            for section in ("counters", "commander_damage", "statuses"):
+                section_update = sanitized_card_state.get(section)
+                if isinstance(section_update, dict) and section_update:
+                    merged_player_card_state[section].update(section_update)
+
+            state["card_state"][pid] = merged_player_card_state
+
     # Host-only: update active_player_id and turn number
     if is_host:
         active_player_raw = data.get("active_player_id")
