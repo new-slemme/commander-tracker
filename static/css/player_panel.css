@@ -107,6 +107,7 @@ html, body {
   gap: .4rem;
   cursor: pointer;
   transition: background .1s, border-color .1s, color .1s;
+  min-height: 44px;
 }
 
 .panel-flag-btn.is-active {
@@ -120,7 +121,73 @@ html, body {
   padding: 4px 8px 8px;
   border-top: 1px solid #2a2e45;
   overflow-y: auto;
-  max-height: calc(100dvh - 44dvh - 28dvh - 80px - 56px);
+  max-height: calc(100dvh - 44dvh - 28dvh - 80px - 220px);
+}
+
+/* ---- Commander damage ---- */
+.panel-commander-damage {
+  padding: 4px 8px;
+  border-top: 1px solid #2a2e45;
+}
+
+.panel-commander-damage h2 {
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #6a7090;
+  margin: 4px 0 6px;
+}
+
+.commander-damage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.commander-damage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  background: #1a1e30;
+  border-radius: 8px;
+  padding: .4rem .5rem;
+}
+
+.cd-name {
+  color: #c0c8e0;
+  font-size: .9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cd-controls {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.cd-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 1px solid #3a3f5c;
+  background: #1e2235;
+  color: #e0e0e0;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.cd-btn:active {
+  background: #2a3050;
+}
+
+.cd-value {
+  min-width: 2ch;
+  text-align: right;
+  font-weight: 700;
+  color: #fff;
 }
 
 .panel-scoreboard h2 {

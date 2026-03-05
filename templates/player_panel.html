@@ -33,6 +33,11 @@
   </button>
 </div>
 
+<div class="panel-commander-damage" id="commanderDamageCard">
+  <h2>Commander Damage Taken</h2>
+  <div class="commander-damage-list" id="commanderDamageList"></div>
+</div>
+
 <div class="panel-scoreboard">
   <h2>All Players</h2>
   <div class="scoreboard-list" id="scoreboardList"></div>
@@ -54,6 +59,9 @@ let pendingTimer = null;
 let lastVersion = -1;
 let flags = { mana_fucked: false, misplayed: false, salt_count: 0 };
 let activePlayerId = null;
+let commanderDamageBySource = {};
+
+const OPPONENTS = (PARTICIPANTS || []).filter((p) => String(p.player_id) !== MY_PID);
 
 function renderLife(){
   const display = Math.max(0, committedLife + pendingDelta);
@@ -112,6 +120,39 @@ function renderScoreboard(state){
   });
 }
 
+function renderCommanderDamage(){
+  const list = document.getElementById("commanderDamageList");
+  if(!list) return;
+  list.innerHTML = "";
+
+  OPPONENTS.forEach((opponent) => {
+    const sourcePid = String(opponent.player_id);
+    const current = Number(commanderDamageBySource[sourcePid]) || 0;
+    const row = document.createElement("div");
+    row.className = "commander-damage-row";
+    row.innerHTML = `
+      <span class="cd-name">${escapeHtml(opponent.player_name)}</span>
+      <div class="cd-controls">
+        <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="-1">−1</button>
+        <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="1">+1</button>
+        <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="5">+5</button>
+        <span class="cd-value" id="commanderDamage-${sourcePid}">${current}</span>
+      </div>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function queueCommanderDamage(sourcePid, delta){
+  const current = Number(commanderDamageBySource[sourcePid]) || 0;
+  const next = Math.max(0, Math.min(99, current + delta));
+  if(next === current) return;
+  commanderDamageBySource[sourcePid] = next;
+  const valueEl = document.getElementById(`commanderDamage-${sourcePid}`);
+  if(valueEl) valueEl.textContent = String(next);
+  pushUpdate({ card_state: { commander_damage: { [sourcePid]: next } } });
+}
+
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
@@ -139,7 +180,20 @@ function applyRemoteState(state){
   }
 
   activePlayerId = state.active_player_id;
+
+  const remoteCommanderDamage = (((state.card_state || {})[MY_PID] || {}).commander_damage || {});
+  const nextCommanderDamageBySource = {};
+  OPPONENTS.forEach((opponent) => {
+    const sourcePid = String(opponent.player_id);
+    const remoteValue = remoteCommanderDamage[sourcePid];
+    nextCommanderDamageBySource[sourcePid] = (typeof remoteValue === "number" && remoteValue >= 0)
+      ? Math.min(99, remoteValue)
+      : 0;
+  });
+  commanderDamageBySource = nextCommanderDamageBySource;
+
   renderScoreboard(state);
+  renderCommanderDamage();
   document.getElementById("panelStatus").textContent = `Turn ${state.turn || 1}`;
 }
 
@@ -191,6 +245,15 @@ document.getElementById("misplayedBtn").addEventListener("click", () => {
   pushUpdate({ flags: { mana_fucked: flags.mana_fucked, misplayed: flags.misplayed, salt_count: flags.salt_count } });
 });
 
+document.getElementById("commanderDamageList").addEventListener("click", (event) => {
+  const btn = event.target.closest("button.cd-btn");
+  if(!btn) return;
+  const sourcePid = btn.dataset.sourcePid;
+  const delta = Number(btn.dataset.delta || 0);
+  if(!sourcePid || !Number.isFinite(delta) || !delta) return;
+  queueCommanderDamage(sourcePid, delta);
+});
+
 // Init from server state
 const initState = {{ initial_state|tojson }};
 if(initState && Object.keys(initState).length){
@@ -198,6 +261,7 @@ if(initState && Object.keys(initState).length){
 } else {
   renderLife();
   renderScoreboard({});
+  renderCommanderDamage();
 }
 
 const pollInterval = setInterval(poll, POLL_INTERVAL_MS);
