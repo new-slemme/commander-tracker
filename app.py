@@ -1360,6 +1360,43 @@ def scryfall_named_exact(name: str):
         return None
 
 
+def custommtg_gallery_named_exact(name: str) -> dict | None:
+    """Look up a card by exact name in the custom MTG gallery. Returns card dict or None."""
+    if not CCAUTO_BASE_URL or not name:
+        return None
+    name_lower = name.lower().strip()
+    try:
+        r = requests.get(
+            f"{CCAUTO_BASE_URL}/api/cards/search?q={quote(name_lower)}",
+            timeout=5,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        for card in data.get("data") or []:
+            if isinstance(card, dict) and (card.get("name") or "").lower().strip() == name_lower:
+                return card
+    except (requests.RequestException, ValueError):
+        return None
+    return None
+
+
+def _rewrite_gallery_image_uris(card: dict) -> dict:
+    """Rewrite relative gallery image paths in image_uris to proxy URLs."""
+    if not card:
+        return card
+    uris = card.get("image_uris")
+    if not isinstance(uris, dict):
+        return card
+    rewritten = {}
+    for key, val in uris.items():
+        if isinstance(val, str) and val.startswith("/api/sets/"):
+            rewritten[key] = f"/api/gallery-image?path={quote(val)}"
+        else:
+            rewritten[key] = val
+    return {**card, "image_uris": rewritten}
+
+
 def extract_art_crop(card: dict):
     """Returns art_crop URL or None. Handles DFC cards (card_faces)."""
     if not card:
@@ -1471,6 +1508,8 @@ def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
 
         try:
             card_json = scryfall_named_exact(name)
+            if not card_json and CCAUTO_BASE_URL:
+                card_json = custommtg_gallery_named_exact(name)
             if not card_json:
                 unresolved_cards.append(name)
                 continue
@@ -1621,18 +1660,26 @@ def resolve_commander_metadata(commander_input: str) -> dict:
             ccauto_cards = [c for c in ccauto_cards if c]
             if ccauto_cards:
                 combined_color = "".join(
-                    _color_identity_from_mana(c.get("mana", "")) for c in ccauto_cards
+                    "".join(c.get("color_identity") or [])
+                    or _color_identity_from_mana(c.get("mana_cost") or c.get("mana", ""))
+                    for c in ccauto_cards
                 )
                 color_identity = "".join(c for c in "WUBRG" if c in combined_color)
                 combined_name = " + ".join(
                     c.get("name") or commander_names[i] for i, c in enumerate(ccauto_cards)
                 )
+                primary = ccauto_cards[0]
+                art_crop_path = (primary.get("image_uris") or {}).get("art_crop")
+                art_url_internal = f"{CCAUTO_BASE_URL}{art_crop_path}" if art_crop_path else None
+                art_url_proxy = f"/api/gallery-image?path={quote(art_crop_path)}" if art_crop_path else None
+                card_id = primary.get("id")
+                local_art = download_art_crop(art_url_internal, card_id, combined_name) if art_url_internal and card_id else None
                 return {
                     "commander": combined_name,
                     "commander_name": combined_name,
                     "commander_scryfall_id": None,
-                    "commander_art_crop_url": None,
-                    "commander_local_art_crop": None,
+                    "commander_art_crop_url": art_url_proxy,
+                    "commander_local_art_crop": local_art,
                     "commander_local_art_custom": None,
                     "color_identity": color_identity,
                     "lookup_ok": True,
@@ -1733,6 +1780,16 @@ def cache_card_art_by_name(card_name: str) -> str | None:
         return None
 
     card = scryfall_named_exact(normalized_name)
+    if not card and CCAUTO_BASE_URL:
+        gallery_card = custommtg_gallery_named_exact(normalized_name)
+        if gallery_card:
+            # Make relative image path absolute for download
+            uris = gallery_card.get("image_uris") or {}
+            normal_path = uris.get("normal") or ""
+            if normal_path.startswith("/"):
+                normal_path = CCAUTO_BASE_URL + normal_path
+            card = {**gallery_card, "image_uris": {**uris, "normal": normal_path}}
+
     if not card:
         return None
 
@@ -4140,6 +4197,83 @@ def api_card_art():
 
     image = cache_card_art_by_name(card_name)
     return jsonify({"image": image})
+
+
+@app.route("/api/gallery-image")
+def api_gallery_image():
+    """Proxy gallery images to the browser (internal Docker URL not reachable from browser)."""
+    path_param = (request.args.get("path") or "").strip()
+    if not path_param or not CCAUTO_BASE_URL:
+        return "Not found", 404
+    try:
+        r = requests.get(f"{CCAUTO_BASE_URL}{path_param}", timeout=10, stream=True)
+        if r.status_code != 200:
+            return "Not found", 404
+        content_type = r.headers.get("Content-Type", "image/jpeg")
+        return r.content, 200, {"Content-Type": content_type, "Cache-Control": "public, max-age=86400"}
+    except requests.RequestException:
+        return "Not found", 404
+
+
+@app.route("/api/cards/autocomplete")
+def api_cards_autocomplete():
+    """Merge Scryfall + gallery autocomplete results."""
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify({"data": []})
+
+    results = []
+    seen = set()
+
+    # Scryfall
+    try:
+        r = requests.get(
+            f"https://api.scryfall.com/cards/autocomplete?q={quote(q)}", timeout=5
+        )
+        if r.status_code == 200:
+            for name in r.json().get("data") or []:
+                key = name.lower()
+                if key not in seen:
+                    seen.add(key)
+                    results.append(name)
+    except requests.RequestException:
+        pass
+
+    # Gallery
+    if CCAUTO_BASE_URL:
+        try:
+            r = requests.get(
+                f"{CCAUTO_BASE_URL}/api/cards/autocomplete?q={quote(q)}", timeout=5
+            )
+            if r.status_code == 200:
+                for name in r.json().get("data") or []:
+                    key = name.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        results.append(name)
+        except requests.RequestException:
+            pass
+
+    return jsonify({"data": results})
+
+
+@app.route("/api/cards/named")
+def api_cards_named():
+    """Try Scryfall then gallery for exact card lookup, rewriting gallery image URLs."""
+    exact = (request.args.get("exact") or "").strip()
+    if not exact:
+        return jsonify({"error": "Missing 'exact' parameter"}), 400
+
+    card = scryfall_named_exact(exact)
+    if card:
+        return jsonify(card)
+
+    if CCAUTO_BASE_URL:
+        card = custommtg_gallery_named_exact(exact)
+        if card:
+            return jsonify(_rewrite_gallery_image_uris(card))
+
+    return jsonify({"error": "Card not found"}), 404
 
 
 @app.route("/deck/<int:deck_id>/retag", methods=["POST"])

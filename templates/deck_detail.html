@@ -408,7 +408,7 @@
             <label class="form-label">Commander</label>
             <input class="form-control" id="editCommanderInput" name="commander" value="{{ deck.commander_name or deck.commander }}" autocomplete="off" required>
             <div class="form-text" style="color: var(--font-base-trans);">
-              Start typing a card name; suggestions come from Scryfall.
+              Start typing a card name; suggestions come from Scryfall and custom cards.
             </div>
           </div>
 
@@ -525,7 +525,7 @@
   const autocompleteTimers = new WeakMap();
 
   async function scryfallAutocomplete(q) {
-    const url = `https://api.scryfall.com/cards/autocomplete?q=${encodeURIComponent(q)}`;
+    const url = `/api/cards/autocomplete?q=${encodeURIComponent(q)}`;
     const res = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
@@ -533,7 +533,7 @@
   }
 
   async function scryfallCardByExactName(name) {
-    const url = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(name)}`;
+    const url = `/api/cards/named?exact=${encodeURIComponent(name)}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     return await res.json();

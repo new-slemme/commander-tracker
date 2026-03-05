@@ -291,9 +291,9 @@ def parse_ccauto_set_url(url: str, *, timeout: int = 15) -> ParsedDeck:
 
 
 def ccauto_named_exact(name: str, *, timeout: int = 5) -> dict | None:
-    """Look up a card by name across all Card Conjurer sets.
+    """Look up a card by exact name via the gallery API (/api/cards/search).
 
-    Returns the raw card dict (with 'name', 'mana', 'type', 'rules', etc.) or None.
+    Returns the Scryfall-compatible card dict or None.
     Requires CCAUTO_BASE_URL to be set.
     """
     if not _CCAUTO_BASE_URL or not name:
@@ -302,38 +302,21 @@ def ccauto_named_exact(name: str, *, timeout: int = 5) -> dict | None:
     name_lower = name.lower().strip()
 
     try:
-        index_r = requests.get(f"{_CCAUTO_BASE_URL}/sets/index.json", timeout=timeout)
-        if index_r.status_code != 200:
+        r = requests.get(
+            f"{_CCAUTO_BASE_URL}/api/cards/search?q={requests.utils.quote(name_lower)}",
+            timeout=timeout,
+        )
+        if r.status_code != 200:
             return None
-        sets = index_r.json()
-        if not isinstance(sets, list):
-            return None
+        data = r.json()
+        for card in data.get("data") or []:
+            if (
+                isinstance(card, dict)
+                and (card.get("name") or "").lower().strip() == name_lower
+            ):
+                return card
     except (requests.RequestException, ValueError):
         return None
-
-    for set_info in sets:
-        if not isinstance(set_info, dict):
-            continue
-        set_name = set_info.get("name")
-        if not set_name:
-            continue
-        try:
-            cards_r = requests.get(
-                f"{_CCAUTO_BASE_URL}/sets/{set_name}.json", timeout=timeout
-            )
-            if cards_r.status_code != 200:
-                continue
-            cards = cards_r.json()
-            if not isinstance(cards, list):
-                continue
-            for card in cards:
-                if (
-                    isinstance(card, dict)
-                    and (card.get("name") or "").lower().strip() == name_lower
-                ):
-                    return card
-        except (requests.RequestException, ValueError):
-            continue
 
     return None
 

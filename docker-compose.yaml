@@ -11,7 +11,7 @@ services:
 #      - APP_PASSWORD=  # <<< CHANGE THIS!
       - FLASK_SECRET_KEY=YxbJdOs4KSc8e1avKUK2kIQl  # Optional but recommended
 #      - BOOTSTRAP_ADMIN_USERNAME=slemme
-      - CCAUTO_BASE_URL=http://cardconjurer:4242
+      - CCAUTO_BASE_URL=http://custom-mtg-gallery:3000
     networks:
       - npm_default
 
