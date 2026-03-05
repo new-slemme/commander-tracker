@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join Game — Commandersohn</title>
+  <link href="/static/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #10121a; color: #e0e0e0; min-height: 100dvh; }
+    .join-header { text-align: center; padding: 2rem 1rem 1rem; }
+    .join-header h1 { font-size: 1.6rem; margin-bottom: .25rem; }
+    .join-header p { color: #9aa; font-size: .95rem; }
+    .player-list { display: flex; flex-direction: column; gap: .75rem; padding: 1rem; max-width: 480px; margin: 0 auto; }
+    .player-btn {
+      display: flex; align-items: center; gap: 1rem;
+      background: #1e2235; border: 1px solid #3a3f5c; border-radius: 12px;
+      padding: .85rem 1.1rem; color: #e0e0e0; font-size: 1.05rem;
+      cursor: pointer; width: 100%; text-align: left;
+      transition: background .15s, border-color .15s;
+    }
+    .player-btn:hover, .player-btn:focus { background: #252840; border-color: #5a6090; outline: none; }
+    .player-btn .player-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: #3a3f5c; display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; flex-shrink: 0;
+    }
+    .player-btn .player-info strong { display: block; font-size: 1.05rem; }
+    .player-btn .player-info small { color: #9aa; font-size: .85rem; }
+    .error-box { max-width: 480px; margin: 2rem auto 0; padding: 0 1rem; }
+  </style>
+</head>
+<body>
+  <div class="join-header">
+    <h1>Join Game</h1>
+    <p>Tap your name to join as that player.</p>
+  </div>
+
+  {% if error %}
+  <div class="error-box">
+    <div class="alert alert-warning">{{ error }}</div>
+  </div>
+  {% else %}
+  <form method="post" action="/join/{{ token }}">
+    <div class="player-list">
+      {% for p in participants %}
+      <button class="player-btn" type="submit" name="player_id" value="{{ p.player_id }}">
+        <div class="player-avatar">🃏</div>
+        <div class="player-info">
+          <strong>{{ p.player_name }}</strong>
+          <small>{{ p.deck_name }}</small>
+        </div>
+      </button>
+      {% endfor %}
+    </div>
+  </form>
+  {% endif %}
+</body>
+</html>

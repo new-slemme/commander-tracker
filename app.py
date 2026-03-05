@@ -643,6 +643,18 @@ class GameParticipant(db.Model):
     )
 
 
+class ActiveGame(db.Model):
+    __tablename__ = "active_game"
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    host_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=True)
+    participants_json = db.Column(db.Text, nullable=False)
+    state_json = db.Column(db.Text, nullable=False, default="{}")
+    created_at = db.Column(db.DateTime, nullable=False)
+    updated_at = db.Column(db.DateTime, nullable=False)
+
+
 # -------------------------
 # Dev bootstrap helpers
 # -------------------------
@@ -1225,6 +1237,34 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('016_registration_requests')")
+            )
+
+        if "018_active_game_table" not in applied:
+            db.session.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS active_game (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        token VARCHAR(32) NOT NULL UNIQUE,
+                        host_user_id INTEGER NOT NULL,
+                        pod_id INTEGER,
+                        participants_json TEXT NOT NULL,
+                        state_json TEXT NOT NULL DEFAULT '{}',
+                        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(host_user_id) REFERENCES user (id),
+                        FOREIGN KEY(pod_id) REFERENCES pod (id)
+                    )
+                    """
+                )
+            )
+            db.session.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_active_game_token ON active_game (token)"
+                )
+            )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('018_active_game_table')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -4520,6 +4560,40 @@ def start_game():
     session["game_started_at"] = int(datetime.utcnow().timestamp())
     session.modified = True
 
+    # Create ActiveGame record for multiplayer sync
+    try:
+        game_token = uuid4().hex
+        initial_state = {
+            "version": 0,
+            "life": {str(p["player_id"]): 40 for p in participants},
+            "flags": {
+                str(p["player_id"]): {"mana_fucked": False, "misplayed": False, "salt_count": 0}
+                for p in participants
+            },
+            "card_state": {
+                str(p["player_id"]): {"statuses": {}, "counters": {}, "commander_damage": {}}
+                for p in participants
+            },
+            "turn": 1,
+            "active_player_id": starting_player,
+        }
+        active_pod = get_active_pod()
+        active_game_rec = ActiveGame(
+            token=game_token,
+            host_user_id=session["user_id"],
+            pod_id=active_pod.id if active_pod else None,
+            participants_json=json.dumps(participants),
+            state_json=json.dumps(initial_state),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.session.add(active_game_rec)
+        db.session.commit()
+        session["game_token"] = game_token
+        session.modified = True
+    except Exception:
+        pass  # graceful degradation: game works without sync
+
     return redirect(url_for("life_counter"))
 
 
@@ -4527,7 +4601,17 @@ def start_game():
 @app.route("/cancel_game", methods=["POST"])
 @login_required
 def cancel_game():
-    # Just drop the active game from session
+    # Delete ActiveGame record if present
+    game_token = session.pop("game_token", None)
+    if game_token:
+        try:
+            active_game_rec = ActiveGame.query.filter_by(token=game_token).first()
+            if active_game_rec:
+                db.session.delete(active_game_rec)
+                db.session.commit()
+        except Exception:
+            pass
+    # Drop the active game from session
     session.pop("game_participants", None)
     session.pop("active_player_id", None)
     session.pop("timer_config", None)
@@ -4571,6 +4655,12 @@ def life_counter():
         active_mechanics["citys_blessing"] = active_mechanics["citys_blessing"] or mechanics["citys_blessing"]
         active_mechanics["poison"] = active_mechanics["poison"] or mechanics["poison"]
 
+    game_token = session.get("game_token")
+    if game_token:
+        active_game_check = ActiveGame.query.filter_by(token=game_token).first()
+        if not active_game_check:
+            game_token = None
+
     current_user = get_current_user()
     debug_ui_enabled = app.debug and request.args.get("debug_ui") == "1"
     salt_action_values = {
@@ -4608,6 +4698,7 @@ def life_counter():
         active_mechanics=active_mechanics,
         card_logic_catalog=card_logic_catalog,
         debug_ui_enabled=debug_ui_enabled,
+        game_token=game_token,
     )
 
 
@@ -4853,6 +4944,18 @@ def end_game():
         )
 
     db.session.commit()
+
+    # Delete ActiveGame record if present
+    game_token = session.pop("game_token", None)
+    if game_token:
+        try:
+            active_game_rec = ActiveGame.query.filter_by(token=game_token).first()
+            if active_game_rec:
+                db.session.delete(active_game_rec)
+                db.session.commit()
+        except Exception:
+            pass
+
     session.pop("game_participants", None)
     session.pop("active_player_id", None)
     session.pop("timer_config", None)
@@ -4860,6 +4963,203 @@ def end_game():
     session.pop("turn_number", None)
     return redirect(url_for("index"))
 
+
+# -------------------------
+# Multiplayer sync API
+# -------------------------
+
+@app.route("/api/game/<token>/state", methods=["GET", "POST"])
+def api_game_state(token):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return jsonify({"error": "Game not found"}), 404
+
+    if request.method == "GET":
+        try:
+            state = json.loads(active_game_rec.state_json)
+        except (json.JSONDecodeError, Exception):
+            state = {}
+        return jsonify(state)
+
+    # POST — apply a state update
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request body"}), 400
+
+    player_id_raw = data.get("player_id")
+    if player_id_raw is None:
+        return jsonify({"error": "player_id required"}), 400
+    try:
+        player_id = int(player_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid player_id"}), 400
+
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+    valid_player_ids = {p["player_id"] for p in participants}
+    if player_id not in valid_player_ids:
+        return jsonify({"error": "Player not in game"}), 403
+
+    # Authorization: host can update any player; phone players only their own
+    is_host = session.get("user_id") == active_game_rec.host_user_id
+    if not is_host:
+        claimed_pid = session.get(f"game_join_{token}")
+        if claimed_pid is None or int(claimed_pid) != player_id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+    try:
+        state = json.loads(active_game_rec.state_json)
+    except (json.JSONDecodeError, Exception):
+        state = {}
+
+    if "life" not in state:
+        state["life"] = {}
+    if "flags" not in state:
+        state["flags"] = {}
+    if "card_state" not in state:
+        state["card_state"] = {}
+    if "version" not in state:
+        state["version"] = 0
+
+    pid = str(player_id)
+
+    # Life: prefer absolute value from host, delta from phone
+    life_abs = data.get("life")
+    if life_abs is not None:
+        try:
+            life_abs = int(life_abs)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid life value"}), 400
+        state["life"][pid] = life_abs
+
+    life_delta = data.get("life_delta")
+    if life_delta is not None and life_abs is None:
+        try:
+            life_delta = int(life_delta)
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid life_delta"}), 400
+        if life_delta < -1000 or life_delta > 1000:
+            return jsonify({"error": "life_delta out of range"}), 400
+        current_life = int(state["life"].get(pid, 40))
+        state["life"][pid] = max(0, current_life + life_delta)
+
+    # Flags
+    flags_update = data.get("flags")
+    if flags_update is not None and isinstance(flags_update, dict):
+        if pid not in state["flags"]:
+            state["flags"][pid] = {}
+        for k, v in flags_update.items():
+            if k in {"mana_fucked", "misplayed"} and isinstance(v, bool):
+                state["flags"][pid][k] = v
+            elif k == "salt_count" and isinstance(v, int) and not isinstance(v, bool) and v >= 0:
+                state["flags"][pid][k] = v
+
+    # Host-only: update active_player_id and turn number
+    if is_host:
+        active_player_raw = data.get("active_player_id")
+        if active_player_raw is not None:
+            try:
+                apid = int(active_player_raw)
+            except (TypeError, ValueError):
+                apid = None
+            if apid in valid_player_ids:
+                state["active_player_id"] = apid
+        turn_raw = data.get("turn")
+        if turn_raw is not None:
+            try:
+                t = int(turn_raw)
+                if 1 <= t <= 500:
+                    state["turn"] = t
+            except (TypeError, ValueError):
+                pass
+
+    state["version"] = int(state.get("version", 0)) + 1
+    active_game_rec.state_json = json.dumps(state)
+    active_game_rec.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify(state)
+
+
+# -------------------------
+# Multiplayer join routes
+# -------------------------
+
+@app.route("/join/<token>", methods=["GET"])
+def join_game(token):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return render_template("join_game.html", error="Game not found or already ended.", participants=[], token=token)
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+    return render_template("join_game.html", error=None, participants=participants, token=token)
+
+
+@app.route("/join/<token>", methods=["POST"])
+def join_game_claim(token):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return render_template("join_game.html", error="Game not found or already ended.", participants=[], token=token)
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+
+    player_id_raw = request.form.get("player_id")
+    try:
+        player_id = int(player_id_raw)
+    except (TypeError, ValueError):
+        return render_template("join_game.html", error="Invalid selection.", participants=participants, token=token)
+
+    valid_player_ids = {p["player_id"] for p in participants}
+    if player_id not in valid_player_ids:
+        return render_template("join_game.html", error="Invalid player selection.", participants=participants, token=token)
+
+    session[f"game_join_{token}"] = player_id
+    session.modified = True
+    return redirect(url_for("player_panel", token=token, player_id=player_id))
+
+
+@app.route("/join/<token>/<int:player_id>", methods=["GET"])
+def player_panel(token, player_id):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return render_template("join_game.html", error="Game not found or already ended.", participants=[], token=token)
+
+    claimed = session.get(f"game_join_{token}")
+    if claimed is None or int(claimed) != player_id:
+        try:
+            participants = json.loads(active_game_rec.participants_json)
+        except (json.JSONDecodeError, Exception):
+            participants = []
+        return render_template("join_game.html", error="Please select your seat first.", participants=participants, token=token)
+
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+
+    this_player = next((p for p in participants if p["player_id"] == player_id), None)
+    if not this_player:
+        return render_template("join_game.html", error="Player not found in game.", participants=participants, token=token)
+
+    try:
+        state = json.loads(active_game_rec.state_json)
+    except (json.JSONDecodeError, Exception):
+        state = {}
+
+    return render_template(
+        "player_panel.html",
+        token=token,
+        player_id=player_id,
+        this_player=this_player,
+        participants=participants,
+        initial_state=state,
+    )
 
 
 @app.route("/manual_game")

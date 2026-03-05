@@ -1,0 +1,165 @@
+/* Mobile player panel — phone game view */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  width: 100%; height: 100dvh;
+  background: #10121a;
+  color: #e0e0e0;
+  font-family: system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- Life area ---- */
+.panel-life-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  height: 44dvh;
+  position: relative;
+  user-select: none;
+}
+
+.panel-player-name {
+  font-size: 1rem;
+  color: #9aa;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.panel-life-total {
+  font-size: 5.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  transition: color .1s;
+}
+
+.panel-life-total.life-low { color: #ff6b6b; }
+.panel-life-total.life-mid { color: #ffd166; }
+
+.panel-pending {
+  font-size: 1.4rem;
+  font-weight: 600;
+  height: 1.8rem;
+  color: #a0e0a0;
+  transition: opacity .2s;
+}
+.panel-pending.loss { color: #ff8080; }
+.panel-pending.empty { opacity: 0; }
+
+/* ---- Life tap zones ---- */
+.panel-tap-zones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 6px;
+  padding: 6px;
+  height: 28dvh;
+}
+
+.panel-tap-btn {
+  background: #1e2235;
+  border: 1px solid #3a3f5c;
+  border-radius: 10px;
+  color: #e0e0e0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .1s, transform .08s;
+  -webkit-user-select: none;
+}
+
+.panel-tap-btn:active {
+  background: #2a3050;
+  transform: scale(.97);
+}
+
+/* ---- Flags ---- */
+.panel-flags {
+  display: flex;
+  gap: .5rem;
+  padding: 4px 8px;
+  justify-content: center;
+}
+
+.panel-flag-btn {
+  flex: 1;
+  max-width: 160px;
+  padding: .6rem .5rem;
+  background: #1e2235;
+  border: 1.5px solid #3a3f5c;
+  border-radius: 10px;
+  color: #9aa;
+  font-size: .85rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  cursor: pointer;
+  transition: background .1s, border-color .1s, color .1s;
+}
+
+.panel-flag-btn.is-active {
+  background: #2d1e1e;
+  border-color: #d04040;
+  color: #ff8080;
+}
+
+/* ---- Scoreboard ---- */
+.panel-scoreboard {
+  padding: 4px 8px 8px;
+  border-top: 1px solid #2a2e45;
+  overflow-y: auto;
+  max-height: calc(100dvh - 44dvh - 28dvh - 80px - 56px);
+}
+
+.panel-scoreboard h2 {
+  font-size: .8rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: #6a7090;
+  margin: 4px 0 6px;
+}
+
+.scoreboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scoreboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #1a1e30;
+  border-radius: 8px;
+  padding: .35rem .75rem;
+  font-size: .9rem;
+}
+
+.scoreboard-row.is-active {
+  background: #1e2840;
+  border: 1px solid #3a5090;
+}
+
+.scoreboard-row .sb-name { color: #c0c8e0; }
+.scoreboard-row .sb-life { font-weight: 700; color: #fff; }
+.scoreboard-row.is-active .sb-name::after { content: ' ↻'; color: #6a9fff; }
+
+/* ---- Status notice ---- */
+.panel-status {
+  text-align: center;
+  font-size: .8rem;
+  color: #6a7090;
+  padding: 2px 8px 4px;
+}
