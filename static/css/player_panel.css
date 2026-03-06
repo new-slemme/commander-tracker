@@ -22,7 +22,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: .4rem;
-  height: 60dvh;
+  height: 48dvh;
   position: relative;
   user-select: none;
   padding: 0 8px;
@@ -262,49 +262,72 @@ html, body {
   color: #ff8080;
 }
 
-/* ---- Commander damage (inside tab) ---- */
+/* ---- Commander damage (inside tab) — card-art grid ---- */
 .panel-commander-damage {
   padding: 0;
 }
 
 .commander-damage-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 8px;
+  align-content: start;
 }
 
-.commander-damage-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .5rem;
-  background: #1a1e30;
+.cd-art-card {
+  position: relative;
   border-radius: 10px;
-  padding: .5rem .75rem;
-  border: 1px solid transparent;
+  overflow: hidden;
+  background-color: #1a1e30;
+  background-size: cover;
+  background-position: center 15%;
+  min-height: 160px;
+  border: 2px solid transparent;
   transition: border-color .15s;
 }
 
-.commander-damage-row.is-danger {
+.cd-art-card.is-danger {
   border-color: #7a3030;
-  background: #1e1a1a;
 }
 
-.cd-name {
+.cd-art-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(transparent 25%, rgba(0,0,0,0.75) 55%, rgba(0,0,0,0.95) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px;
+  gap: 4px;
+}
+
+.cd-art-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+}
+
+.cd-art-card.is-danger .cd-art-value {
+  color: #ff8080;
+}
+
+.cd-art-name {
+  font-size: 0.65rem;
   color: #c0c8e0;
-  font-size: .9rem;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
+  width: 100%;
 }
 
-.cd-controls {
+.cd-art-controls {
   display: flex;
-  align-items: center;
-  gap: .4rem;
-  flex-shrink: 0;
+  gap: 3px;
+  width: 100%;
+  justify-content: center;
 }
 
 .cd-btn {
@@ -338,16 +361,11 @@ html, body {
   background: #253525;
 }
 
-.cd-value {
-  min-width: 2.5ch;
-  text-align: center;
-  font-weight: 700;
-  font-size: 1.05rem;
-  color: #fff;
-}
-
-.commander-damage-row.is-danger .cd-value {
-  color: #ff8080;
+.cd-art-controls .cd-btn {
+  flex: 1;
+  min-width: unset;
+  min-height: 36px;
+  font-size: .8rem;
 }
 
 /* ---- Scoreboard (inside tab) ---- */
