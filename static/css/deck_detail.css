@@ -45,6 +45,14 @@
   }
 
 
+  .banner-topbar {
+    z-index: 2;
+  }
+
+  .banner-inner {
+    z-index: 1;
+  }
+
   .banner-actions {
     margin-left: auto;
     display: inline-flex;
