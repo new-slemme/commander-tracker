@@ -34,7 +34,13 @@ class ApiGameStateCardStateTests(unittest.TestCase):
             password_hash="hashed",
             is_active=True,
         )
-        app.db.session.add(host_user)
+        non_host_user = app.User(
+            username="non-host-user",
+            display_name="Non Host User",
+            password_hash="hashed",
+            is_active=True,
+        )
+        app.db.session.add_all([host_user, non_host_user])
 
         p1 = app.Player(name="Player 1")
         p2 = app.Player(name="Player 2")
@@ -68,13 +74,14 @@ class ApiGameStateCardStateTests(unittest.TestCase):
         app.db.session.add(active_game)
         app.db.session.commit()
 
-        return token, p1.id, p2.id
+        return token, p1.id, p2.id, non_host_user.id
 
     def test_remote_commander_damage_update_persists_and_merges(self):
         with app.app.app_context():
-            token, p1_id, p2_id = self._create_active_game()
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
             client = app.app.test_client()
             with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
                 session[f"game_join_{token}"] = p1_id
 
             response = client.post(
@@ -98,9 +105,10 @@ class ApiGameStateCardStateTests(unittest.TestCase):
 
     def test_invalid_commander_damage_source_ids_are_ignored(self):
         with app.app.app_context():
-            token, p1_id, p2_id = self._create_active_game()
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
             client = app.app.test_client()
             with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
                 session[f"game_join_{token}"] = p1_id
 
             response = client.post(
@@ -126,9 +134,10 @@ class ApiGameStateCardStateTests(unittest.TestCase):
 
     def test_non_claimed_player_update_is_forbidden(self):
         with app.app.app_context():
-            token, p1_id, p2_id = self._create_active_game()
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
             client = app.app.test_client()
             with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
                 session[f"game_join_{token}"] = p1_id
 
             response = client.post(
@@ -140,6 +149,86 @@ class ApiGameStateCardStateTests(unittest.TestCase):
             )
 
             self.assertEqual(response.status_code, 403)
+
+    def _create_active_game_with_active_player(self):
+        host_user = app.User(
+            username="host-user2",
+            display_name="Host User2",
+            password_hash="hashed",
+            is_active=True,
+        )
+        non_host_user = app.User(
+            username="non-host-user2",
+            display_name="Non Host User2",
+            password_hash="hashed",
+            is_active=True,
+        )
+        app.db.session.add_all([host_user, non_host_user])
+
+        p1 = app.Player(name="Player 1")
+        p2 = app.Player(name="Player 2")
+        app.db.session.add_all([p1, p2])
+        app.db.session.flush()
+
+        token = "tok456"
+        state = {
+            "life": {str(p1.id): 40, str(p2.id): 40},
+            "flags": {},
+            "card_state": {},
+            "version": 0,
+            "turn": 1,
+            "active_player_id": p1.id,
+        }
+        active_game = app.ActiveGame(
+            token=token,
+            host_user_id=host_user.id,
+            participants_json=json.dumps([
+                {"player_id": p1.id, "player_name": p1.name},
+                {"player_id": p2.id, "player_name": p2.name},
+            ]),
+            state_json=json.dumps(state),
+            created_at=app.datetime.utcnow(),
+            updated_at=app.datetime.utcnow(),
+        )
+        app.db.session.add(active_game)
+        app.db.session.commit()
+
+        return token, host_user.id, non_host_user.id, p1.id, p2.id
+
+    def test_non_host_player_can_pass_turn(self):
+        with app.app.app_context():
+            token, host_user_id, non_host_user_id, p1_id, p2_id = self._create_active_game_with_active_player()
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
+                session[f"game_join_{token}"] = p1_id
+
+            response = client.post(
+                f"/api/game/{token}/state",
+                json={"player_id": p1_id, "pass_turn": True},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            updated = response.get_json()
+            self.assertEqual(updated["active_player_id"], p2_id)
+
+    def test_host_player_can_pass_turn(self):
+        with app.app.app_context():
+            token, host_user_id, non_host_user_id, p1_id, p2_id = self._create_active_game_with_active_player()
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                # Host is also playing as p1
+                session["user_id"] = host_user_id
+                session[f"game_join_{token}"] = p1_id
+
+            response = client.post(
+                f"/api/game/{token}/state",
+                json={"player_id": p1_id, "pass_turn": True},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            updated = response.get_json()
+            self.assertEqual(updated["active_player_id"], p2_id)
 
 
 if __name__ == "__main__":
