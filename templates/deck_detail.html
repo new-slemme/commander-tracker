@@ -380,11 +380,15 @@
 
 <!-- Edit Deck Modal -->
 <div class="modal fade" id="editDeckModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
     <div class="modal-content bg-dark text-light">
-      <div class="modal-body p-4">
-        <h4 class="mb-3">Edit Deck</h4>
 
+      <div class="modal-header border-secondary pb-2">
+        <h5 class="modal-title">Edit Deck</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-4">
         <form method="post" action="{{ url_for('update_deck', deck_id=deck.id) }}" enctype="multipart/form-data">
           <input type="hidden" name="next" value="{{ url_for('deck_detail', deck_id=deck.id) }}">
 
@@ -399,115 +403,168 @@
           </div>
           {% endif %}
 
-          <div class="mb-3">
-            <label class="form-label">Deck name</label>
-            <input class="form-control" name="name" value="{{ deck.name }}" required>
+          <!-- Deck name + status toggles on one row -->
+          <div class="row g-2 mb-3 align-items-end">
+            <div class="col">
+              <label class="form-label">Deck name <span class="text-danger">*</span></label>
+              <input class="form-control" name="name" value="{{ deck.name }}" required>
+            </div>
+            {% if is_admin %}
+            <div class="col-auto pb-1 d-flex flex-column gap-1">
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="editRetiredInput" name="retired" value="1" {% if deck.retired %}checked{% endif %}>
+                <label class="form-check-label small" for="editRetiredInput">Retired</label>
+              </div>
+              <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="editPlannedInput" name="planned" value="1" {% if deck.planned %}checked{% endif %}>
+                <label class="form-check-label small" for="editPlannedInput">Planned</label>
+              </div>
+            </div>
+            {% endif %}
           </div>
 
-          <div class="mb-3">
-            <label class="form-label">Commander</label>
-            <input class="form-control" id="editCommanderInput" name="commander" value="{{ deck.commander_name or deck.commander }}" autocomplete="off" required>
-            <div class="form-text" style="color: var(--font-base-trans);">
-              Start typing a card name; suggestions come from Scryfall and custom cards.
+          <!-- Commander section -->
+          {% set edit_commander_parts = (deck.commander_name or deck.commander or '').split(' + ') %}
+          {% set edit_primary = edit_commander_parts[0] | trim %}
+          {% set edit_partner = edit_commander_parts[1] | trim if edit_commander_parts | length > 1 else '' %}
+
+          <div class="mb-2">
+            <label class="form-label">Commander <span class="text-danger">*</span></label>
+            <input class="form-control" id="editCommanderInput" name="commander"
+                   value="{{ edit_primary }}" autocomplete="off" required placeholder="Start typing a card name…">
+          </div>
+
+          <!-- Partner toggle link -->
+          <div id="editPartnerToggle" class="mb-2" {% if edit_partner %}style="display:none;"{% endif %}>
+            <a href="#" id="editShowPartner" class="small text-info">+ Add partner / background commander</a>
+          </div>
+
+          <!-- Partner field (shown if deck already has a partner) -->
+          <div id="editPartnerWrap" class="mb-2" {% if not edit_partner %}style="display:none;"{% endif %}>
+            <label class="form-label">Partner commander</label>
+            <input class="form-control" id="editPartnerCommanderInput" name="partner_commander"
+                   value="{{ edit_partner }}" autocomplete="off" placeholder="Start typing a card name…">
+            <a href="#" id="editHidePartner" class="small text-secondary mt-1 d-block">− Remove partner</a>
+          </div>
+
+          <!-- Commander previews: side-by-side thumbnails -->
+          <div id="editCommanderPreviews" class="d-flex gap-3 mb-3"
+               style="{{ '' if deck.commander_art_url else 'display:none;' }}">
+            <div id="editCommanderPreview" style="{{ '' if deck.commander_art_url else 'display:none;' }}">
+              <img id="editCommanderImg" alt="Commander preview"
+                   src="{{ deck.commander_art_url or '' }}"
+                   style="width:90px; border-radius:8px; aspect-ratio:5/7; object-fit:cover; display:block;" />
+            </div>
+            <div id="editPartnerCommanderPreview" style="display:none;">
+              <img id="editPartnerCommanderImg" alt="Partner preview"
+                   style="width:90px; border-radius:8px; aspect-ratio:5/7; object-fit:cover; display:block;" />
             </div>
           </div>
 
-          <div class="mb-3">
-            <label class="form-label">Partner commander (optional)</label>
-            <input class="form-control" id="editPartnerCommanderInput" name="partner_commander" autocomplete="off">
-            <div class="form-text" style="color: var(--font-base-trans);">
-              Optional: use this only for partner/background-style decks.
+          <hr class="border-secondary my-3">
+
+          <!-- Decklist section (tabs) -->
+          <div class="mb-1">
+            <label class="form-label mb-2">Decklist <span class="text-secondary small">(optional — leave unchanged to keep existing)</span></label>
+            <ul class="nav nav-tabs nav-fill mb-0" id="editDecklistTabs" role="tablist">
+              <li class="nav-item" role="presentation">
+                <button class="nav-link {% if not deck.decklist_text %}active{% endif %}" id="editTabUrlBtn"
+                        data-bs-toggle="tab" data-bs-target="#editTabUrl" type="button" role="tab">URL</button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link {% if deck.decklist_text %}active{% endif %}" id="editTabPasteBtn"
+                        data-bs-toggle="tab" data-bs-target="#editTabPaste" type="button" role="tab">
+                  Paste
+                  {% if deck.decklist_text %}<span class="badge rounded-pill text-bg-secondary ms-1">saved</span>{% endif %}
+                </button>
+              </li>
+              <li class="nav-item" role="presentation">
+                <button class="nav-link" id="editTabFileBtn"
+                        data-bs-toggle="tab" data-bs-target="#editTabFile" type="button" role="tab">File</button>
+              </li>
+            </ul>
+            <div class="tab-content deck-tab-content border border-top-0 border-secondary rounded-bottom p-3">
+
+              <!-- URL tab -->
+              <div class="tab-pane fade {% if not deck.decklist_text %}show active{% endif %}" id="editTabUrl" role="tabpanel">
+                <input class="form-control" id="editDecklistUrlInput" name="decklist_url"
+                       placeholder="https://www.moxfield.com/decks/… or https://archidekt.com/decks/…" />
+                <div id="editImportStatus" class="mt-2" style="display:none;"></div>
+                <div class="d-grid mt-2">
+                  <button class="btn btn-outline-info btn-sm" type="button" id="editImportAutofillBtn">
+                    Autofill commander(s) from URL
+                  </button>
+                </div>
+              </div>
+
+              <!-- Paste tab -->
+              <div class="tab-pane fade {% if deck.decklist_text %}show active{% endif %}" id="editTabPaste" role="tabpanel">
+                <textarea class="form-control font-monospace" id="editDecklistTextInput" name="decklist_text" rows="10"
+                          placeholder="Commander&#10;1 Sol Ring&#10;1 Arcane Signet">{{ deck.decklist_text or '' }}</textarea>
+                <div class="form-text mt-1" style="color: var(--font-base-trans);">
+                  Edit the list above, or leave unchanged to keep the existing decklist.
+                </div>
+                <div class="d-grid mt-2">
+                  <button class="btn btn-outline-info btn-sm" type="button" id="editImportAutofillPasteBtn">
+                    Autofill commander(s) from paste
+                  </button>
+                </div>
+              </div>
+
+              <!-- File tab -->
+              <div class="tab-pane fade" id="editTabFile" role="tabpanel">
+                <label class="form-label small text-secondary mb-1">Upload a .txt, .dek, or .csv decklist file</label>
+                <input class="form-control" id="editDecklistFileInput" type="file" name="decklist_file" accept=".txt,.dek,.csv" />
+              </div>
+
             </div>
           </div>
 
-          {% if is_admin %}
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="editRetiredInput" name="retired" value="1" {% if deck.retired %}checked{% endif %}>
-            <label class="form-check-label" for="editRetiredInput">Retired deck</label>
-          </div>
-          <div class="form-check form-switch mb-3">
-            <input class="form-check-input" type="checkbox" id="editPlannedInput" name="planned" value="1" {% if deck.planned %}checked{% endif %}>
-            <label class="form-check-label" for="editPlannedInput">Planned deck</label>
-          </div>
-          {% endif %}
+          <hr class="border-secondary my-3">
 
-          <div id="editCommanderPreview" class="mt-3" {% if not (deck.commander_art_url) %}style="display:none;"{% endif %}>
-            <img id="editCommanderImg" alt="Commander preview" src="{{ deck.commander_art_url or '' }}" style="max-width:100%; border-radius: 12px;" />
-          </div>
-
-          <div id="editPartnerCommanderPreview" class="mt-3" style="display:none;">
-            <img id="editPartnerCommanderImg" alt="Partner commander preview" style="max-width:100%; border-radius: 12px;" />
-          </div>
-
-          <div class="dropdown mt-3">
-            <button class="btn btn-outline-info w-100 text-start d-flex justify-content-between align-items-center"
+          <!-- Custom Art (collapsible) -->
+          <div class="mb-3">
+            <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center"
                     type="button"
                     data-bs-toggle="collapse"
                     data-bs-target="#editCustomArtOptions"
                     aria-expanded="false"
                     aria-controls="editCustomArtOptions">
-              <span>Custom Art Options</span>
-              <span>▾</span>
+              <span>Custom Art <span class="text-secondary small">(optional)</span></span>
+              <span class="collapse-arrow">▾</span>
             </button>
-          </div>
-          <div class="collapse mt-3" id="editCustomArtOptions">
-            <div class="card p-3 bg-transparent border-secondary">
-              <label class="form-label">Custom Commander Artwork URL (used to represent deck in stats and games /optional)</label>
-              <input class="form-control" name="custom_commander_art_url" value="{{ deck.custom_commander_art_url or '' }}" placeholder="https://..." />
+            <div class="collapse" id="editCustomArtOptions">
+              <div class="card p-3 mt-1 bg-transparent border-secondary">
+                <label class="form-label small">Custom commander artwork URL</label>
+                <input class="form-control form-control-sm" name="custom_commander_art_url"
+                       value="{{ deck.custom_commander_art_url or '' }}" placeholder="https://…" />
+                <div class="form-text mb-2" style="color: var(--font-base-trans);">
+                  Overrides commander portrait for alters/proxies in life counter and deck views.
+                </div>
 
-              <label class="form-label mt-3">Or upload commander artwork (optional)</label>
-              <input class="form-control" type="file" name="custom_commander_art_file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
+                <label class="form-label small">Or upload commander artwork</label>
+                <input class="form-control form-control-sm" type="file" name="custom_commander_art_file"
+                       accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
 
-              <label class="form-label mt-3">Custom card artwork URL (used as card image in deck list /optional)</label>
-              <input class="form-control" name="custom_card_art_url" value="{{ deck.custom_card_art_url or '' }}" placeholder="https://..." />
+                <hr class="border-secondary my-2">
 
-              <label class="form-label mt-3">Or upload card artwork (optional)</label>
-              <input class="form-control" type="file" name="custom_card_art_file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
-            </div>
-          </div>
+                <label class="form-label small">Custom card artwork URL</label>
+                <input class="form-control form-control-sm" name="custom_card_art_url"
+                       value="{{ deck.custom_card_art_url or '' }}" placeholder="https://…" />
+                <div class="form-text mb-2" style="color: var(--font-base-trans);">
+                  Used for deck card/tile backgrounds when players run altered art.
+                </div>
 
-          <div class="dropdown mt-3">
-            <button class="btn btn-outline-info w-100 text-start d-flex justify-content-between align-items-center"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#editDecklistOptions"
-                    aria-expanded="false"
-                    aria-controls="editDecklistOptions">
-              <span>Decklist Options</span>
-              <span>▾</span>
-            </button>
-          </div>
-          <div class="collapse mt-3" id="editDecklistOptions">
-            <div class="card p-3 bg-transparent border-secondary">
-              <label class="form-label">Decklist URL (optional)</label>
-              <input class="form-control" id="editDecklistUrlInput" name="decklist_url" placeholder="https://www.moxfield.com/decks/... or https://archidekt.com/decks/..." />
-
-              <label class="form-label mt-3">Decklist file (optional)</label>
-              <input class="form-control" id="editDecklistFileInput" type="file" name="decklist_file" accept=".txt,.dek,.csv" />
-
-              <label class="form-label mt-3">
-                Paste decklist
-                {% if deck.decklist_text %}
-                  <span class="badge rounded-pill text-bg-secondary ms-1">saved</span>
-                {% endif %}
-              </label>
-              <textarea class="form-control font-monospace" id="editDecklistTextInput" name="decklist_text" rows="10" placeholder="Commander
-1 Sol Ring
-1 Arcane Signet">{{ deck.decklist_text or '' }}</textarea>
-              <div class="form-text mt-1" style="color: var(--font-base-trans);">
-                Edit the list above, or leave unchanged to keep the existing decklist.
-              </div>
-
-              <div class="d-grid mt-3">
-                <button class="btn btn-outline-info" type="button" id="editImportAutofillBtn">Autofill commander(s) from import</button>
+                <label class="form-label small">Or upload card artwork</label>
+                <input class="form-control form-control-sm" type="file" name="custom_card_art_file"
+                       accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
               </div>
             </div>
           </div>
 
-
-          <div class="d-flex gap-2 mt-4">
-            <button class="btn btn-success w-100 btn-lg app-btn" type="submit">Save</button>
-            <button class="btn btn-secondary w-100 btn-lg app-btn" type="button" data-bs-dismiss="modal">Cancel</button>
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-success flex-grow-1 btn-lg app-btn" type="submit">Save Changes</button>
+            <button class="btn btn-secondary btn-lg app-btn" type="button" data-bs-dismiss="modal">Cancel</button>
           </div>
         </form>
       </div>
@@ -516,127 +573,268 @@
 </div>
 
 <script>
-  const editCommanderInput = document.getElementById('editCommanderInput');
-  const editPartnerInput = document.getElementById('editPartnerCommanderInput');
-  const editPreviewWrap = document.getElementById('editCommanderPreview');
-  const editPreviewImg = document.getElementById('editCommanderImg');
-  const editPartnerPreviewWrap = document.getElementById('editPartnerCommanderPreview');
-  const editPartnerPreviewImg = document.getElementById('editPartnerCommanderImg');
-  const autocompleteTimers = new WeakMap();
+  // =========================
+  // Edit Deck modal logic
+  // =========================
+  (function () {
+    const editCommanderInput = document.getElementById('editCommanderInput');
+    const editPartnerInput = document.getElementById('editPartnerCommanderInput');
+    const editPreviewWrap = document.getElementById('editCommanderPreview');
+    const editPreviewImg = document.getElementById('editCommanderImg');
+    const editPartnerPreviewWrap = document.getElementById('editPartnerCommanderPreview');
+    const editPartnerPreviewImg = document.getElementById('editPartnerCommanderImg');
+    const editPreviewsRow = document.getElementById('editCommanderPreviews');
+    const autocompleteTimers = new WeakMap();
 
-  async function scryfallAutocomplete(q) {
-    const url = `/api/cards/autocomplete?q=${encodeURIComponent(q)}`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.data || [];
-  }
+    // --- Partner toggle ---
+    const editShowPartnerLink = document.getElementById('editShowPartner');
+    const editHidePartnerLink = document.getElementById('editHidePartner');
+    const editPartnerWrap = document.getElementById('editPartnerWrap');
+    const editPartnerToggle = document.getElementById('editPartnerToggle');
 
-  async function scryfallCardByExactName(name) {
-    const url = `/api/cards/named?exact=${encodeURIComponent(name)}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.json();
-  }
-
-  function setCommanderPreview(name, wrapEl, imgEl) {
-    if (!wrapEl || !imgEl || !name) {
-      if (wrapEl) wrapEl.style.display = 'none';
-      return;
-    }
-
-    scryfallCardByExactName(name).then((card) => {
-      if (card && card.image_uris && card.image_uris.normal) {
-        imgEl.src = card.image_uris.normal;
-        wrapEl.style.display = '';
-      } else {
-        wrapEl.style.display = 'none';
-      }
-    });
-  }
-
-  function buildCommanderPayload(primaryRaw, partnerRaw) {
-    const deduped = [];
-    const seen = new Set();
-    [primaryRaw, partnerRaw].forEach((value) => {
-      const trimmed = (value || '').trim();
-      if (!trimmed) return;
-      const key = trimmed.toLocaleLowerCase();
-      if (seen.has(key)) return;
-      seen.add(key);
-      deduped.push(trimmed);
-    });
-    return deduped.join(' + ');
-  }
-
-  function attachDropdown(items, inputEl, menuId, onSelect) {
-    let box = document.getElementById(`${menuId}Wrap`);
-    if (!box) {
-      box = document.createElement('div');
-      box.id = `${menuId}Wrap`;
-      box.style.position = 'relative';
-      inputEl.parentNode.appendChild(box);
-
-      const menu = document.createElement('div');
-      menu.id = menuId;
-      menu.className = 'list-group';
-      menu.style.position = 'absolute';
-      menu.style.zIndex = '2000';
-      menu.style.width = '100%';
-      menu.style.maxHeight = '260px';
-      menu.style.overflowY = 'auto';
-      box.appendChild(menu);
-    }
-
-    const menu = document.getElementById(menuId);
-    menu.innerHTML = '';
-    if (!items.length) return;
-
-    for (const name of items.slice(0, 12)) {
-      const a = document.createElement('button');
-      a.type = 'button';
-      a.className = 'list-group-item list-group-item-action';
-      a.textContent = name;
-      a.addEventListener('click', () => {
-        inputEl.value = name;
-        menu.innerHTML = '';
-        onSelect(name);
+    if (editShowPartnerLink && editPartnerWrap) {
+      editShowPartnerLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        editPartnerWrap.style.display = '';
+        editPartnerToggle.style.display = 'none';
+        editPartnerInput && editPartnerInput.focus();
       });
-      menu.appendChild(a);
     }
-  }
+    if (editHidePartnerLink && editPartnerWrap) {
+      editHidePartnerLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        editPartnerWrap.style.display = 'none';
+        editPartnerToggle.style.display = '';
+        if (editPartnerInput) editPartnerInput.value = '';
+        if (editPartnerPreviewWrap) editPartnerPreviewWrap.style.display = 'none';
+        updateEditPreviewsRow();
+      });
+    }
 
-  function initCommanderAutocomplete(inputEl, menuId, onSelect) {
-    if (!inputEl) return;
+    function updateEditPreviewsRow() {
+      if (!editPreviewsRow) return;
+      const anyVisible = (editPreviewWrap && editPreviewWrap.style.display !== 'none') ||
+                         (editPartnerPreviewWrap && editPartnerPreviewWrap.style.display !== 'none');
+      editPreviewsRow.style.display = anyVisible ? '' : 'none';
+    }
 
-    inputEl.addEventListener('input', () => {
-      clearTimeout(autocompleteTimers.get(inputEl));
-      const q = inputEl.value.trim();
-      if (q.length < 3) {
-        attachDropdown([], inputEl, menuId, onSelect);
+    // --- Shared helpers ---
+    async function scryfallAutocomplete(q) {
+      const res = await fetch(`/api/cards/autocomplete?q=${encodeURIComponent(q)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.data || [];
+    }
+
+    async function scryfallCardByExactName(name) {
+      const res = await fetch(`/api/cards/named?exact=${encodeURIComponent(name)}`);
+      if (!res.ok) return null;
+      return await res.json();
+    }
+
+    function setCommanderPreview(name, wrapEl, imgEl) {
+      if (!wrapEl || !imgEl || !name) {
+        if (wrapEl) wrapEl.style.display = 'none';
+        updateEditPreviewsRow();
         return;
       }
+      scryfallCardByExactName(name).then((card) => {
+        if (card && card.image_uris && card.image_uris.normal) {
+          imgEl.src = card.image_uris.normal;
+          wrapEl.style.display = '';
+        } else {
+          wrapEl.style.display = 'none';
+        }
+        updateEditPreviewsRow();
+      });
+    }
 
-      const timer = setTimeout(async () => {
-        const items = await scryfallAutocomplete(q);
-        attachDropdown(items, inputEl, menuId, onSelect);
-      }, 200);
-      autocompleteTimers.set(inputEl, timer);
-    });
+    function buildCommanderPayload(primaryRaw, partnerRaw) {
+      const deduped = [];
+      const seen = new Set();
+      [primaryRaw, partnerRaw].forEach((value) => {
+        const trimmed = (value || '').trim();
+        if (!trimmed) return;
+        const key = trimmed.toLocaleLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        deduped.push(trimmed);
+      });
+      return deduped.join(' + ');
+    }
 
-    document.addEventListener('click', (e) => {
+    function attachDropdown(items, inputEl, menuId, onSelect) {
+      let box = document.getElementById(`${menuId}Wrap`);
+      if (!box) {
+        box = document.createElement('div');
+        box.id = `${menuId}Wrap`;
+        box.style.position = 'relative';
+        inputEl.parentNode.appendChild(box);
+
+        const menu = document.createElement('div');
+        menu.id = menuId;
+        menu.className = 'list-group';
+        menu.style.position = 'absolute';
+        menu.style.zIndex = '2000';
+        menu.style.width = '100%';
+        menu.style.maxHeight = '260px';
+        menu.style.overflowY = 'auto';
+        box.appendChild(menu);
+      }
+
       const menu = document.getElementById(menuId);
-      if (!menu) return;
-      if (e.target === inputEl || menu.contains(e.target)) return;
       menu.innerHTML = '';
-    });
-  }
+      if (!items.length) return;
 
+      for (const name of items.slice(0, 12)) {
+        const a = document.createElement('button');
+        a.type = 'button';
+        a.className = 'list-group-item list-group-item-action';
+        a.textContent = name;
+        a.addEventListener('click', () => {
+          inputEl.value = name;
+          menu.innerHTML = '';
+          onSelect(name);
+        });
+        menu.appendChild(a);
+      }
+    }
 
+    function initCommanderAutocomplete(inputEl, menuId, onSelect) {
+      if (!inputEl) return;
 
+      inputEl.addEventListener('input', () => {
+        clearTimeout(autocompleteTimers.get(inputEl));
+        const q = inputEl.value.trim();
+        if (q.length < 3) {
+          attachDropdown([], inputEl, menuId, onSelect);
+          return;
+        }
+        const timer = setTimeout(async () => {
+          const items = await scryfallAutocomplete(q);
+          attachDropdown(items, inputEl, menuId, onSelect);
+        }, 200);
+        autocompleteTimers.set(inputEl, timer);
+      });
+
+      document.addEventListener('click', (e) => {
+        const menu = document.getElementById(menuId);
+        if (!menu) return;
+        if (e.target === inputEl || menu.contains(e.target)) return;
+        menu.innerHTML = '';
+      });
+    }
+
+    // --- Import / autofill ---
+    async function fetchImportPreview(rawImport) {
+      const res = await fetch('/api/deck-import-preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_import: rawImport })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Import preview failed.');
+      return data;
+    }
+
+    function showEditImportStatus(msg, isError) {
+      const el = document.getElementById('editImportStatus');
+      if (!el) return;
+      el.className = 'mt-2 import-status ' + (isError ? 'error' : 'success');
+      el.textContent = msg;
+      el.style.display = '';
+    }
+
+    function clearEditImportStatus() {
+      const el = document.getElementById('editImportStatus');
+      if (el) el.style.display = 'none';
+    }
+
+    async function runEditAutofill(rawImport, btn) {
+      if (!rawImport) {
+        showEditImportStatus('⚠ Enter a deck URL or paste a decklist first.', true);
+        return;
+      }
+      if (btn) { btn.disabled = true; btn.textContent = 'Detecting…'; }
+      clearEditImportStatus();
+      try {
+        const preview = await fetchImportPreview(rawImport);
+        if (editCommanderInput) editCommanderInput.value = preview.primary_commander || '';
+        const hasPartner = !!(preview.partner_commander);
+        if (hasPartner) {
+          if (editPartnerWrap) editPartnerWrap.style.display = '';
+          if (editPartnerToggle) editPartnerToggle.style.display = 'none';
+          if (editPartnerInput) editPartnerInput.value = preview.partner_commander;
+        } else if (editPartnerInput) {
+          editPartnerInput.value = '';
+        }
+        setCommanderPreview(editCommanderInput ? editCommanderInput.value : '', editPreviewWrap, editPreviewImg);
+        setCommanderPreview(hasPartner ? preview.partner_commander : '', editPartnerPreviewWrap, editPartnerPreviewImg);
+
+        const cmdLabel = preview.commander || preview.primary_commander || '';
+        const partnerLabel = hasPartner ? ` + ${preview.partner_commander}` : '';
+        showEditImportStatus(`✓ Commander detected: ${cmdLabel}${partnerLabel}`, false);
+      } catch (err) {
+        showEditImportStatus(`⚠ ${err.message || 'Unable to auto-fill from import.'}`, true);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = btn.id === 'editImportAutofillBtn' ? 'Autofill commander(s) from URL' : 'Autofill commander(s) from paste';
+        }
+      }
+    }
+
+    // URL autofill button
+    const editImportAutofillBtn = document.getElementById('editImportAutofillBtn');
+    if (editImportAutofillBtn) {
+      editImportAutofillBtn.addEventListener('click', () => {
+        const val = (document.getElementById('editDecklistUrlInput')?.value || '').trim();
+        runEditAutofill(val, editImportAutofillBtn);
+      });
+    }
+
+    // Auto-trigger autofill on URL blur
+    const editUrlInput = document.getElementById('editDecklistUrlInput');
+    if (editUrlInput) {
+      editUrlInput.addEventListener('blur', () => {
+        const val = editUrlInput.value.trim();
+        if (/moxfield\.com\/decks|archidekt\.com\/decks/i.test(val)) {
+          runEditAutofill(val, editImportAutofillBtn);
+        }
+      });
+      editUrlInput.addEventListener('input', clearEditImportStatus);
+    }
+
+    // Paste autofill button
+    const editImportAutofillPasteBtn = document.getElementById('editImportAutofillPasteBtn');
+    if (editImportAutofillPasteBtn) {
+      editImportAutofillPasteBtn.addEventListener('click', () => {
+        const val = (document.getElementById('editDecklistTextInput')?.value || '').trim();
+        runEditAutofill(val, editImportAutofillPasteBtn);
+      });
+    }
+
+    // Form submit: combine primary + partner
+    const editDeckForm = document.querySelector('#editDeckModal form');
+    if (editDeckForm && editCommanderInput) {
+      editDeckForm.addEventListener('submit', () => {
+        const primary = editCommanderInput.value;
+        const partner = editPartnerInput ? editPartnerInput.value : '';
+        editCommanderInput.value = buildCommanderPayload(primary, partner);
+      });
+    }
+
+    // Init autocompletes
+    initCommanderAutocomplete(editCommanderInput, 'editCommanderSuggestMenu',
+      (name) => setCommanderPreview(name, editPreviewWrap, editPreviewImg));
+    initCommanderAutocomplete(editPartnerInput, 'editPartnerCommanderSuggestMenu',
+      (name) => setCommanderPreview(name, editPartnerPreviewWrap, editPartnerPreviewImg));
+
+  })();
+
+  // --- Card image hydration ---
   async function scryfallCardImageByName(name) {
-    const url = `/api/card-art?name=${encodeURIComponent(name)}`;
-    const res = await fetch(url);
+    const res = await fetch(`/api/card-art?name=${encodeURIComponent(name)}`);
     if (!res.ok) return null;
     const payload = await res.json().catch(() => ({}));
     return payload?.image || null;
@@ -671,65 +869,6 @@
     }));
   }
 
-  async function fetchImportPreview(rawImport) {
-    const res = await fetch('/api/deck-import-preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ raw_import: rawImport })
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(data.error || 'Import preview failed.');
-    }
-    return data;
-  }
-
-  function collectEditImportText() {
-    const urlValue = (document.getElementById('editDecklistUrlInput')?.value || '').trim();
-    if (urlValue) return urlValue;
-    return (document.getElementById('editDecklistTextInput')?.value || '').trim();
-  }
-
-  const editImportAutofillBtn = document.getElementById('editImportAutofillBtn');
-  if (editImportAutofillBtn && editCommanderInput) {
-    editImportAutofillBtn.addEventListener('click', async () => {
-      const rawImport = collectEditImportText();
-      if (!rawImport) {
-        alert('Paste a decklist or enter a deck URL first.');
-        return;
-      }
-
-      editImportAutofillBtn.disabled = true;
-      const oldLabel = editImportAutofillBtn.textContent;
-      editImportAutofillBtn.textContent = 'Autofilling...';
-      try {
-        const preview = await fetchImportPreview(rawImport);
-        editCommanderInput.value = preview.primary_commander || '';
-        if (editPartnerInput) {
-          editPartnerInput.value = preview.partner_commander || '';
-        }
-        setCommanderPreview(editCommanderInput.value, editPreviewWrap, editPreviewImg);
-        setCommanderPreview(editPartnerInput ? editPartnerInput.value : '', editPartnerPreviewWrap, editPartnerPreviewImg);
-      } catch (err) {
-        alert(err.message || 'Unable to auto-fill commanders from import.');
-      } finally {
-        editImportAutofillBtn.disabled = false;
-        editImportAutofillBtn.textContent = oldLabel;
-      }
-    });
-  }
-
-  const editDeckForm = document.querySelector('#editDeckModal form');
-  if (editDeckForm && editCommanderInput) {
-    editDeckForm.addEventListener('submit', () => {
-      const primary = editCommanderInput.value;
-      const partner = editPartnerInput ? editPartnerInput.value : '';
-      editCommanderInput.value = buildCommanderPayload(primary, partner);
-    });
-  }
-
-  initCommanderAutocomplete(editCommanderInput, 'editCommanderSuggestMenu', (name) => setCommanderPreview(name, editPreviewWrap, editPreviewImg));
-  initCommanderAutocomplete(editPartnerInput, 'editPartnerCommanderSuggestMenu', (name) => setCommanderPreview(name, editPartnerPreviewWrap, editPartnerPreviewImg));
   hydrateDeckCardImages();
 </script>
 
