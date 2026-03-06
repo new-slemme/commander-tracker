@@ -184,18 +184,28 @@ function renderCommanderDamage(){
     const sourcePid = String(opponent.player_id);
     const current = Number(commanderDamageBySource[sourcePid]) || 0;
     const isDanger = current >= 21;
-    const row = document.createElement("div");
-    row.className = "commander-damage-row" + (isDanger ? " is-danger" : "");
-    row.innerHTML = `
-      <span class="cd-name">${escapeHtml(opponent.player_name)}</span>
-      <div class="cd-controls">
-        <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="-1">−1</button>
-        <span class="cd-value" id="commanderDamage-${sourcePid}">${current}</span>
-        <button class="cd-btn cd-btn-plus" type="button" data-source-pid="${sourcePid}" data-delta="1">+1</button>
-        <button class="cd-btn cd-btn-plus" type="button" data-source-pid="${sourcePid}" data-delta="5">+5</button>
+    const artUrl = opponent.commander_art || "";
+    const artScale = opponent.commander_art_scale || "cover";
+
+    const card = document.createElement("div");
+    card.className = "cd-art-card" + (isDanger ? " is-danger" : "");
+    if(artUrl){
+      card.style.backgroundImage = `url(${JSON.stringify(artUrl)})`;
+      card.style.backgroundSize = artScale;
+      card.style.backgroundPosition = "center 15%";
+    }
+    card.innerHTML = `
+      <div class="cd-art-overlay">
+        <span class="cd-art-value" id="commanderDamage-${sourcePid}">${current}</span>
+        <span class="cd-art-name">${escapeHtml(opponent.player_name)}</span>
+        <div class="cd-art-controls">
+          <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="-1">−1</button>
+          <button class="cd-btn cd-btn-plus" type="button" data-source-pid="${sourcePid}" data-delta="1">+1</button>
+          <button class="cd-btn cd-btn-plus" type="button" data-source-pid="${sourcePid}" data-delta="5">+5</button>
+        </div>
       </div>
     `;
-    list.appendChild(row);
+    list.appendChild(card);
   });
 
   // Update badge on Cmd Dmg tab
