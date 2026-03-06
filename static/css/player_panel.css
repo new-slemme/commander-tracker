@@ -22,10 +22,11 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: .4rem;
-  height: 38dvh;
+  height: 60dvh;
   position: relative;
   user-select: none;
   padding: 0 8px;
+  cursor: pointer;
 }
 
 .panel-top-row {
@@ -75,34 +76,23 @@ html, body {
 .panel-pending.loss { color: #ff8080; }
 .panel-pending.empty { opacity: 0; }
 
-/* ---- Life tap zones ---- */
-.panel-tap-zones {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 6px;
-  padding: 6px;
-  height: 22dvh;
-}
-
-.panel-tap-btn {
-  background: #1e2235;
-  border: 1px solid #3a3f5c;
-  border-radius: 10px;
-  color: #e0e0e0;
-  font-size: 1.5rem;
-  font-weight: 700;
+/* ---- Life tap zone hints ---- */
+.panel-life-zone-hints {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background .1s, transform .08s;
-  -webkit-user-select: none;
+  justify-content: space-between;
+  padding: 0 1rem;
+  pointer-events: none;
 }
 
-.panel-tap-btn:active {
-  background: #2a3050;
-  transform: scale(.97);
+.panel-life-hint {
+  font-size: 2rem;
+  font-weight: 700;
+  opacity: 0.12;
+  color: #fff;
+  user-select: none;
 }
 
 /* ---- Pass turn row ---- */
