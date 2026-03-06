@@ -27,6 +27,12 @@
   <button class="panel-tap-btn" id="minusFive" type="button">−5</button>
 </div>
 
+<div class="panel-pass-row">
+  <button class="panel-pass-btn" id="passTurnBtn" type="button" aria-label="Pass your turn">
+    <span class="panel-pass-icon">↻</span> Pass Turn
+  </button>
+</div>
+
 <div class="panel-bottom">
   <div class="panel-tab-bar" role="tablist">
     <button class="panel-tab-btn active" data-tab="flags" type="button" role="tab" aria-selected="true" aria-controls="tabFlags">
@@ -244,7 +250,8 @@ function applyRemoteState(state){
     renderFlags();
   }
 
-  activePlayerId = state.active_player_id;
+  activePlayerId = state.active_player_id != null ? String(state.active_player_id) : null;
+  renderPassTurnBtn();
 
   const remoteCommanderDamage = (((state.card_state || {})[MY_PID] || {}).commander_damage || {});
   const nextCommanderDamageBySource = {};
@@ -262,6 +269,15 @@ function applyRemoteState(state){
 
   const turnBadge = document.getElementById("turnBadge");
   if(turnBadge) turnBadge.textContent = `Turn ${state.turn || 1}`;
+}
+
+// ---- Pass Turn ----
+function renderPassTurnBtn(){
+  const btn = document.getElementById("passTurnBtn");
+  if(!btn) return;
+  const isMyTurn = activePlayerId === MY_PID;
+  btn.classList.toggle("is-my-turn", isMyTurn);
+  btn.disabled = !isMyTurn;
 }
 
 async function pushUpdate(patch){
@@ -313,6 +329,11 @@ document.getElementById("misplayedBtn").addEventListener("click", () => {
   pushUpdate({ flags: { mana_fucked: flags.mana_fucked, misplayed: flags.misplayed, salt_count: flags.salt_count } });
 });
 
+document.getElementById("passTurnBtn").addEventListener("click", () => {
+  if(activePlayerId !== MY_PID) return;
+  pushUpdate({ pass_turn: true });
+});
+
 document.getElementById("commanderDamageList").addEventListener("click", (event) => {
   const btn = event.target.closest("button.cd-btn");
   if(!btn) return;
@@ -330,6 +351,7 @@ if(initState && Object.keys(initState).length){
   renderLife();
   renderScoreboard({});
   renderCommanderDamage();
+  renderPassTurnBtn();
 }
 
 const pollInterval = setInterval(poll, POLL_INTERVAL_MS);
