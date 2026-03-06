@@ -5300,6 +5300,27 @@ def api_game_state(token):
             except (TypeError, ValueError):
                 pass
 
+    # Non-host pass_turn: advance the active player to the next in seat order
+    if not is_host and data.get("pass_turn"):
+        pid_list = [p["player_id"] for p in participants]
+        if len(pid_list) > 1:
+            if "passed" not in state or not isinstance(state["passed"], list):
+                state["passed"] = []
+            if player_id not in state["passed"]:
+                state["passed"].append(player_id)
+            current_active = state.get("active_player_id")
+            # Advance to next player
+            if current_active in pid_list:
+                current_idx = pid_list.index(current_active)
+            else:
+                current_idx = 0
+            next_idx = (current_idx + 1) % len(pid_list)
+            state["active_player_id"] = pid_list[next_idx]
+            # Increment turn counter when all players have passed
+            if len(set(state["passed"])) >= len(pid_list):
+                state["turn"] = int(state.get("turn", 1)) + 1
+                state["passed"] = []
+
     state["version"] = int(state.get("version", 0)) + 1
     active_game_rec.state_json = json.dumps(state)
     active_game_rec.updated_at = datetime.utcnow()

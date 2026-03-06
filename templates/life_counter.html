@@ -1107,6 +1107,7 @@ function nextPlayer(){
   }
   renderTimers();
   playSfx(turnChangeAudio);
+  syncPushTurnHook?.();
 }
 
 /* ---------- LIFE TAP ---------- */
@@ -1954,6 +1955,8 @@ if(activeTurnBadgeToggle){
 }
 
 /* ---------- MULTIPLAYER SYNC ---------- */
+let syncPushTurnHook = null; // set by the sync block below; called from nextPlayer()
+
 if(JOIN_TOKEN){
   const SYNC_POLL_MS = 2000;
   let syncLastVersion = -1;
@@ -1968,8 +1971,6 @@ if(JOIN_TOKEN){
         body: JSON.stringify({
           player_id: Number(playerId),
           life: absoluteLife,
-          active_player_id: active ? Number(active) : undefined,
-          turn: turn,
         }),
       });
       if(resp.ok){
@@ -2028,6 +2029,18 @@ if(JOIN_TOKEN){
         }
       });
     }
+
+    // Sync active player and turn from remote state (enables remote pass-turn)
+    if(state.active_player_id != null){
+      const remoteActive = String(state.active_player_id);
+      if(remoteActive !== active){
+        setActive(remoteActive);
+      }
+    }
+    if(typeof state.turn === "number" && state.turn > turn){
+      turn = state.turn;
+      updateTurnPills();
+    }
   }
 
   async function syncPoll(){
@@ -2068,6 +2081,9 @@ if(JOIN_TOKEN){
     });
   }
   setInterval(syncFlushLifeChanges, 500);
+
+  // Expose syncPushTurn so nextPlayer() (outside this block) can call it
+  syncPushTurnHook = syncPushTurn;
 
   // QR code button
   const showQrBtn = document.getElementById("showQrBtn");

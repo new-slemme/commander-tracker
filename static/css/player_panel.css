@@ -11,6 +11,8 @@ html, body {
   overflow: hidden;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ---- Life area ---- */
@@ -103,11 +105,59 @@ html, body {
   transform: scale(.97);
 }
 
+/* ---- Pass turn row ---- */
+.panel-pass-row {
+  display: flex;
+  justify-content: center;
+  padding: 4px 6px 2px;
+  flex-shrink: 0;
+}
+
+.panel-pass-btn {
+  width: 100%;
+  max-width: 320px;
+  padding: .6rem 1rem;
+  background: #1a2240;
+  border: 1.5px solid #2a3a70;
+  border-radius: 10px;
+  color: #6a9fff;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  cursor: pointer;
+  transition: background .1s, border-color .1s, color .1s, opacity .15s;
+  -webkit-user-select: none;
+}
+
+.panel-pass-btn.is-my-turn {
+  background: #1e3a20;
+  border-color: #3a7a40;
+  color: #60d070;
+}
+
+.panel-pass-btn.is-my-turn:active {
+  background: #254a28;
+}
+
+.panel-pass-btn:not(.is-my-turn) {
+  opacity: .45;
+  pointer-events: none;
+}
+
+.panel-pass-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 /* ---- Bottom tabbed section ---- */
 .panel-bottom {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 38dvh - 22dvh);
+  flex: 1;
+  min-height: 0;
   border-top: 1px solid #2a2e45;
 }
 
