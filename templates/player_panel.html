@@ -11,20 +11,17 @@
 </head>
 <body>
 
-<div class="panel-life-area">
+<div class="panel-life-area" id="lifeTapZone">
   <div class="panel-top-row">
     <div class="panel-player-name">{{ this_player.player_name }}</div>
     <div class="panel-turn-badge" id="turnBadge">Turn 1</div>
   </div>
+  <div class="panel-life-zone-hints" aria-hidden="true">
+    <span class="panel-life-hint panel-life-hint--minus">−</span>
+    <span class="panel-life-hint panel-life-hint--plus">+</span>
+  </div>
   <div class="panel-life-total" id="lifeTotal">40</div>
   <div class="panel-pending empty" id="pendingIndicator"></div>
-</div>
-
-<div class="panel-tap-zones">
-  <button class="panel-tap-btn" id="plusFive" type="button">+5</button>
-  <button class="panel-tap-btn" id="plusOne" type="button">+1</button>
-  <button class="panel-tap-btn" id="minusOne" type="button">−1</button>
-  <button class="panel-tap-btn" id="minusFive" type="button">−5</button>
 </div>
 
 <div class="panel-pass-row">
@@ -311,11 +308,13 @@ async function poll(){
   } catch(e){}
 }
 
-// Tap buttons
-document.getElementById("plusFive").addEventListener("click", () => queueDelta(5));
-document.getElementById("plusOne").addEventListener("click", () => queueDelta(1));
-document.getElementById("minusOne").addEventListener("click", () => queueDelta(-1));
-document.getElementById("minusFive").addEventListener("click", () => queueDelta(-5));
+// Tap zone: left half = −1, right half = +1
+document.getElementById("lifeTapZone").addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  const rect = e.currentTarget.getBoundingClientRect();
+  const delta = e.clientX < rect.left + rect.width / 2 ? -1 : 1;
+  queueDelta(delta);
+});
 
 document.getElementById("manaFuckedBtn").addEventListener("click", () => {
   flags.mana_fucked = !flags.mana_fucked;
