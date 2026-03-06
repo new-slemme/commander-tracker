@@ -5300,8 +5300,8 @@ def api_game_state(token):
             except (TypeError, ValueError):
                 pass
 
-    # Non-host pass_turn: advance the active player to the next in seat order
-    if not is_host and data.get("pass_turn"):
+    # pass_turn: advance the active player to the next in seat order
+    if data.get("pass_turn"):
         pid_list = [p["player_id"] for p in participants]
         if len(pid_list) > 1:
             if "passed" not in state or not isinstance(state["passed"], list):
