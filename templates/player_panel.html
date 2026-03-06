@@ -12,7 +12,10 @@
 <body>
 
 <div class="panel-life-area">
-  <div class="panel-player-name">{{ this_player.player_name }}</div>
+  <div class="panel-top-row">
+    <div class="panel-player-name">{{ this_player.player_name }}</div>
+    <div class="panel-turn-badge" id="turnBadge">Turn 1</div>
+  </div>
   <div class="panel-life-total" id="lifeTotal">40</div>
   <div class="panel-pending empty" id="pendingIndicator"></div>
 </div>
@@ -24,26 +27,47 @@
   <button class="panel-tap-btn" id="minusFive" type="button">−5</button>
 </div>
 
-<div class="panel-flags">
-  <button class="panel-flag-btn" id="manaFuckedBtn" type="button">
-    <span>💧</span> Mana Screwed
-  </button>
-  <button class="panel-flag-btn" id="misplayedBtn" type="button">
-    <span>⚡</span> Misplayed
-  </button>
-</div>
+<div class="panel-bottom">
+  <div class="panel-tab-bar" role="tablist">
+    <button class="panel-tab-btn active" data-tab="flags" type="button" role="tab" aria-selected="true" aria-controls="tabFlags">
+      <span class="tab-icon">⚑</span>
+      <span class="tab-label">Flags</span>
+      <span class="tab-badge" id="flagsBadge" hidden></span>
+    </button>
+    <button class="panel-tab-btn" data-tab="cmddmg" type="button" role="tab" aria-selected="false" aria-controls="tabCmddmg">
+      <span class="tab-icon">⚔</span>
+      <span class="tab-label">Cmd Dmg</span>
+      <span class="tab-badge" id="cmdDmgBadge" hidden></span>
+    </button>
+    <button class="panel-tab-btn" data-tab="scores" type="button" role="tab" aria-selected="false" aria-controls="tabScores">
+      <span class="tab-icon">📋</span>
+      <span class="tab-label">Scores</span>
+    </button>
+  </div>
 
-<div class="panel-commander-damage" id="commanderDamageCard">
-  <h2>Commander Damage Taken</h2>
-  <div class="commander-damage-list" id="commanderDamageList"></div>
-</div>
+  <div class="panel-tab-content" id="tabFlags" role="tabpanel">
+    <div class="panel-flags">
+      <button class="panel-flag-btn" id="manaFuckedBtn" type="button">
+        <span>💧</span> Mana Screwed
+      </button>
+      <button class="panel-flag-btn" id="misplayedBtn" type="button">
+        <span>⚡</span> Misplayed
+      </button>
+    </div>
+  </div>
 
-<div class="panel-scoreboard">
-  <h2>All Players</h2>
-  <div class="scoreboard-list" id="scoreboardList"></div>
-</div>
+  <div class="panel-tab-content hidden" id="tabCmddmg" role="tabpanel">
+    <div class="panel-commander-damage" id="commanderDamageCard">
+      <div class="commander-damage-list" id="commanderDamageList"></div>
+    </div>
+  </div>
 
-<div class="panel-status" id="panelStatus">Connecting...</div>
+  <div class="panel-tab-content hidden" id="tabScores" role="tabpanel">
+    <div class="panel-scoreboard">
+      <div class="scoreboard-list" id="scoreboardList"></div>
+    </div>
+  </div>
+</div>
 
 <script>
 const TOKEN = {{ token|tojson }};
@@ -63,6 +87,27 @@ let commanderDamageBySource = {};
 
 const OPPONENTS = (PARTICIPANTS || []).filter((p) => String(p.player_id) !== MY_PID);
 
+// ---- Tab switching ----
+function switchTab(tabName) {
+  document.querySelectorAll(".panel-tab-btn").forEach((btn) => {
+    const isActive = btn.dataset.tab === tabName;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-selected", String(isActive));
+  });
+  document.querySelectorAll(".panel-tab-content").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.id !== "tab" + capitalize(tabName));
+  });
+}
+
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+document.querySelectorAll(".panel-tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+
+// ---- Life ----
 function renderLife(){
   const display = Math.max(0, committedLife + pendingDelta);
   const el = document.getElementById("lifeTotal");
@@ -100,11 +145,17 @@ function commitLife(){
   pushUpdate({ life_delta: delta });
 }
 
+// ---- Flags ----
 function renderFlags(){
   document.getElementById("manaFuckedBtn").classList.toggle("is-active", !!flags.mana_fucked);
   document.getElementById("misplayedBtn").classList.toggle("is-active", !!flags.misplayed);
+  // Update badge on Flags tab
+  const badge = document.getElementById("flagsBadge");
+  const anyActive = !!flags.mana_fucked || !!flags.misplayed;
+  badge.hidden = !anyActive;
 }
 
+// ---- Scoreboard ----
 function renderScoreboard(state){
   const list = document.getElementById("scoreboardList");
   if(!list || !PARTICIPANTS) return;
@@ -114,12 +165,13 @@ function renderScoreboard(state){
     const pid = String(p.player_id);
     const life = (state.life || {})[pid] ?? "?";
     const row = document.createElement("div");
-    row.className = "scoreboard-row" + (pid === apid ? " is-active" : "");
+    row.className = "scoreboard-row" + (pid === apid ? " is-active" : "") + (pid === MY_PID ? " is-me" : "");
     row.innerHTML = `<span class="sb-name">${escapeHtml(p.player_name)}</span><span class="sb-life">${life}</span>`;
     list.appendChild(row);
   });
 }
 
+// ---- Commander damage ----
 function renderCommanderDamage(){
   const list = document.getElementById("commanderDamageList");
   if(!list) return;
@@ -128,19 +180,30 @@ function renderCommanderDamage(){
   OPPONENTS.forEach((opponent) => {
     const sourcePid = String(opponent.player_id);
     const current = Number(commanderDamageBySource[sourcePid]) || 0;
+    const isDanger = current >= 21;
     const row = document.createElement("div");
-    row.className = "commander-damage-row";
+    row.className = "commander-damage-row" + (isDanger ? " is-danger" : "");
     row.innerHTML = `
       <span class="cd-name">${escapeHtml(opponent.player_name)}</span>
       <div class="cd-controls">
         <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="-1">−1</button>
-        <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="1">+1</button>
-        <button class="cd-btn" type="button" data-source-pid="${sourcePid}" data-delta="5">+5</button>
         <span class="cd-value" id="commanderDamage-${sourcePid}">${current}</span>
+        <button class="cd-btn cd-btn-plus" type="button" data-source-pid="${sourcePid}" data-delta="1">+1</button>
+        <button class="cd-btn cd-btn-plus" type="button" data-source-pid="${sourcePid}" data-delta="5">+5</button>
       </div>
     `;
     list.appendChild(row);
   });
+
+  // Update badge on Cmd Dmg tab
+  const total = Object.values(commanderDamageBySource).reduce((s, v) => s + (Number(v) || 0), 0);
+  const badge = document.getElementById("cmdDmgBadge");
+  if(total > 0){
+    badge.hidden = false;
+    badge.textContent = String(total);
+  } else {
+    badge.hidden = true;
+  }
 }
 
 function queueCommanderDamage(sourcePid, delta){
@@ -150,6 +213,8 @@ function queueCommanderDamage(sourcePid, delta){
   commanderDamageBySource[sourcePid] = next;
   const valueEl = document.getElementById(`commanderDamage-${sourcePid}`);
   if(valueEl) valueEl.textContent = String(next);
+  // Re-render row danger state
+  renderCommanderDamage();
   pushUpdate({ card_state: { commander_damage: { [sourcePid]: next } } });
 }
 
@@ -194,7 +259,9 @@ function applyRemoteState(state){
 
   renderScoreboard(state);
   renderCommanderDamage();
-  document.getElementById("panelStatus").textContent = `Turn ${state.turn || 1}`;
+
+  const turnBadge = document.getElementById("turnBadge");
+  if(turnBadge) turnBadge.textContent = `Turn ${state.turn || 1}`;
 }
 
 async function pushUpdate(patch){
@@ -216,7 +283,8 @@ async function poll(){
   try {
     const resp = await fetch(`/api/game/${TOKEN}/state`);
     if(resp.status === 404){
-      document.getElementById("panelStatus").textContent = "Game has ended.";
+      const turnBadge = document.getElementById("turnBadge");
+      if(turnBadge) turnBadge.textContent = "Game ended";
       clearInterval(pollInterval);
       return;
     }
