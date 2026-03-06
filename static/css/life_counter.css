@@ -943,6 +943,8 @@ body.sigtaara-ui .h4 {
   width:min(460px, calc(100vw - 32px));
   min-height:0;
   max-height:min(74vh, 420px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
   padding:12px;
   border-radius:18px;
   border:2px solid rgba(173,189,224,0.42);
@@ -1108,6 +1110,19 @@ body.sigtaara-ui .h4 {
   outline-offset:2px;
 }
 
+@media (max-height:500px),(max-width:768px) and (orientation:landscape){
+  .player-salt-action-btn{
+    width:60px;
+    height:60px;
+    flex-basis:60px;
+  }
+
+  .player-salt-action-btn img{
+    width:46px;
+    height:46px;
+  }
+}
+
 @media (max-width:576px){
   :root{
     --ui-pad-top:max(12px, var(--safe-top));
@@ -1212,11 +1227,88 @@ body.sigtaara-ui .h4 {
 
 .player-salt-card-logic .card-logic-panel{
   display:flex;
+  flex-direction:column;
+  gap:.5rem;
+  padding:.2rem .1rem .3rem;
+  align-items:stretch;
+  justify-content:flex-start;
+}
+
+.player-salt-card-logic .card-logic-statuses,
+.player-salt-card-logic .card-logic-counters{
+  display:flex;
   flex-wrap:wrap;
+  gap:.3rem;
   justify-content:center;
+}
+
+/* Commander Damage section label */
+.card-logic-cmdr-label{
+  display:none;
+}
+
+.player-salt-card-logic .card-logic-cmdr-label{
+  display:block;
+  font-size:.72rem;
+  font-weight:700;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:rgba(234,240,255,.75);
+  padding-top:.5rem;
+  border-top:1px solid rgba(255,255,255,.16);
+  text-align:center;
+}
+
+/* Commander damage chip aligned to center in flyout */
+.player-salt-card-logic .commander-damage-chip{
+  align-self:center;
+  margin-top:.05rem;
+}
+
+/* Source rows become a vertical list */
+.player-salt-card-logic .commander-damage-sources{
+  display:flex;
+  flex-direction:column;
+  gap:.4rem;
+}
+
+/* Each source row: [−] [Name] [value] [+] [↺] */
+.player-salt-card-logic .commander-damage-source-row{
+  display:flex;
   align-items:center;
-  gap:.35rem;
-  padding:.2rem .1rem .1rem;
+  gap:.3rem;
+  padding:.3rem .5rem;
+  border-radius:10px;
+  background:rgba(0,0,0,.3);
+  border:1px solid rgba(255,255,255,.15);
+  min-height:2.2rem;
+}
+
+/* Name label takes remaining space */
+.player-salt-card-logic .commander-damage-source-row .counter-chip-label{
+  flex:1;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-size:.8rem;
+}
+
+/* Larger touch targets for source row buttons */
+.player-salt-card-logic .counter-chip-btn{
+  width:1.7rem;
+  height:1.7rem;
+  min-width:1.7rem;
+  font-size:.85rem;
+}
+
+/* Reset button – full width */
+.player-salt-card-logic .commander-damage-reset-all{
+  align-self:stretch;
+  border-radius:8px;
+  min-height:2rem;
+  font-size:.72rem;
+  padding:0 .5rem;
 }
 
 .card-logic-statuses,
