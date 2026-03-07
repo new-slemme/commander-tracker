@@ -633,6 +633,11 @@ body.sigtaara-ui .h4 {
     }
     .players-3 .life-card[data-orientation="right"] .player-timer{
       order:-1;
+         /* The top turn-pill is centred at left:50vw and extends ~56px rightward,
+         which overlaps into player 3's card (starts at 49vw).
+         Push the timer past the pill's right edge: 50vw - 49vw + 56px = 1vw + 56px,
+         plus the card's own 10px padding already applied, minus that padding. */
+      margin-inline-start:calc(1vw + 50px);
       margin-inline-end:auto;
       align-self:flex-start;
     }
@@ -820,10 +825,6 @@ body.sigtaara-ui .h4 {
     /* Hide the bottom turn pill in 2-player mode (reduces clutter & overlap) */
     .mode-2p #turnPillBottom{ display:none; }
 
-    /* In 3-player mode the right column belongs to player 3; shift pills to the
-       centre of the left column (0–49% of viewport) so they don't obscure
-       player 3's chess-clock timer which sits at the top-left of their card */
-    .mode-3p .turn-pill{ left:24.5%; }
 
     .mode-5p .turn-pill{ display:none; }
 
