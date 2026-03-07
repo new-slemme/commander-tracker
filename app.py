@@ -2500,55 +2500,6 @@ def login():
     return render_template("login.html")
 
 
-@app.route("/api/login", methods=["POST"])
-def api_login():
-    payload = request.get_json(silent=True) or {}
-    username = (payload.get("username") or "").strip()
-    password = payload.get("password") or ""
-
-    if not username or not password:
-        return jsonify({"error": "username and password required"}), 400
-
-    user = User.query.filter_by(username=username).first()
-    if not user or not check_password_hash(user.password_hash, password):
-        return jsonify({"error": "Invalid username or password"}), 401
-
-    if not user.is_active:
-        return jsonify({"error": "Account pending approval. Please contact an admin."}), 403
-
-    if not user.player:
-        user.player = Player(name=user.display_name)
-        db.session.commit()
-
-    session["user_id"] = user.id
-    session["username"] = user.username
-    session["display_name"] = user.display_name
-    session["is_admin"] = user.is_admin
-    session["use_sigtaara"] = user.use_sigtaara
-    get_active_pod()
-
-    return jsonify(api_user_payload(user))
-
-
-@app.route("/api/me", methods=["GET"])
-def api_me():
-    user = get_current_user()
-    if not user:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    if not user.player:
-        user.player = Player(name=user.display_name)
-        db.session.commit()
-
-    return jsonify(api_user_payload(user))
-
-
-@app.route("/api/logout", methods=["POST"])
-def api_logout():
-    session.clear()
-    return jsonify({"ok": True})
-
-
 @app.route("/logout")
 def logout():
     session.clear()
@@ -5408,58 +5359,6 @@ def api_game_state(token):
 
 
 # -------------------------
-@app.route("/api/join/<token>", methods=["GET"])
-def api_join_get(token):
-    active_game_rec = ActiveGame.query.filter_by(token=token).first()
-    if not active_game_rec:
-        return jsonify({"error": "Game not found or already ended."}), 404
-
-    try:
-        participants = json.loads(active_game_rec.participants_json)
-    except (json.JSONDecodeError, Exception):
-        participants = []
-
-    return jsonify({"participants": participants, "token": token})
-
-
-@app.route("/api/join/<token>", methods=["POST"])
-def api_join_claim(token):
-    active_game_rec = ActiveGame.query.filter_by(token=token).first()
-    if not active_game_rec:
-        return jsonify({"error": "Game not found or already ended."}), 404
-
-    try:
-        participants = json.loads(active_game_rec.participants_json)
-    except (json.JSONDecodeError, Exception):
-        participants = []
-
-    payload = request.get_json(silent=True) or {}
-    player_id_raw = payload.get("player_id")
-    try:
-        player_id = int(player_id_raw)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid player selection."}), 400
-
-    valid_player_ids = {p["player_id"] for p in participants}
-    if player_id not in valid_player_ids:
-        return jsonify({"error": "Invalid player selection."}), 400
-
-    session[f"game_join_{token}"] = player_id
-    session.modified = True
-
-    try:
-        state = json.loads(active_game_rec.state_json)
-    except (json.JSONDecodeError, Exception):
-        state = {}
-
-    return jsonify({
-        "token": token,
-        "player_id": player_id,
-        "participants": participants,
-        "state": state,
-    })
-
-
 # Multiplayer join routes
 # -------------------------
 
@@ -6130,3 +6029,4 @@ def api_join_claim(token):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
