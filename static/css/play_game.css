@@ -143,25 +143,7 @@
     }
 
     .life-position-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      width: fit-content;
       margin-bottom: 8px;
-      padding: 3px 9px;
-      border-radius: 999px;
-      background: var(--base-trans);
-      border: 1px solid rgba(170,181,235,0.35);
-      color: rgba(230,235,255,0.95);
-      font-size: 0.72rem;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      font-weight: 800;
-    }
-
-    .life-position-indicator .pos-icon {
-      font-size: 0.95rem;
-      line-height: 1;
     }
 
     .player-tile .form-label {
@@ -274,7 +256,29 @@
   .player-tile-header{ display:none; }
 
   .life-position-indicator {
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    margin-bottom: 10px;
+    padding: 5px 10px 5px 6px;
+    border-radius: 10px;
+    background: rgba(124,146,245,0.08);
+    border: 1px solid rgba(124,146,245,0.25);
+    color: rgba(200,210,255,0.9);
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    font-weight: 700;
+  }
+
+  .life-position-indicator .pos-icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .life-position-indicator .pos-icon svg {
+    display: block;
   }
 
   .player-label {

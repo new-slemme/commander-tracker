@@ -260,41 +260,59 @@
     }
   }
 
-  function getLifeLayoutPosition(count, slot) {
-    const byCount = {
-      2: {
-        1: { icon: "⬅️", label: "Left" },
-        2: { icon: "➡️", label: "Right" },
-      },
-      3: {
-        1: { icon: "↖️", label: "Top Left" },
-        2: { icon: "↙️", label: "Bottom Left" },
-        3: { icon: "➡️", label: "Right" },
-      },
-      4: {
-        1: { icon: "↖️", label: "Top Left" },
-        2: { icon: "↗️", label: "Top Right" },
-        3: { icon: "↙️", label: "Bottom Left" },
-        4: { icon: "↘️", label: "Bottom Right" },
-      },
-      5: {
-        1: { icon: "↖️", label: "Top Left" },
-        2: { icon: "⬆️", label: "Top Middle" },
-        3: { icon: "↗️", label: "Top Right" },
-        4: { icon: "↙️", label: "Bottom Left" },
-        5: { icon: "↘️", label: "Bottom Middle" },
-      },
-      6: {
-        1: { icon: "↖️", label: "Top Left" },
-        2: { icon: "⬆️", label: "Top Middle" },
-        3: { icon: "↗️", label: "Top Right" },
-        4: { icon: "↙️", label: "Bottom Left" },
-        5: { icon: "⬇️", label: "Bottom Middle" },
-        6: { icon: "↘️", label: "Bottom Right" },
-      },
-    };
+  // Cell coordinates [x, y, w, h] for each slot within a 48×34 SVG canvas.
+  // Matches the actual life-counter grid layout for each player count.
+  const MINIMAP_LAYOUTS = {
+    2: [
+      [2, 2, 20, 30],   // slot 1: left half
+      [26, 2, 20, 30],  // slot 2: right half
+    ],
+    3: [
+      [2, 2, 20, 14],   // slot 1: top-left
+      [2, 18, 20, 14],  // slot 2: bottom-left
+      [26, 2, 20, 30],  // slot 3: right (spans full height)
+    ],
+    4: [
+      [2, 2, 20, 14],   // slot 1: top-left
+      [26, 2, 20, 14],  // slot 2: top-right
+      [2, 18, 20, 14],  // slot 3: bottom-left
+      [26, 18, 20, 14], // slot 4: bottom-right
+    ],
+    5: [
+      [2, 2, 13, 14],   // slot 1: top-left
+      [17, 2, 13, 14],  // slot 2: top-middle
+      [32, 2, 14, 14],  // slot 3: top-right
+      [2, 18, 13, 14],  // slot 4: bottom-left
+      [17, 18, 13, 14], // slot 5: bottom-middle
+    ],
+    6: [
+      [2, 2, 13, 14],   // slot 1: top-left
+      [17, 2, 13, 14],  // slot 2: top-middle
+      [32, 2, 14, 14],  // slot 3: top-right
+      [2, 18, 13, 14],  // slot 4: bottom-left
+      [17, 18, 13, 14], // slot 5: bottom-middle
+      [32, 18, 14, 14], // slot 6: bottom-right
+    ],
+  };
 
-    return byCount[count]?.[slot] || { icon: "•", label: "Position" };
+  const POSITION_LABELS = {
+    2: { 1: "Left", 2: "Right" },
+    3: { 1: "Top Left", 2: "Bottom Left", 3: "Right" },
+    4: { 1: "Top Left", 2: "Top Right", 3: "Bottom Left", 4: "Bottom Right" },
+    5: { 1: "Top Left", 2: "Top Middle", 3: "Top Right", 4: "Bottom Left", 5: "Bottom Middle" },
+    6: { 1: "Top Left", 2: "Top Middle", 3: "Top Right", 4: "Bottom Left", 5: "Bottom Middle", 6: "Bottom Right" },
+  };
+
+  function buildPositionSVG(count, activeSlot) {
+    const cells = MINIMAP_LAYOUTS[count] || MINIMAP_LAYOUTS[4];
+    const rects = cells.map(([x, y, w, h], i) => {
+      const isActive = (i + 1) === activeSlot;
+      const fill   = isActive ? '#7c92f5' : 'rgba(170,181,235,0.12)';
+      const stroke = isActive ? '#aab8ff' : 'rgba(170,181,235,0.30)';
+      const sw     = isActive ? '1.5' : '1';
+      return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    }).join('');
+    return `<svg width="48" height="34" viewBox="0 0 48 34" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${rects}</svg>`;
   }
 
   function refreshLifeLayoutHints() {
@@ -306,11 +324,11 @@
       hint.style.display = isActive ? "inline-flex" : "none";
       if (!isActive) continue;
 
-      const pos = getLifeLayoutPosition(playerCount, i);
+      const label = POSITION_LABELS[playerCount]?.[i] || "Position";
       const iconEl = hint.querySelector(".pos-icon");
       const textEl = hint.querySelector(".pos-text");
-      if (iconEl) iconEl.textContent = pos.icon;
-      if (textEl) textEl.textContent = `Life layout: ${pos.label}`;
+      if (iconEl) iconEl.innerHTML = buildPositionSVG(playerCount, i);
+      if (textEl) textEl.textContent = label;
     }
   }
 
