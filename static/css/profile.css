@@ -1,15 +1,9 @@
   /* ===== Profile ===== */
   .profile-wrap { padding: 18px 0; }
 
-  .profile-hero {
-    background: linear-gradient(135deg, rgba(22,45,61,0.55), rgba(23,26,38,0.90));
-    border: 1px solid rgba(143,153,197,0.25);
-    border-radius: 22px;
-    box-shadow: 0 0 28px rgba(0,0,0,0.55);
-    overflow: hidden;
-  }
+  /* .profile-hero shell is now .app-hero (defined in base.css) */
 
-  .profile-hero-inner {
+.profile-hero-inner {
     padding: 18px 18px;
     display: flex;
     align-items: flex-start;
