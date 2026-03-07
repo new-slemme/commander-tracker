@@ -614,6 +614,24 @@
     padding: 18px;
   }
 
+  /* Section header row */
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .section-head h2,
+  .section-head h3,
+  .section-head h4 { margin: 0; }
+  .section-head__meta {
+    color: var(--font-base-trans);
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
   /* Responsiveness */
   @media (max-width: 576px) {
     .container { padding: 0 15px; }

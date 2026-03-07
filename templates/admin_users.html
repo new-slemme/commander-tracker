@@ -16,9 +16,9 @@
 </div>
 
 <div class="card p-3 mb-4 admin-card">
-  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <h3 class="mb-0">Pending approval</h3>
-    <span class="text-muted small">New users awaiting activation</span>
+  <div class="section-head">
+    <h3>Pending approval</h3>
+    <span class="section-head__meta">New users awaiting activation</span>
   </div>
 
   {% if pending %}
@@ -76,9 +76,9 @@
 </div>
 
 <div class="card p-3 admin-card">
-  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
-    <h3 class="mb-0">Active users</h3>
-    <span class="text-muted small">Currently enabled accounts</span>
+  <div class="section-head">
+    <h3>Active users</h3>
+    <span class="section-head__meta">Currently enabled accounts</span>
   </div>
 
   {% if active %}
