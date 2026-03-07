@@ -819,6 +819,12 @@ body.sigtaara-ui .h4 {
 
     /* Hide the bottom turn pill in 2-player mode (reduces clutter & overlap) */
     .mode-2p #turnPillBottom{ display:none; }
+
+    /* In 3-player mode the right column belongs to player 3; shift pills to the
+       centre of the left column (0–49% of viewport) so they don't obscure
+       player 3's chess-clock timer which sits at the top-left of their card */
+    .mode-3p .turn-pill{ left:24.5%; }
+
     .mode-5p .turn-pill{ display:none; }
 
 

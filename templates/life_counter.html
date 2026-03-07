@@ -9,7 +9,7 @@
   <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
 </head>
 
-<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}{% if debug_ui_enabled %} debug-ui{% endif %}">
+<body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 3 %}mode-3p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}{% if debug_ui_enabled %} debug-ui{% endif %}">
   {% set n = participants|length %}
 
   <div class="life-wrapper">
