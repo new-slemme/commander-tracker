@@ -54,6 +54,27 @@
     --font-warning: #FF9900;
     --font-warning-trans: #FF9900a8;
     --font-accent: #6e7cb7;
+
+    /* Shadows */
+    --shadow-sm:  0 0 14px rgba(0,0,0,0.35);
+    --shadow-md:  0 0 22px rgba(0,0,0,0.45);
+    --shadow-lg:  0 0 28px rgba(0,0,0,0.55);
+
+    /* Border colors */
+    --border-color:        rgba(143,153,197,0.25);
+    --border-color-subtle: rgba(143,153,197,0.18);
+    --border-color-strong: rgba(143,153,197,0.35);
+
+    /* Border-radius scale */
+    --radius-sm:  12px;
+    --radius-md:  14px;
+    --radius-lg:  18px;
+    --radius-xl:  22px;
+    --radius-2xl: 24px;
+
+    /* Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.2s ease;
   }
 
     body {
@@ -222,12 +243,12 @@
 
 
   .app-hero {
-    border-radius: 24px;
-    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: var(--radius-2xl);
+    border: 1px solid var(--border-color);
     background:
       radial-gradient(circle at 18% 20%, rgba(70,84,147,0.20), transparent 45%),
       linear-gradient(135deg, rgba(22,45,61,0.50), rgba(23,26,38,0.92));
-    box-shadow: 0 0 28px rgba(0,0,0,0.55);
+    box-shadow: var(--shadow-lg);
     padding: 18px;
     overflow: hidden;
     position: relative;
@@ -544,7 +565,54 @@
     padding: 26px;
   }
 
-  .muted { color: var(--font-base-trans); }
+  .muted  { color: var(--font-base-trans); }
+  .muted2 { color: var(--font-base-trans); }
+
+  /* Eyebrow label (small uppercase label above headings) */
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.75rem;
+    color: var(--font-base-trans);
+  }
+
+  /* Overview stat grid — detail pages */
+  .overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+
+  /* Stat card — used inside .overview-grid */
+  .stat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px;
+  }
+  .stat-label {
+    margin: 0;
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--font-base-trans);
+  }
+  .stat-value {
+    margin: 5px 0 0;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #fff;
+    text-transform: capitalize;
+  }
+
+  /* Empty state card */
+  .empty-card {
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--border-color-strong);
+    background: rgba(5,8,18,0.55);
+    color: var(--font-base-trans);
+    padding: 18px;
+  }
 
   /* Responsiveness */
   @media (max-width: 576px) {
