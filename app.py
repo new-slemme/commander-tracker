@@ -5534,5 +5534,469 @@ def record_game():
     return redirect(url_for("index"))
 
 
+# -------------------------
+# JSON REST API (for native clients)
+# -------------------------
+
+
+def api_login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request body"}), 400
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid username or password"}), 401
+    if not user.is_active:
+        return jsonify({"error": "Account pending approval. Please contact an admin."}), 403
+    if not user.player:
+        user.player = Player(name=user.display_name)
+        db.session.commit()
+    session["user_id"] = user.id
+    session["username"] = user.username
+    session["display_name"] = user.display_name
+    session["is_admin"] = user.is_admin
+    session["use_sigtaara"] = user.use_sigtaara
+    get_active_pod()
+    return jsonify({
+        "user_id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "is_admin": user.is_admin,
+        "player_id": user.player.id if user.player else None,
+    })
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"message": "Logged out"})
+
+
+@app.route("/api/me")
+@api_login_required
+def api_me():
+    u = get_current_user()
+    if not u:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify({
+        "user_id": u.id,
+        "username": u.username,
+        "display_name": u.display_name,
+        "is_admin": u.is_admin,
+        "player_id": u.player.id if u.player else None,
+    })
+
+
+@app.route("/api/stats")
+@api_login_required
+def api_stats():
+    game_q, scope, active_pod = game_query_for_scope()
+    game_ids_subquery = game_q.with_entities(Game.id)
+
+    players = Player.query.all()
+    player_stats = []
+    for p in players:
+        wins = game_q.filter_by(winner_id=p.id).count()
+        played = (
+            GameParticipant.query.join(Game)
+            .filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery))
+            .count()
+        )
+        winrate = round(wins / played * 100, 1) if played > 0 else 0.0
+        player_stats.append({"player_id": p.id, "name": p.name, "wins": wins, "played": played, "winrate": winrate})
+    player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
+
+    recent_games_list = game_q.order_by(Game.date.desc()).limit(10).all()
+    recent_game_ids = [g.id for g in recent_games_list]
+    parts = GameParticipant.query.filter(
+        GameParticipant.game_id.in_(recent_game_ids if recent_game_ids else [-1])
+    ).all()
+    game_parts_map: dict = {}
+    for gp in parts:
+        game_parts_map.setdefault(gp.game_id, []).append(gp)
+
+    recent_games = []
+    for g in recent_games_list:
+        gps = game_parts_map.get(g.id, [])
+        recent_games.append({
+            "id": g.id,
+            "date": g.date.isoformat(),
+            "winner": {"id": g.winner_id, "name": g.winner.name},
+            "win_type": g.win_type,
+            "ending_turn": g.ending_turn,
+            "participants": [
+                {
+                    "player_id": gp.player_id,
+                    "player_name": gp.player.name,
+                    "deck_id": gp.deck_id,
+                    "deck_name": gp.deck.name,
+                    "commander": gp.deck.commander_name or gp.deck.commander,
+                    "art_url": gp.deck.commander_art_url,
+                    "won": g.winner_id == gp.player_id,
+                }
+                for gp in gps
+            ],
+        })
+
+    decks = Deck.query.all()
+    deck_stats = []
+    for d in decks:
+        wins = (
+            GameParticipant.query.join(Game)
+            .filter(
+                GameParticipant.deck_id == d.id,
+                Game.winner_id == GameParticipant.player_id,
+                Game.id.in_(game_ids_subquery),
+            )
+            .count()
+        )
+        uses = (
+            GameParticipant.query.join(Game)
+            .filter(GameParticipant.deck_id == d.id, Game.id.in_(game_ids_subquery))
+            .count()
+        )
+        winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
+        deck_stats.append({
+            "id": d.id,
+            "name": d.name,
+            "commander": d.commander_name or d.commander,
+            "owner": d.owner.name,
+            "owner_id": d.player_id,
+            "wins": wins,
+            "uses": uses,
+            "winrate": winrate,
+            "art_url": d.commander_art_url,
+            "retired": d.retired,
+        })
+    deck_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
+
+    return jsonify({
+        "player_stats": player_stats,
+        "recent_games": recent_games,
+        "top_decks": deck_stats[:6],
+        "scope": scope,
+        "pod_name": active_pod.name if active_pod else None,
+    })
+
+
+@app.route("/api/players")
+@api_login_required
+def api_players():
+    players_list = Player.query.order_by(Player.name.asc()).all()
+    result = []
+    for p in players_list:
+        played = GameParticipant.query.filter_by(player_id=p.id).count()
+        won = Game.query.filter_by(winner_id=p.id).count()
+        deck_count = Deck.query.filter_by(player_id=p.id).count()
+        winrate = round((won / played) * 100, 1) if played else 0.0
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "wins": won,
+            "played": played,
+            "winrate": winrate,
+            "deck_count": deck_count,
+        })
+    return jsonify(result)
+
+
+@app.route("/api/players/<int:player_id>")
+@api_login_required
+def api_player_detail(player_id):
+    player = db.session.get(Player, player_id)
+    if not player:
+        return jsonify({"error": "Not found"}), 404
+    decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
+    games_played = GameParticipant.query.filter_by(player_id=player.id).count()
+    games_won = Game.query.filter_by(winner_id=player.id).count()
+    winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
+    deck_list = []
+    for d in decks:
+        deck_wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+        deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
+        deck_list.append({
+            "id": d.id,
+            "name": d.name,
+            "commander": d.commander_name or d.commander,
+            "retired": d.retired,
+            "planned": d.planned,
+            "wins": deck_wins,
+            "games": deck_games,
+            "winrate": deck_winrate,
+            "art_url": d.commander_art_url,
+        })
+    participations = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.player_id == player.id)
+        .order_by(Game.date.desc())
+        .limit(20)
+        .all()
+    )
+    recent_games = []
+    for gp in participations:
+        game = gp.game
+        participant_count = GameParticipant.query.filter_by(game_id=game.id).count()
+        recent_games.append({
+            "game_id": game.id,
+            "date": game.date.isoformat(),
+            "won": game.winner_id == player.id,
+            "deck_id": gp.deck_id,
+            "deck_name": gp.deck.name,
+            "win_type": game.win_type,
+            "participant_count": participant_count,
+        })
+    return jsonify({
+        "id": player.id,
+        "name": player.name,
+        "games_played": games_played,
+        "games_won": games_won,
+        "winrate": winrate,
+        "decks": deck_list,
+        "recent_games": recent_games,
+    })
+
+
+@app.route("/api/games")
+@api_login_required
+def api_games_list():
+    game_q, scope, active_pod = game_query_for_scope()
+    player_id = request.args.get("player_id", type=int)
+    deck_id = request.args.get("deck_id", type=int)
+    winner_id = request.args.get("winner_id", type=int)
+    page = request.args.get("page", 1, type=int)
+    per_page = min(request.args.get("per_page", 25, type=int), 100)
+    q = game_q
+    if winner_id:
+        q = q.filter(Game.winner_id == winner_id)
+    if player_id:
+        gp_player = aliased(GameParticipant)
+        q = q.join(gp_player, gp_player.game_id == Game.id).filter(gp_player.player_id == player_id)
+    if deck_id:
+        gp_deck = aliased(GameParticipant)
+        q = q.join(gp_deck, gp_deck.game_id == Game.id).filter(gp_deck.deck_id == deck_id)
+    q = q.distinct().order_by(Game.date.desc())
+    pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+    games_page = pagination.items
+    game_ids = [g.id for g in games_page]
+    parts = GameParticipant.query.filter(
+        GameParticipant.game_id.in_(game_ids if game_ids else [-1])
+    ).all()
+    game_parts_map: dict = {}
+    for gp in parts:
+        game_parts_map.setdefault(gp.game_id, []).append(gp)
+    games_data = []
+    for g in games_page:
+        gps = game_parts_map.get(g.id, [])
+        games_data.append({
+            "id": g.id,
+            "date": g.date.isoformat(),
+            "winner": {"id": g.winner_id, "name": g.winner.name},
+            "win_type": g.win_type,
+            "ending_turn": g.ending_turn,
+            "participants": [
+                {
+                    "player_id": gp.player_id,
+                    "player_name": gp.player.name,
+                    "deck_id": gp.deck_id,
+                    "deck_name": gp.deck.name,
+                    "commander": gp.deck.commander_name or gp.deck.commander,
+                    "art_url": gp.deck.commander_art_url,
+                    "won": g.winner_id == gp.player_id,
+                }
+                for gp in gps
+            ],
+        })
+    return jsonify({
+        "games": games_data,
+        "page": pagination.page,
+        "pages": pagination.pages or 1,
+        "total": pagination.total,
+        "per_page": per_page,
+    })
+
+
+@app.route("/api/games/<int:game_id>")
+@api_login_required
+def api_game_detail(game_id):
+    game = db.session.get(Game, game_id)
+    if not game:
+        return jsonify({"error": "Not found"}), 404
+    parts = GameParticipant.query.filter_by(game_id=game.id).all()
+    return jsonify({
+        "id": game.id,
+        "date": game.date.isoformat(),
+        "winner": {"id": game.winner_id, "name": game.winner.name},
+        "win_type": game.win_type,
+        "ending_turn": game.ending_turn,
+        "note": game.note,
+        "participants": [
+            {
+                "player_id": gp.player_id,
+                "player_name": gp.player.name,
+                "deck_id": gp.deck_id,
+                "deck_name": gp.deck.name,
+                "commander": gp.deck.commander_name or gp.deck.commander,
+                "art_url": gp.deck.commander_art_url,
+                "won": game.winner_id == gp.player_id,
+                "seat_position": gp.seat_position,
+                "salt_count": gp.salt_count,
+                "mana_fucked": gp.mana_fucked,
+                "misplayed": gp.misplayed,
+            }
+            for gp in parts
+        ],
+    })
+
+
+@app.route("/api/decks")
+@api_login_required
+def api_decks():
+    current_user = get_current_user()
+    player_id = request.args.get("player_id", type=int)
+    show_retired = request.args.get("show_retired", "0") == "1"
+    q = Deck.query
+    if not current_user.is_admin:
+        if current_user.player:
+            q = q.filter_by(player_id=current_user.player.id)
+    elif player_id:
+        q = q.filter_by(player_id=player_id)
+    if not show_retired:
+        q = q.filter(Deck.retired == False, Deck.planned == False)
+    decks = q.order_by(Deck.name.asc()).all()
+    result = []
+    for d in decks:
+        wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+        uses = GameParticipant.query.filter_by(deck_id=d.id).count()
+        winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
+        result.append({
+            "id": d.id,
+            "name": d.name,
+            "commander": d.commander_name or d.commander,
+            "retired": d.retired,
+            "planned": d.planned,
+            "player_id": d.player_id,
+            "player_name": d.owner.name,
+            "wins": wins,
+            "uses": uses,
+            "winrate": winrate,
+            "art_url": d.commander_art_url,
+        })
+    return jsonify(result)
+
+
+@app.route("/api/decks/<int:deck_id>")
+@api_login_required
+def api_deck_detail(deck_id):
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        return jsonify({"error": "Not found"}), 404
+    wins = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
+        .count()
+    )
+    uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
+    participations = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.deck_id == deck.id)
+        .order_by(Game.date.desc())
+        .limit(20)
+        .all()
+    )
+    recent_games = []
+    for gp in participations:
+        game = gp.game
+        recent_games.append({
+            "game_id": game.id,
+            "date": game.date.isoformat(),
+            "won": game.winner_id == deck.player_id,
+            "win_type": game.win_type,
+            "ending_turn": game.ending_turn,
+            "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
+        })
+    return jsonify({
+        "id": deck.id,
+        "name": deck.name,
+        "commander": deck.commander_name or deck.commander,
+        "retired": deck.retired,
+        "planned": deck.planned,
+        "player_id": deck.player_id,
+        "player_name": deck.owner.name,
+        "wins": wins,
+        "uses": uses,
+        "winrate": winrate,
+        "art_url": deck.commander_art_url,
+        "recent_games": recent_games,
+    })
+
+
+@app.route("/api/join/<token>")
+def api_join_get(token):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return jsonify({"error": "Game not found"}), 404
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+    return jsonify({"participants": participants, "token": token})
+
+
+@app.route("/api/join/<token>", methods=["POST"])
+def api_join_claim(token):
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "Invalid request body"}), 400
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return jsonify({"error": "Game not found"}), 404
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+    player_id_raw = data.get("player_id")
+    try:
+        player_id = int(player_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid player_id"}), 400
+    valid_player_ids = {p["player_id"] for p in participants}
+    if player_id not in valid_player_ids:
+        return jsonify({"error": "Invalid player selection"}), 400
+    session[f"game_join_{token}"] = player_id
+    session.modified = True
+    try:
+        state = json.loads(active_game_rec.state_json)
+    except (json.JSONDecodeError, Exception):
+        state = {}
+    return jsonify({
+        "token": token,
+        "player_id": player_id,
+        "participants": participants,
+        "state": state,
+    })
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
