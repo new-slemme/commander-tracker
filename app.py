@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from flask import (
     Flask,
     Response,
@@ -36,7 +36,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-DEFAULT_POD_NAME = "Der Keller – Die Salzmine"
+DEFAULT_POD_NAME = "Der Keller â€“ Die Salzmine"
 DEFAULT_POD_SLUG = "der-keller-die-salzmine"
 
 ART_DIR = Path("/data/art")
@@ -1472,7 +1472,7 @@ def analyze_scryfall_card(card_json: dict) -> dict:
     return {
         "monarch": "monarch" in oracle_text,
         "initiative": "initiative" in oracle_text,
-        "citys_blessing": ("city's blessing" in oracle_text) or ("city’s blessing" in oracle_text),
+        "citys_blessing": ("city's blessing" in oracle_text) or ("cityâ€™s blessing" in oracle_text),
         "poison": "poison" in oracle_text,
         "proliferate": "proliferate" in oracle_text,
         "energy": "{e}" in oracle_text,
@@ -2059,6 +2059,16 @@ def get_current_user():
         return None
     return db.session.get(User, uid)
 
+def api_user_payload(user):
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "is_admin": bool(user.is_admin),
+        "player_id": user.player.id if user.player else None,
+    }
+
+
 
 def login_required(f):
     @wraps(f)
@@ -2360,8 +2370,27 @@ def require_login():
                 get_active_pod()
                 return None
 
-        # Allow auth routes + static assets + art
-        if request.endpoint not in ("login", "register", "static", "art"):
+        # Allow auth routes + static assets + selected public API routes.
+        public_endpoints = {
+            "login",
+            "register",
+            "static",
+            "art",
+            "api_login",
+            "api_logout",
+            "api_me",
+            "api_card_art",
+            "api_gallery_image",
+            "api_cards_autocomplete",
+            "api_cards_named",
+            "api_commander_bracket",
+            "api_game_state",
+            "api_join_get",
+            "api_join_claim",
+        }
+        if request.endpoint not in public_endpoints:
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Unauthorized"}), 401
             return redirect(url_for("login") + "?next=" + quote(request.full_path))
 
     get_active_pod()
@@ -2469,6 +2498,55 @@ def login():
         flash("Invalid username or password")
 
     return render_template("login.html")
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    payload = request.get_json(silent=True) or {}
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"error": "username and password required"}), 400
+
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    if not user.is_active:
+        return jsonify({"error": "Account pending approval. Please contact an admin."}), 403
+
+    if not user.player:
+        user.player = Player(name=user.display_name)
+        db.session.commit()
+
+    session["user_id"] = user.id
+    session["username"] = user.username
+    session["display_name"] = user.display_name
+    session["is_admin"] = user.is_admin
+    session["use_sigtaara"] = user.use_sigtaara
+    get_active_pod()
+
+    return jsonify(api_user_payload(user))
+
+
+@app.route("/api/me", methods=["GET"])
+def api_me():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    if not user.player:
+        user.player = Player(name=user.display_name)
+        db.session.commit()
+
+    return jsonify(api_user_payload(user))
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"ok": True})
 
 
 @app.route("/logout")
@@ -4867,14 +4945,14 @@ def life_counter():
 
     card_logic_catalog = {
         "statuses": [
-            {"id": "monarch", "label": "Monarch", "icon": "👑", "kind": "exclusive"},
-            {"id": "initiative", "label": "Initiative", "icon": "⚔️", "kind": "exclusive"},
-            {"id": "citys_blessing", "label": "City's Blessing", "icon": "🏙️", "kind": "toggle"},
+            {"id": "monarch", "label": "Monarch", "icon": "ðŸ‘‘", "kind": "exclusive"},
+            {"id": "initiative", "label": "Initiative", "icon": "âš”ï¸", "kind": "exclusive"},
+            {"id": "citys_blessing", "label": "City's Blessing", "icon": "ðŸ™ï¸", "kind": "toggle"},
         ],
         "counters": [
-            {"id": "energy", "label": "Energy", "icon": "⚡", "step": 1, "min": 0},
-            {"id": "experience", "label": "Experience", "icon": "✨", "step": 1, "min": 0},
-            {"id": "poison", "label": "Poison", "icon": "☠️", "step": 1, "min": 0, "max": 10},
+            {"id": "energy", "label": "Energy", "icon": "âš¡", "step": 1, "min": 0},
+            {"id": "experience", "label": "Experience", "icon": "âœ¨", "step": 1, "min": 0},
+            {"id": "poison", "label": "Poison", "icon": "â˜ ï¸", "step": 1, "min": 0, "max": 10},
         ],
         "commander_damage_threshold": 21,
     }
@@ -5178,7 +5256,7 @@ def api_game_state(token):
             state = {}
         return jsonify(state)
 
-    # POST — apply a state update
+    # POST â€” apply a state update
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid request body"}), 400
@@ -5330,6 +5408,58 @@ def api_game_state(token):
 
 
 # -------------------------
+@app.route("/api/join/<token>", methods=["GET"])
+def api_join_get(token):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return jsonify({"error": "Game not found or already ended."}), 404
+
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+
+    return jsonify({"participants": participants, "token": token})
+
+
+@app.route("/api/join/<token>", methods=["POST"])
+def api_join_claim(token):
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return jsonify({"error": "Game not found or already ended."}), 404
+
+    try:
+        participants = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, Exception):
+        participants = []
+
+    payload = request.get_json(silent=True) or {}
+    player_id_raw = payload.get("player_id")
+    try:
+        player_id = int(player_id_raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid player selection."}), 400
+
+    valid_player_ids = {p["player_id"] for p in participants}
+    if player_id not in valid_player_ids:
+        return jsonify({"error": "Invalid player selection."}), 400
+
+    session[f"game_join_{token}"] = player_id
+    session.modified = True
+
+    try:
+        state = json.loads(active_game_rec.state_json)
+    except (json.JSONDecodeError, Exception):
+        state = {}
+
+    return jsonify({
+        "token": token,
+        "player_id": player_id,
+        "participants": participants,
+        "state": state,
+    })
+
+
 # Multiplayer join routes
 # -------------------------
 
