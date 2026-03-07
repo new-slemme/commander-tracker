@@ -1499,10 +1499,14 @@ document.addEventListener("pointerdown", (e)=>{
   closePlayerSaltMenu();
 });
 
+let _resizeTimer = null;
 window.addEventListener("resize", ()=>{
-  if(!playerSaltFlyoutOpen || !playerFlagTargetId) return;
-  const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
-  positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(()=>{
+    if(!playerSaltFlyoutOpen || !playerFlagTargetId) return;
+    const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
+    positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
+  }, 80);
 });
 
 function closeAnyOpenModal(){
@@ -1935,8 +1939,6 @@ if(cards.length){
   initializeCardLogicState();
 }
 
-setInterval(tickTimers, 250);
-
 lockLandscapeBestEffort();
 initializeDebugUiOverlays();
 
@@ -1961,6 +1963,9 @@ if(JOIN_TOKEN){
   const SYNC_POLL_MS = 2000;
   let syncLastVersion = -1;
   let syncInFlight = false;
+  let _syncFailCount = 0;
+  let _syncSkipNextPoll = false;
+  let _syncPollSkipUntilMs = 0;
 
   async function syncPushLifeForPlayer(playerId, absoluteLife){
     if(!JOIN_TOKEN) return;
@@ -1974,6 +1979,7 @@ if(JOIN_TOKEN){
         }),
       });
       if(resp.ok){
+        _syncSkipNextPoll = true;
         const data = await resp.json();
         applyRemoteGameState(data, playerId);
       }
@@ -2045,31 +2051,38 @@ if(JOIN_TOKEN){
 
   async function syncPoll(){
     if(syncInFlight) return;
+    if(_syncSkipNextPoll){ _syncSkipNextPoll = false; return; }
+    if(Date.now() < _syncPollSkipUntilMs) return;
     syncInFlight = true;
     try {
       const resp = await fetch(`/api/game/${JOIN_TOKEN}/state`);
       if(resp.ok){
+        _syncFailCount = 0;
+        _syncPollSkipUntilMs = 0;
         const data = await resp.json();
         applyRemoteGameState(data, null);
+      } else {
+        _syncFailCount = Math.min(_syncFailCount + 1, 4);
+        _syncPollSkipUntilMs = Date.now() + Math.min(1000 * (1 << (_syncFailCount - 1)), 8000);
       }
-    } catch(e){} finally {
+    } catch(e){
+      _syncFailCount = Math.min(_syncFailCount + 1, 4);
+      _syncPollSkipUntilMs = Date.now() + Math.min(1000 * (1 << (_syncFailCount - 1)), 8000);
+    } finally {
       syncInFlight = false;
     }
   }
 
-  setInterval(syncPoll, SYNC_POLL_MS);
-
-  // Hook: push life to server after each local commit
-  const _origApplyPendingLife = applyPendingLife;
-  // Re-define applyPendingLife to also push to server
-  // We patch it by wrapping — re-assign won't work since it's already referenced;
-  // instead we register a post-commit hook via a flag checked in a wrapper below.
-  // The cleanest approach: monkey-patch committedLife writes.
-  // Since applyPendingLife is a named function we can't re-assign cleanly,
-  // we use a MutationObserver-free approach: poll changes via a post-commit interval.
   // We track last-pushed life values and push on change.
   const lastPushedLife = {};
   function syncFlushLifeChanges(){
+    // Fast path: skip DOM iteration if nothing is pending
+    const hasPending = cards.some((card) => {
+      const pid = String(card.dataset.player || "");
+      return pid && committedLife[pid] !== undefined && committedLife[pid] !== lastPushedLife[pid];
+    });
+    if(!hasPending) return;
+
     cards.forEach((card)=>{
       const pid = String(card.dataset.player || "");
       if(!pid) return;
@@ -2080,12 +2093,29 @@ if(JOIN_TOKEN){
       }
     });
   }
-  setInterval(syncFlushLifeChanges, 500);
+
+  // Single master tick replaces three independent setInterval calls:
+  //   tickTimers  every 250ms (every tick)
+  //   syncFlushLifeChanges every 500ms (every 2nd tick)
+  //   syncPoll    every 2000ms (every 8th tick)
+  let _masterTickCount = 0;
+  setInterval(function masterTick(){
+    _masterTickCount++;
+    tickTimers();
+    if(_masterTickCount % 2 === 0){
+      syncFlushLifeChanges();
+    }
+    if(_masterTickCount % 8 === 0){
+      syncPoll();
+      if(_masterTickCount >= 10000) _masterTickCount = 0;
+    }
+  }, 250);
 
   // Expose syncPushTurn so nextPlayer() (outside this block) can call it
   syncPushTurnHook = syncPushTurn;
 
   // QR code button
+
   const showQrBtn = document.getElementById("showQrBtn");
   if(showQrBtn){
     showQrBtn.addEventListener("click", ()=>{
@@ -2117,6 +2147,9 @@ if(JOIN_TOKEN){
       }, 160);
     });
   }
+} else {
+  // No multiplayer token — run timer tick standalone
+  setInterval(tickTimers, 250);
 }
 </script>
 
