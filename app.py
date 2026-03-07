@@ -4688,6 +4688,9 @@ def start_game():
             if not deck or deck.player_id != p_id or deck.retired or deck.planned:
                 return "Invalid deck for player", 400
 
+            deck_tags = get_deck_parsed_tags(deck)
+            deck_mechanics = derive_deck_mechanics(deck_tags)
+
             participants.append({
                 "player_id": p_id,
                 "deck_id": d_id,
@@ -4696,6 +4699,7 @@ def start_game():
                 "deck_name": deck.name,
                 "commander_art": deck.commander_art_url,
                 "commander_art_scale": deck.commander_art_scale,
+                "mechanics": deck_mechanics,
             })
 
     if len(participants) < 2:
@@ -5910,6 +5914,7 @@ def api_decks():
         q = q.filter(Deck.retired == False, Deck.planned == False)
     decks = q.order_by(Deck.name.asc()).all()
     result = []
+    deck_tags_cache: dict[int, dict[str, bool]] = {}
     for d in decks:
         wins = (
             GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
@@ -5918,6 +5923,8 @@ def api_decks():
         )
         uses = GameParticipant.query.filter_by(deck_id=d.id).count()
         winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
+        deck_tags = get_deck_parsed_tags(d, cache=deck_tags_cache)
+        deck_mechanics = derive_deck_mechanics(deck_tags)
         result.append({
             "id": d.id,
             "name": d.name,
@@ -5930,6 +5937,7 @@ def api_decks():
             "uses": uses,
             "winrate": winrate,
             "art_url": d.commander_art_url,
+            "mechanics": deck_mechanics,
         })
     return jsonify(result)
 
@@ -5965,6 +5973,9 @@ def api_deck_detail(deck_id):
             "ending_turn": game.ending_turn,
             "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
         })
+    deck_tags = get_deck_parsed_tags(deck)
+    deck_mechanics = derive_deck_mechanics(deck_tags)
+
     return jsonify({
         "id": deck.id,
         "name": deck.name,
@@ -5977,6 +5988,7 @@ def api_deck_detail(deck_id):
         "uses": uses,
         "winrate": winrate,
         "art_url": deck.commander_art_url,
+        "mechanics": deck_mechanics,
         "recent_games": recent_games,
     })
 
@@ -6029,4 +6041,7 @@ def api_join_claim(token):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+
+
 
