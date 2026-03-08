@@ -216,6 +216,124 @@ Response items include:
 
 Adds `recent_games[]` (up to 20). Error `404` if missing.
 
+### Create deck
+
+`POST /api/decks` (auth required)
+
+Creates a new deck and returns deck summary data.
+
+Request body example (non-admin creating for own player):
+
+```json
+{
+  "name": "Pirate Party",
+  "commander": "Admiral Beckett Brass",
+  "raw_import": "1 Admiral Beckett Brass\n1 Sol Ring\n1 Island"
+}
+```
+
+Request body example (admin setting explicit owner):
+
+```json
+{
+  "player_id": 12,
+  "name": "Pirate Party",
+  "commander": "Admiral Beckett Brass",
+  "decklist_text": "1 Admiral Beckett Brass\n1 Sol Ring\n1 Island",
+  "retired": false,
+  "planned": false
+}
+```
+
+Success `201`:
+
+```json
+{
+  "id": 42,
+  "name": "Pirate Party",
+  "commander": "Admiral Beckett Brass",
+  "retired": false,
+  "planned": false,
+  "player_id": 12,
+  "player_name": "Player 12",
+  "wins": 0,
+  "uses": 0,
+  "winrate": 0.0,
+  "art_url": null,
+  "mechanics": {
+    "monarch": false,
+    "poison": false,
+    "energy": false,
+    "experience": false
+  }
+}
+```
+
+Errors:
+- `400` invalid JSON body, missing required fields (`name`, owner context), invalid import payload type, or deck parsing/validation errors
+- `401` not authenticated
+- `403` non-admin attempted to set `player_id` to another player
+
+### Update deck
+
+`PATCH /api/decks/<deck_id>` or `PUT /api/decks/<deck_id>` (auth required)
+
+Updates an existing deck. `PATCH` supports partial updates; `PUT` requires `name`.
+
+Request body example (`PATCH`):
+
+```json
+{
+  "name": "Pirate Party v2",
+  "commander": "Admiral Beckett Brass",
+  "raw_import": "1 Admiral Beckett Brass\n1 Sol Ring\n1 Arcane Signet"
+}
+```
+
+Request body example (`PUT`):
+
+```json
+{
+  "name": "Pirate Party",
+  "commander": "Admiral Beckett Brass",
+  "decklist_text": "1 Admiral Beckett Brass\n1 Sol Ring\n1 Island",
+  "retired": false,
+  "planned": false
+}
+```
+
+Success `200`:
+
+```json
+{
+  "id": 42,
+  "name": "Pirate Party v2",
+  "commander": "Admiral Beckett Brass",
+  "retired": false,
+  "planned": false,
+  "player_id": 12,
+  "player_name": "Player 12",
+  "wins": 3,
+  "uses": 7,
+  "winrate": 42.9,
+  "art_url": null,
+  "mechanics": {
+    "monarch": false,
+    "poison": false,
+    "energy": false,
+    "experience": false
+  },
+  "recent_games": []
+}
+```
+
+Errors:
+- `400` invalid JSON body or invalid field values (for example: empty `name` on `PATCH`, missing `name` on `PUT`, invalid `raw_import` type)
+- `401` not authenticated
+- `403` attempting to update a deck you do not own (non-admin)
+- `404` deck not found
+
+
 ---
 
 ## 4) Live game APIs (join + state sync)
