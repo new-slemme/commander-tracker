@@ -2048,6 +2048,166 @@ def _count_imported_cards(parsed: dict) -> int:
     return total
 
 
+class DeckPayloadError(ValueError):
+    """Validation error while constructing/updating a deck from structured payload data."""
+
+
+def _prepare_deck_payload(
+    payload: dict,
+    *,
+    current_deck: "Deck" | None = None,
+    require_name: bool = True,
+    require_commander_input: bool = False,
+) -> tuple[dict, dict]:
+    name = (payload.get("name") or "").strip()
+    commander_input = (payload.get("commander") or "").strip()
+    raw_import = (payload.get("raw_import") or "").strip()
+    imported_from = payload.get("imported_from")
+
+    custom_commander_art_url = (payload.get("custom_commander_art_url") or "").strip()
+    custom_card_art_url = (payload.get("custom_card_art_url") or "").strip()
+    custom_commander_art_upload = payload.get("custom_commander_art_upload")
+    custom_card_art_upload = payload.get("custom_card_art_upload")
+
+    if require_name and not name:
+        raise DeckPayloadError("Deck name is required.")
+    if require_commander_input and not commander_input:
+        raise DeckPayloadError("Commander is required.")
+
+    commander_url_invalid = (
+        not has_uploaded_custom_art(custom_commander_art_upload)
+        and not is_valid_custom_art_url(custom_commander_art_url)
+    )
+    card_url_invalid = (
+        not has_uploaded_custom_art(custom_card_art_upload)
+        and not is_valid_custom_art_url(custom_card_art_url)
+    )
+    if commander_url_invalid or card_url_invalid:
+        raise DeckPayloadError("Custom art URLs must be valid http(s) links up to 500 characters.")
+
+    parsed_import = None
+    if raw_import:
+        if current_deck and imported_from == "text" and raw_import == (current_deck.decklist_text or "").strip():
+            raw_import = ""
+            imported_from = None
+        else:
+            parsed_import = parse_deck_input(raw_import)
+
+    custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
+        custom_commander_art_url,
+        custom_commander_art_upload,
+        "custom commander art",
+    )
+    custom_card_art_url_value, custom_card_art_local = resolve_custom_art_value(
+        custom_card_art_url,
+        custom_card_art_upload,
+        "custom card art",
+    )
+
+    resolved_commander = parsed_import.get("commander") if parsed_import else None
+    commander_to_set = (resolved_commander or commander_input or (current_deck.commander if current_deck else "")).strip()
+    if not commander_to_set:
+        raise DeckPayloadError("Commander is required, or include one in the imported list.")
+
+    if current_deck and not has_uploaded_custom_art(custom_commander_art_upload) and not custom_commander_art_url:
+        custom_commander_art_local = current_deck.commander_local_art_custom
+    if current_deck and not has_uploaded_custom_art(custom_card_art_upload) and not custom_card_art_url:
+        custom_card_art_local = current_deck.custom_card_art_local
+
+    prepared = {
+        "name": name,
+        "commander_input": commander_input,
+        "commander_to_set": commander_to_set,
+        "parsed_import": parsed_import,
+        "imported_from": imported_from,
+        "custom_commander_art_url": custom_commander_art_url_value,
+        "custom_commander_art_local": custom_commander_art_local,
+        "custom_card_art_url": custom_card_art_url_value,
+        "custom_card_art_local": custom_card_art_local,
+    }
+    diagnostics = {
+        "resolved_commander": resolved_commander,
+        "tag_diagnostics": {"unresolved_count": 0, "unresolved_cards": []},
+    }
+    return prepared, diagnostics
+
+
+def _apply_deck_payload(deck: "Deck", prepared: dict, diagnostics: dict) -> None:
+    deck.name = prepared["name"]
+    deck.commander = prepared["commander_to_set"]
+    deck.custom_commander_art_url = prepared["custom_commander_art_url"]
+    deck.commander_local_art_custom = prepared["custom_commander_art_local"]
+    deck.custom_card_art_url = prepared["custom_card_art_url"]
+    deck.custom_card_art_local = prepared["custom_card_art_local"]
+
+    parsed_import = prepared["parsed_import"]
+    if parsed_import:
+        deck.decklist_text = _render_decklist_text(parsed_import)
+        tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
+        apply_deck_tags(deck, tags)
+        diagnostics["tag_diagnostics"] = tag_diagnostics
+
+    commander_to_set = prepared["commander_to_set"]
+    commander_meta = resolve_commander_metadata(commander_to_set)
+    deck.commander = commander_meta["commander"] or commander_to_set
+    deck.commander_name = commander_meta["commander_name"]
+    deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
+    deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
+    deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
+    deck.color_identity = commander_meta["color_identity"]
+    diagnostics["commander_meta"] = commander_meta
+
+
+def _create_deck_from_payload(payload: dict, *, player_id: int, is_admin: bool) -> tuple[Deck, dict]:
+    prepared, diagnostics = _prepare_deck_payload(payload, require_name=True, require_commander_input=False)
+    deck = Deck(name=prepared["name"], commander=prepared["commander_to_set"], player_id=player_id)
+    if is_admin:
+        deck.retired = bool(payload.get("retired", False))
+        deck.planned = bool(payload.get("planned", False))
+        if deck.retired:
+            deck.planned = False
+    else:
+        deck.planned = bool(payload.get("planned"))
+    _apply_deck_payload(deck, prepared, diagnostics)
+    diagnostics["parsed_import"] = prepared["parsed_import"]
+    diagnostics["imported_from"] = prepared["imported_from"]
+    diagnostics["commander_input"] = prepared["commander_input"]
+    return deck, diagnostics
+
+
+def _update_deck_from_payload(
+    deck: "Deck",
+    payload: dict,
+    *,
+    is_admin: bool,
+    allow_owner_update: bool,
+    require_commander_input: bool,
+) -> tuple[Deck, dict]:
+    prepared, diagnostics = _prepare_deck_payload(
+        payload,
+        current_deck=deck,
+        require_name=True,
+        require_commander_input=require_commander_input,
+    )
+
+    _apply_deck_payload(deck, prepared, diagnostics)
+
+    if is_admin:
+        if allow_owner_update and payload.get("player_id"):
+            owner = db.session.get(Player, payload.get("player_id"))
+            if owner:
+                deck.player_id = owner.id
+        deck.retired = bool(payload.get("retired"))
+        deck.planned = bool(payload.get("planned"))
+        if deck.retired:
+            deck.planned = False
+
+    diagnostics["parsed_import"] = prepared["parsed_import"]
+    diagnostics["imported_from"] = prepared["imported_from"]
+    diagnostics["commander_input"] = prepared["commander_input"]
+    return deck, diagnostics
+
+
 # -------------------------
 # Auth helpers / guards
 # -------------------------
@@ -4151,32 +4311,8 @@ def deck_export(deck_id):
 def add_deck():
     u = get_current_user()
 
-    name = request.form.get("name", "").strip()
-    commander_input = request.form.get("commander", "").strip()
-    custom_commander_art_url = request.form.get("custom_commander_art_url", "").strip()
-    custom_card_art_url = request.form.get("custom_card_art_url", "").strip()
-    custom_commander_art_upload = request.files.get("custom_commander_art_file")
-    custom_card_art_upload = request.files.get("custom_card_art_file")
-
-    if not (name and commander_input):
-        flash("Deck name and commander are required.")
-        return redirect(url_for("decks"))
-
-    commander_url_invalid = (
-        not has_uploaded_custom_art(custom_commander_art_upload)
-        and not is_valid_custom_art_url(custom_commander_art_url)
-    )
-    card_url_invalid = (
-        not has_uploaded_custom_art(custom_card_art_upload)
-        and not is_valid_custom_art_url(custom_card_art_url)
-    )
-    if commander_url_invalid or card_url_invalid:
-        flash("Custom art URLs must be valid http(s) links up to 500 characters.")
-        return redirect(url_for("decks"))
-
-    # Decide owner:
     if u.is_admin:
-        player_id = request.form.get("player_id", type=int)  # admin can choose
+        player_id = request.form.get("player_id", type=int)
         if not player_id:
             flash("Owner is required.")
             return redirect(url_for("decks"))
@@ -4186,59 +4322,45 @@ def add_deck():
             return redirect(url_for("decks"))
         player_id = u.player.id
 
-    parsed_import = None
-    imported_from = None
-    tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
+    name = request.form.get("name", "").strip()
+    commander_input = request.form.get("commander", "").strip()
+    if not (name and commander_input):
+        flash("Deck name and commander are required.")
+        return redirect(url_for("decks"))
+
     try:
         raw_import, imported_from = _extract_deck_import_text()
-        if raw_import:
-            parsed_import = parse_deck_input(raw_import)
-
-        custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
-            custom_commander_art_url,
-            custom_commander_art_upload,
-            "custom commander art",
-        )
-        custom_card_art_url_value, custom_card_art_local = resolve_custom_art_value(
-            custom_card_art_url,
-            custom_card_art_upload,
-            "custom card art",
+        deck, diagnostics = _create_deck_from_payload(
+            {
+                "name": name,
+                "commander": commander_input,
+                "raw_import": raw_import,
+                "imported_from": imported_from,
+                "custom_commander_art_url": request.form.get("custom_commander_art_url", ""),
+                "custom_card_art_url": request.form.get("custom_card_art_url", ""),
+                "custom_commander_art_upload": request.files.get("custom_commander_art_file"),
+                "custom_card_art_upload": request.files.get("custom_card_art_file"),
+                "planned": request.form.get("planned"),
+            },
+            player_id=player_id,
+            is_admin=bool(u.is_admin),
         )
     except DeckParserError as exc:
         flash(f"Deck setup failed: {exc}")
         return redirect(url_for("decks"))
-
-    resolved_commander = parsed_import.get("commander") if parsed_import else None
-    commander_to_set = (resolved_commander or commander_input).strip()
-
-    if not commander_to_set:
-        flash("Commander is required, or include one in the imported list.")
+    except DeckPayloadError as exc:
+        flash(str(exc))
         return redirect(url_for("decks"))
-
-    deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
-    deck.custom_commander_art_url = custom_commander_art_url_value
-    deck.commander_local_art_custom = custom_commander_art_local
-    deck.custom_card_art_url = custom_card_art_url_value
-    deck.custom_card_art_local = custom_card_art_local
-    deck.planned = bool(request.form.get("planned"))
-    if parsed_import:
-        deck.decklist_text = _render_decklist_text(parsed_import)
-        tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
-        apply_deck_tags(deck, tags)
-
-    commander_meta = resolve_commander_metadata(commander_to_set)
-    deck.commander = commander_meta["commander"] or commander_to_set
-    deck.commander_name = commander_meta["commander_name"]
-    deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
-    deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
-    deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
-    deck.color_identity = commander_meta["color_identity"]
 
     db.session.add(deck)
     db.session.commit()
 
+    parsed_import = diagnostics["parsed_import"]
+    commander_meta = diagnostics["commander_meta"]
     if parsed_import:
         imported_cards = _count_imported_cards(parsed_import)
+        resolved_commander = diagnostics["resolved_commander"]
+        commander_input = diagnostics["commander_input"]
         commander_msg = (
             f"commander resolved: {resolved_commander}" if resolved_commander else "commander unresolved"
         )
@@ -4250,11 +4372,12 @@ def add_deck():
 
         warning_msg = f"; warnings: {', '.join(warnings)}" if warnings else ""
         flash(
-            f"Deck added. {imported_cards} cards imported from {imported_from}; {commander_msg}{warning_msg}."
+            f"Deck added. {imported_cards} cards imported from {diagnostics['imported_from']}; "
+            f"{commander_msg}{warning_msg}."
         )
     else:
         flash("Deck added.")
-    flash_unresolved_tag_warning(tag_diagnostics)
+    flash_unresolved_tag_warning(diagnostics["tag_diagnostics"])
     return redirect(url_for("decks"))
 
 
@@ -4430,31 +4553,6 @@ def update_deck(deck_id):
         flash("You don't have permission to edit this deck.")
         return redirect(request.form.get("next") or url_for("decks"))
 
-    name = request.form.get("name", "").strip()
-    commander_input = request.form.get("commander", "").strip()
-    custom_commander_art_url = request.form.get("custom_commander_art_url", "").strip()
-    custom_card_art_url = request.form.get("custom_card_art_url", "").strip()
-    custom_commander_art_upload = request.files.get("custom_commander_art_file")
-    custom_card_art_upload = request.files.get("custom_card_art_file")
-    if not name:
-        flash("Deck name is required.")
-        return redirect(request.form.get("next") or url_for("decks"))
-    if not commander_input:
-        flash("Commander is required.")
-        return redirect(request.form.get("next") or url_for("decks"))
-
-    commander_url_invalid = (
-        not has_uploaded_custom_art(custom_commander_art_upload)
-        and not is_valid_custom_art_url(custom_commander_art_url)
-    )
-    card_url_invalid = (
-        not has_uploaded_custom_art(custom_card_art_upload)
-        and not is_valid_custom_art_url(custom_card_art_url)
-    )
-    if commander_url_invalid or card_url_invalid:
-        flash("Custom art URLs must be valid http(s) links up to 500 characters.")
-        return redirect(request.form.get("next") or url_for("decks"))
-
     old_name = deck.name
     old_commander = deck.commander
     old_player_id = deck.player_id
@@ -4474,73 +4572,42 @@ def update_deck(deck_id):
     old_tags_version = deck.tags_version
     old_tags_computed_at = deck.tags_computed_at
 
-    parsed_import = None
-    imported_from = None
-    tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
+    name = request.form.get("name", "").strip()
+    commander_input = request.form.get("commander", "").strip()
+    if not name:
+        flash("Deck name is required.")
+        return redirect(request.form.get("next") or url_for("decks"))
+    if not commander_input:
+        flash("Commander is required.")
+        return redirect(request.form.get("next") or url_for("decks"))
+
     try:
         raw_import, imported_from = _extract_deck_import_text()
-        if raw_import:
-            # Skip re-parsing if the pasted text is identical to the stored decklist
-            if imported_from == "text" and raw_import == (deck.decklist_text or "").strip():
-                raw_import = None
-                imported_from = None
-            else:
-                parsed_import = parse_deck_input(raw_import)
-
-        custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
-            custom_commander_art_url,
-            custom_commander_art_upload,
-            "custom commander art",
-        )
-        custom_card_art_url_value, custom_card_art_local = resolve_custom_art_value(
-            custom_card_art_url,
-            custom_card_art_upload,
-            "custom card art",
+        deck, diagnostics = _update_deck_from_payload(
+            deck,
+            {
+                "name": name,
+                "commander": commander_input,
+                "raw_import": raw_import,
+                "imported_from": "text" if imported_from == "pasted text" else imported_from,
+                "custom_commander_art_url": request.form.get("custom_commander_art_url", ""),
+                "custom_card_art_url": request.form.get("custom_card_art_url", ""),
+                "custom_commander_art_upload": request.files.get("custom_commander_art_file"),
+                "custom_card_art_upload": request.files.get("custom_card_art_file"),
+                "player_id": request.form.get("player_id", type=int),
+                "retired": request.form.get("retired"),
+                "planned": request.form.get("planned"),
+            },
+            is_admin=bool(u.is_admin),
+            allow_owner_update=True,
+            require_commander_input=True,
         )
     except DeckParserError as exc:
         flash(f"Deck setup failed: {exc}")
         return redirect(request.form.get("next") or url_for("decks"))
-
-    resolved_commander = parsed_import.get("commander") if parsed_import else None
-    commander_to_set = (resolved_commander or commander_input).strip()
-    if not commander_to_set:
-        flash("Commander is required, or include one in the imported list.")
+    except DeckPayloadError as exc:
+        flash(str(exc))
         return redirect(request.form.get("next") or url_for("decks"))
-
-    deck.name = name
-    deck.commander = commander_to_set
-    if not has_uploaded_custom_art(custom_commander_art_upload) and not custom_commander_art_url:
-        custom_commander_art_local = deck.commander_local_art_custom
-    if not has_uploaded_custom_art(custom_card_art_upload) and not custom_card_art_url:
-        custom_card_art_local = deck.custom_card_art_local
-
-    deck.custom_commander_art_url = custom_commander_art_url_value
-    deck.commander_local_art_custom = custom_commander_art_local
-    deck.custom_card_art_url = custom_card_art_url_value
-    deck.custom_card_art_local = custom_card_art_local
-    if parsed_import:
-        deck.decklist_text = _render_decklist_text(parsed_import)
-        tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
-        apply_deck_tags(deck, tags)
-
-    if u.is_admin:
-        owner_id = request.form.get("player_id", type=int)
-        if owner_id:
-            owner = db.session.get(Player, owner_id)
-            if owner:
-                deck.player_id = owner.id
-        deck.retired = bool(request.form.get("retired"))
-        deck.planned = bool(request.form.get("planned"))
-        if deck.retired:
-            deck.planned = False
-
-    commander_meta = resolve_commander_metadata(commander_to_set)
-    deck.commander = commander_meta["commander"] or commander_to_set
-    deck.commander_name = commander_meta["commander_name"]
-    deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
-    deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
-    deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
-    deck.color_identity = commander_meta["color_identity"]
 
     try:
         db.session.commit()
@@ -4569,8 +4636,12 @@ def update_deck(deck_id):
         flash(f"Failed to update deck: {exc}")
         return redirect(request.form.get("next") or url_for("decks"))
 
+    parsed_import = diagnostics["parsed_import"]
+    commander_meta = diagnostics["commander_meta"]
     if parsed_import:
         imported_cards = _count_imported_cards(parsed_import)
+        resolved_commander = diagnostics["resolved_commander"]
+        commander_input = diagnostics["commander_input"]
         commander_msg = (
             f"commander resolved: {resolved_commander}" if resolved_commander else "commander unresolved"
         )
@@ -4582,12 +4653,12 @@ def update_deck(deck_id):
 
         warning_msg = f"; warnings: {', '.join(warnings)}" if warnings else ""
         flash(
-            f"Updated deck: {deck.name}. {imported_cards} cards imported from {imported_from}; "
+            f"Updated deck: {deck.name}. {imported_cards} cards imported from {diagnostics['imported_from']}; "
             f"{commander_msg}{warning_msg}."
         )
     else:
         flash(f"Updated deck: {deck.name}")
-    flash_unresolved_tag_warning(tag_diagnostics)
+    flash_unresolved_tag_warning(diagnostics["tag_diagnostics"])
     return redirect(request.form.get("next") or url_for("decks"))
 
 
@@ -5979,17 +6050,11 @@ def api_decks():
         if payload is None:
             return jsonify({"error": "Invalid request body"}), 400
 
-        name = (payload.get("name") or "").strip()
-        commander_input = (payload.get("commander") or "").strip()
         raw_import = payload.get("raw_import")
         if raw_import is None:
             raw_import = payload.get("decklist_text")
         if raw_import is not None and not isinstance(raw_import, str):
             return jsonify({"error": "raw_import/decklist_text must be a string"}), 400
-        raw_import = (raw_import or "").strip()
-
-        if not name:
-            return jsonify({"error": "name is required"}), 400
 
         player_id = _api_deck_owner_id_from_payload(payload, current_user)
         if player_id is None:
@@ -5997,44 +6062,35 @@ def api_decks():
                 return jsonify({"error": "player_id is required and must reference an existing player"}), 400
             return jsonify({"error": "No player profile found for your account."}), 400
 
-        parsed_import = None
-        tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
-        if raw_import:
-            try:
-                parsed_import = parse_deck_input(raw_import)
-            except DeckParserError as exc:
-                return jsonify({"error": f"Deck setup failed: {exc}"}), 400
-
-        resolved_commander = parsed_import.get("commander") if parsed_import else None
-        commander_to_set = (resolved_commander or commander_input).strip()
-        if not commander_to_set:
-            return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
-
-        deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
-        if current_user.is_admin:
-            deck.retired = bool(payload.get("retired", False))
-            deck.planned = bool(payload.get("planned", False))
-            if deck.retired:
-                deck.planned = False
-        if parsed_import:
-            deck.decklist_text = _render_decklist_text(parsed_import)
-            tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
-            apply_deck_tags(deck, tags)
-
-        commander_meta = resolve_commander_metadata(commander_to_set)
-        deck.commander = commander_meta["commander"] or commander_to_set
-        deck.commander_name = commander_meta["commander_name"]
-        deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
-        deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
-        deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
-        deck.color_identity = commander_meta["color_identity"]
+        try:
+            deck, diagnostics = _create_deck_from_payload(
+                {
+                    "name": payload.get("name") or "",
+                    "commander": payload.get("commander") or "",
+                    "raw_import": raw_import or "",
+                    "imported_from": "text",
+                    "retired": payload.get("retired", False),
+                    "planned": payload.get("planned", False),
+                },
+                player_id=player_id,
+                is_admin=bool(current_user.is_admin),
+            )
+        except DeckParserError as exc:
+            return jsonify({"error": f"Deck setup failed: {exc}"}), 400
+        except DeckPayloadError as exc:
+            message = str(exc)
+            if message == "Deck name is required.":
+                return jsonify({"error": "name is required"}), 400
+            if message == "Commander is required, or include one in the imported list.":
+                return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
+            return jsonify({"error": message}), 400
 
         db.session.add(deck)
         db.session.commit()
 
         response_payload = _serialize_deck_summary(deck)
-        if tag_diagnostics.get("unresolved_count", 0) > 0:
-            response_payload["tag_diagnostics"] = tag_diagnostics
+        if diagnostics["tag_diagnostics"].get("unresolved_count", 0) > 0:
+            response_payload["tag_diagnostics"] = diagnostics["tag_diagnostics"]
         return jsonify(response_payload), 201
 
     player_id = request.args.get("player_id", type=int)
@@ -6072,34 +6128,19 @@ def api_deck_detail(deck_id):
             return jsonify({"error": "Invalid request body"}), 400
 
         if request.method == "PUT":
-            name = (payload.get("name") or "").strip()
-            if not name:
-                return jsonify({"error": "name is required"}), 400
+            name = payload.get("name")
         elif "name" in payload:
-            name = (payload.get("name") or "").strip()
-            if not name:
+            name = payload.get("name")
+            if not (isinstance(name, str) and name.strip()):
                 return jsonify({"error": "name must be a non-empty string"}), 400
         else:
             name = deck.name
-
-        commander_input = None
-        if "commander" in payload:
-            commander_input = (payload.get("commander") or "").strip()
 
         raw_import = payload.get("raw_import")
         if raw_import is None and "decklist_text" in payload:
             raw_import = payload.get("decklist_text")
         if raw_import is not None and not isinstance(raw_import, str):
             return jsonify({"error": "raw_import/decklist_text must be a string"}), 400
-        raw_import = (raw_import or "").strip() if raw_import is not None else None
-
-        parsed_import = None
-        tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
-        if raw_import:
-            try:
-                parsed_import = parse_deck_input(raw_import)
-            except DeckParserError as exc:
-                return jsonify({"error": f"Deck setup failed: {exc}"}), 400
 
         if current_user.is_admin and "player_id" in payload:
             owner_id = payload.get("player_id")
@@ -6108,39 +6149,37 @@ def api_deck_detail(deck_id):
             owner = db.session.get(Player, owner_id)
             if not owner:
                 return jsonify({"error": "player_id must reference an existing player"}), 400
-            deck.player_id = owner.id
 
-        if current_user.is_admin and "retired" in payload:
-            deck.retired = bool(payload.get("retired"))
-        if current_user.is_admin and "planned" in payload:
-            deck.planned = bool(payload.get("planned"))
-        if deck.retired:
-            deck.planned = False
-
-        resolved_commander = parsed_import.get("commander") if parsed_import else None
-        commander_to_set = (resolved_commander or commander_input or deck.commander).strip()
-        if not commander_to_set:
-            return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
-
-        deck.name = name
-        deck.commander = commander_to_set
-        if parsed_import:
-            deck.decklist_text = _render_decklist_text(parsed_import)
-            tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
-            apply_deck_tags(deck, tags)
-
-        commander_meta = resolve_commander_metadata(commander_to_set)
-        deck.commander = commander_meta["commander"] or commander_to_set
-        deck.commander_name = commander_meta["commander_name"]
-        deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
-        deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
-        deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
-        deck.color_identity = commander_meta["color_identity"]
+        try:
+            deck, diagnostics = _update_deck_from_payload(
+                deck,
+                {
+                    "name": name,
+                    "commander": payload.get("commander") if "commander" in payload else deck.commander,
+                    "raw_import": raw_import if raw_import is not None else "",
+                    "imported_from": "text",
+                    "player_id": payload.get("player_id"),
+                    "retired": payload.get("retired") if "retired" in payload else deck.retired,
+                    "planned": payload.get("planned") if "planned" in payload else deck.planned,
+                },
+                is_admin=bool(current_user.is_admin),
+                allow_owner_update=(current_user.is_admin and "player_id" in payload),
+                require_commander_input=False,
+            )
+        except DeckParserError as exc:
+            return jsonify({"error": f"Deck setup failed: {exc}"}), 400
+        except DeckPayloadError as exc:
+            message = str(exc)
+            if request.method == "PUT" and message == "Deck name is required.":
+                return jsonify({"error": "name is required"}), 400
+            if message == "Commander is required, or include one in the imported list.":
+                return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
+            return jsonify({"error": message}), 400
 
         db.session.commit()
         response_payload = _serialize_deck_detail(deck)
-        if tag_diagnostics.get("unresolved_count", 0) > 0:
-            response_payload["tag_diagnostics"] = tag_diagnostics
+        if diagnostics["tag_diagnostics"].get("unresolved_count", 0) > 0:
+            response_payload["tag_diagnostics"] = diagnostics["tag_diagnostics"]
         return jsonify(response_payload), 200
 
     if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
@@ -6196,5 +6235,4 @@ def api_join_claim(token):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
 
