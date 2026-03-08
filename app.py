@@ -6050,6 +6050,12 @@ def api_decks():
         if payload is None:
             return jsonify({"error": "Invalid request body"}), 400
 
+        if not current_user.is_admin and "player_id" in payload:
+            requested_player_id = payload.get("player_id")
+            current_player_id = current_user.player.id if current_user.player else None
+            if requested_player_id != current_player_id:
+                return jsonify({"error": "Forbidden"}), 403
+
         raw_import = payload.get("raw_import")
         if raw_import is None:
             raw_import = payload.get("decklist_text")
@@ -6235,4 +6241,3 @@ def api_join_claim(token):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
