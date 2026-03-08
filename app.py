@@ -5581,6 +5581,78 @@ def api_login_required(f):
     return decorated
 
 
+def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, bool]] | None = None) -> dict:
+    wins = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
+        .count()
+    )
+    uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
+    deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
+    deck_mechanics = derive_deck_mechanics(deck_tags)
+    return {
+        "id": deck.id,
+        "name": deck.name,
+        "commander": deck.commander_name or deck.commander,
+        "retired": deck.retired,
+        "planned": deck.planned,
+        "player_id": deck.player_id,
+        "player_name": deck.owner.name,
+        "wins": wins,
+        "uses": uses,
+        "winrate": winrate,
+        "art_url": deck.commander_art_url,
+        "mechanics": deck_mechanics,
+    }
+
+
+def _serialize_deck_detail(deck: Deck) -> dict:
+    payload = _serialize_deck_summary(deck)
+    participations = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.deck_id == deck.id)
+        .order_by(Game.date.desc())
+        .limit(20)
+        .all()
+    )
+    recent_games = []
+    for gp in participations:
+        game = gp.game
+        recent_games.append({
+            "game_id": game.id,
+            "date": game.date.isoformat(),
+            "won": game.winner_id == deck.player_id,
+            "win_type": game.win_type,
+            "ending_turn": game.ending_turn,
+            "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
+        })
+    payload["recent_games"] = recent_games
+    return payload
+
+
+def _api_json_payload() -> dict | None:
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _api_deck_owner_id_from_payload(payload: dict, current_user: User) -> int | None:
+    if current_user.is_admin:
+        owner_id = payload.get("player_id")
+        if not isinstance(owner_id, int):
+            return None
+        owner = db.session.get(Player, owner_id)
+        if not owner:
+            return None
+        return owner.id
+
+    if not current_user.player:
+        return None
+    return current_user.player.id
+
+
 @app.route("/api/login", methods=["POST"])
 def api_login():
     data = request.get_json(silent=True)
@@ -5898,10 +5970,73 @@ def api_game_detail(game_id):
     })
 
 
-@app.route("/api/decks")
+@app.route("/api/decks", methods=["GET", "POST"])
 @api_login_required
 def api_decks():
     current_user = get_current_user()
+    if request.method == "POST":
+        payload = _api_json_payload()
+        if payload is None:
+            return jsonify({"error": "Invalid request body"}), 400
+
+        name = (payload.get("name") or "").strip()
+        commander_input = (payload.get("commander") or "").strip()
+        raw_import = payload.get("raw_import")
+        if raw_import is None:
+            raw_import = payload.get("decklist_text")
+        if raw_import is not None and not isinstance(raw_import, str):
+            return jsonify({"error": "raw_import/decklist_text must be a string"}), 400
+        raw_import = (raw_import or "").strip()
+
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+
+        player_id = _api_deck_owner_id_from_payload(payload, current_user)
+        if player_id is None:
+            if current_user.is_admin:
+                return jsonify({"error": "player_id is required and must reference an existing player"}), 400
+            return jsonify({"error": "No player profile found for your account."}), 400
+
+        parsed_import = None
+        tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
+        if raw_import:
+            try:
+                parsed_import = parse_deck_input(raw_import)
+            except DeckParserError as exc:
+                return jsonify({"error": f"Deck setup failed: {exc}"}), 400
+
+        resolved_commander = parsed_import.get("commander") if parsed_import else None
+        commander_to_set = (resolved_commander or commander_input).strip()
+        if not commander_to_set:
+            return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
+
+        deck = Deck(name=name, commander=commander_to_set, player_id=player_id)
+        if current_user.is_admin:
+            deck.retired = bool(payload.get("retired", False))
+            deck.planned = bool(payload.get("planned", False))
+            if deck.retired:
+                deck.planned = False
+        if parsed_import:
+            deck.decklist_text = _render_decklist_text(parsed_import)
+            tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
+            apply_deck_tags(deck, tags)
+
+        commander_meta = resolve_commander_metadata(commander_to_set)
+        deck.commander = commander_meta["commander"] or commander_to_set
+        deck.commander_name = commander_meta["commander_name"]
+        deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
+        deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
+        deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
+        deck.color_identity = commander_meta["color_identity"]
+
+        db.session.add(deck)
+        db.session.commit()
+
+        response_payload = _serialize_deck_summary(deck)
+        if tag_diagnostics.get("unresolved_count", 0) > 0:
+            response_payload["tag_diagnostics"] = tag_diagnostics
+        return jsonify(response_payload), 201
+
     player_id = request.args.get("player_id", type=int)
     show_retired = request.args.get("show_retired", "0") == "1"
     q = Deck.query
@@ -5916,81 +6051,101 @@ def api_decks():
     result = []
     deck_tags_cache: dict[int, dict[str, bool]] = {}
     for d in decks:
-        wins = (
-            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
-            .count()
-        )
-        uses = GameParticipant.query.filter_by(deck_id=d.id).count()
-        winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
-        deck_tags = get_deck_parsed_tags(d, cache=deck_tags_cache)
-        deck_mechanics = derive_deck_mechanics(deck_tags)
-        result.append({
-            "id": d.id,
-            "name": d.name,
-            "commander": d.commander_name or d.commander,
-            "retired": d.retired,
-            "planned": d.planned,
-            "player_id": d.player_id,
-            "player_name": d.owner.name,
-            "wins": wins,
-            "uses": uses,
-            "winrate": winrate,
-            "art_url": d.commander_art_url,
-            "mechanics": deck_mechanics,
-        })
+        result.append(_serialize_deck_summary(d, deck_tags_cache=deck_tags_cache))
     return jsonify(result)
 
 
-@app.route("/api/decks/<int:deck_id>")
+@app.route("/api/decks/<int:deck_id>", methods=["GET", "PATCH", "PUT"])
 @api_login_required
 def api_deck_detail(deck_id):
+    current_user = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         return jsonify({"error": "Not found"}), 404
-    wins = (
-        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-        .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
-        .count()
-    )
-    uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
-    winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
-    participations = (
-        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-        .filter(GameParticipant.deck_id == deck.id)
-        .order_by(Game.date.desc())
-        .limit(20)
-        .all()
-    )
-    recent_games = []
-    for gp in participations:
-        game = gp.game
-        recent_games.append({
-            "game_id": game.id,
-            "date": game.date.isoformat(),
-            "won": game.winner_id == deck.player_id,
-            "win_type": game.win_type,
-            "ending_turn": game.ending_turn,
-            "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
-        })
-    deck_tags = get_deck_parsed_tags(deck)
-    deck_mechanics = derive_deck_mechanics(deck_tags)
 
-    return jsonify({
-        "id": deck.id,
-        "name": deck.name,
-        "commander": deck.commander_name or deck.commander,
-        "retired": deck.retired,
-        "planned": deck.planned,
-        "player_id": deck.player_id,
-        "player_name": deck.owner.name,
-        "wins": wins,
-        "uses": uses,
-        "winrate": winrate,
-        "art_url": deck.commander_art_url,
-        "mechanics": deck_mechanics,
-        "recent_games": recent_games,
-    })
+    if request.method in {"PATCH", "PUT"}:
+        if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
+            return jsonify({"error": "Forbidden"}), 403
+
+        payload = _api_json_payload()
+        if payload is None:
+            return jsonify({"error": "Invalid request body"}), 400
+
+        if request.method == "PUT":
+            name = (payload.get("name") or "").strip()
+            if not name:
+                return jsonify({"error": "name is required"}), 400
+        elif "name" in payload:
+            name = (payload.get("name") or "").strip()
+            if not name:
+                return jsonify({"error": "name must be a non-empty string"}), 400
+        else:
+            name = deck.name
+
+        commander_input = None
+        if "commander" in payload:
+            commander_input = (payload.get("commander") or "").strip()
+
+        raw_import = payload.get("raw_import")
+        if raw_import is None and "decklist_text" in payload:
+            raw_import = payload.get("decklist_text")
+        if raw_import is not None and not isinstance(raw_import, str):
+            return jsonify({"error": "raw_import/decklist_text must be a string"}), 400
+        raw_import = (raw_import or "").strip() if raw_import is not None else None
+
+        parsed_import = None
+        tag_diagnostics = {"unresolved_count": 0, "unresolved_cards": []}
+        if raw_import:
+            try:
+                parsed_import = parse_deck_input(raw_import)
+            except DeckParserError as exc:
+                return jsonify({"error": f"Deck setup failed: {exc}"}), 400
+
+        if current_user.is_admin and "player_id" in payload:
+            owner_id = payload.get("player_id")
+            if not isinstance(owner_id, int):
+                return jsonify({"error": "player_id must be an integer"}), 400
+            owner = db.session.get(Player, owner_id)
+            if not owner:
+                return jsonify({"error": "player_id must reference an existing player"}), 400
+            deck.player_id = owner.id
+
+        if current_user.is_admin and "retired" in payload:
+            deck.retired = bool(payload.get("retired"))
+        if current_user.is_admin and "planned" in payload:
+            deck.planned = bool(payload.get("planned"))
+        if deck.retired:
+            deck.planned = False
+
+        resolved_commander = parsed_import.get("commander") if parsed_import else None
+        commander_to_set = (resolved_commander or commander_input or deck.commander).strip()
+        if not commander_to_set:
+            return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
+
+        deck.name = name
+        deck.commander = commander_to_set
+        if parsed_import:
+            deck.decklist_text = _render_decklist_text(parsed_import)
+            tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
+            apply_deck_tags(deck, tags)
+
+        commander_meta = resolve_commander_metadata(commander_to_set)
+        deck.commander = commander_meta["commander"] or commander_to_set
+        deck.commander_name = commander_meta["commander_name"]
+        deck.commander_scryfall_id = commander_meta["commander_scryfall_id"]
+        deck.commander_art_crop_url = commander_meta["commander_art_crop_url"]
+        deck.commander_local_art_crop = commander_meta["commander_local_art_crop"]
+        deck.color_identity = commander_meta["color_identity"]
+
+        db.session.commit()
+        response_payload = _serialize_deck_detail(deck)
+        if tag_diagnostics.get("unresolved_count", 0) > 0:
+            response_payload["tag_diagnostics"] = tag_diagnostics
+        return jsonify(response_payload), 200
+
+    if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
+        return jsonify({"error": "Forbidden"}), 403
+    return jsonify(_serialize_deck_detail(deck))
 
 
 @app.route("/api/join/<token>")
@@ -6041,7 +6196,5 @@ def api_join_claim(token):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
-
 
 
