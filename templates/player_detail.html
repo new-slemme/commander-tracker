@@ -16,8 +16,15 @@
           {% endif %}
         </div>
       </div>
-      {% set back_fallback_url = url_for('players') %}
-      {% include '_detail_back_button.html' %}
+      <div class="d-flex align-items-center gap-2">
+        <a href="{{ url_for('player_export', player_id=player.id) }}"
+           class="btn btn-outline-secondary btn-sm"
+           title="Export player profile as JSON">
+          Export JSON
+        </a>
+        {% set back_fallback_url = url_for('players') %}
+        {% include '_detail_back_button.html' %}
+      </div>
     </div>
 
     <div class="overview-grid mt-4">
