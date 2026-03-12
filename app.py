@@ -4057,6 +4057,104 @@ def player_detail(player_id):
     )
 
 
+@app.route("/player/<int:player_id>/export")
+def player_export(player_id):
+    player = db.session.get(Player, player_id)
+    if not player:
+        abort(404)
+
+    decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
+
+    games_played = GameParticipant.query.filter_by(player_id=player.id).count()
+    games_won = Game.query.filter_by(winner_id=player.id).count()
+    games_started = Game.query.filter_by(starting_player_id=player.id).count()
+    winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
+
+    decks_data = []
+    for d in decks:
+        deck_wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+        deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_losses = max(0, deck_games - deck_wins)
+        deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
+        tags = {}
+        try:
+            tags = json.loads(d.tags_json or "{}")
+        except (ValueError, TypeError):
+            pass
+        decks_data.append({
+            "id": d.id,
+            "name": d.name,
+            "commander": d.commander_name or d.commander,
+            "color_identity": d.color_identity,
+            "retired": d.retired,
+            "planned": d.planned,
+            "stats": {
+                "games": deck_games,
+                "wins": deck_wins,
+                "losses": deck_losses,
+                "winrate": deck_winrate,
+            },
+            "tags": tags,
+        })
+
+    participations = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.player_id == player.id)
+        .order_by(Game.date.desc())
+        .all()
+    )
+
+    games_data = []
+    for gp in participations:
+        game = gp.game
+        participant_count = GameParticipant.query.filter_by(game_id=game.id).count()
+        games_data.append({
+            "game_id": game.id,
+            "date": game.date.isoformat() if game.date else None,
+            "won": game.winner_id == player.id,
+            "deck_id": gp.deck_id,
+            "deck_name": gp.deck.name if gp.deck else None,
+            "commander": (gp.deck.commander_name or gp.deck.commander) if gp.deck else None,
+            "participant_count": participant_count,
+            "win_type": canonicalize_win_type(game.win_type) if game.win_type else None,
+            "salt_count": gp.salt_count,
+            "mana_fucked": gp.mana_fucked,
+            "misplayed": gp.misplayed,
+            "life_delta": gp.life_delta_total,
+        })
+
+    payload = {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "player": {
+            "id": player.id,
+            "name": player.name,
+            "linked_account": player.user_id is not None,
+        },
+        "stats": {
+            "games_played": games_played,
+            "games_won": games_won,
+            "games_started": games_started,
+            "winrate": winrate,
+        },
+        "decks": decks_data,
+        "games": games_data,
+    }
+
+    filename = re.sub(r"[^A-Za-z0-9_-]+", "_", player.name.strip()) or f"player_{player.id}"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}_profile.json"'
+    }
+    return Response(
+        json.dumps(payload, indent=2),
+        mimetype="application/json",
+        headers=headers,
+    )
+
+
 @app.route("/add_player", methods=["POST"])
 def add_player():
     name = request.form["name"].strip()
