@@ -4092,6 +4092,7 @@ def player_export(player_id):
             "color_identity": d.color_identity,
             "retired": d.retired,
             "planned": d.planned,
+            "decklist": d.decklist_text or "",
             "stats": {
                 "games": deck_games,
                 "wins": deck_wins,
