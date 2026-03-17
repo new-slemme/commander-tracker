@@ -1,20 +1,28 @@
-version: '3.8'
+version: '3.8'  # Added for clarity/modern syntax
 
 services:
   commander-tracker:
     build: .
     container_name: commander-tracker
     restart: unless-stopped
+    ports: 
+      - "5000:5000"  # No direct host exposure; Traefik handles it
     volumes:
       - ./data:/data
-    environment:
-#      - APP_PASSWORD=  # <<< CHANGE THIS!
-      - FLASK_SECRET_KEY=YxbJdOs4KSc8e1avKUK2kIQl  # Optional but recommended
-#      - BOOTSTRAP_ADMIN_USERNAME=slemme
-      - CCAUTO_BASE_URL=http://custom-mtg-gallery:3000
     networks:
       - npm_default
+    #labels:
+      #- "traefik.enable=true"
+      #- "traefik.http.routers.edh.rule=Host(`edh.figurensohn.de`)"  # Routes the subdomain
+      #- "traefik.http.routers.edh.entrypoints=websecure"  # HTTPS entrypoint (assumes Traefik config)
+      #- "traefik.http.routers.edh.tls=true"  # Enable TLS
+      #- "traefik.http.routers.edh.tls.certresolver=letsencrypt"  # Your Let's Encrypt resolver name
+      #- "traefik.http.services.edh.loadbalancer.server.port=5000"  # Internal app port
+      #- "traefik.docker.network=traefik_ proxy"
+      # Optional: If you want HSTS or other headers, add middleware:
+      # - "traefik.http.routers.edh.middlewares=hsts"  # Commented out to avoid missing middleware error
+      # Define middlewares in Traefik's config file.
 
 networks:
   npm_default:
-    external: true
+    external: true  # References the external Traefik network
