@@ -9,6 +9,7 @@ services:
       - "5000:5000"  # No direct host exposure; Traefik handles it
     volumes:
       - ./data:/data
+      - ./apk:/app/apk
     networks:
       - npm_default
     #labels:

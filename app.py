@@ -48,6 +48,10 @@ CARD_ART_DIR.mkdir(parents=True, exist_ok=True)
 APK_DIR = Path(__file__).resolve().parent / "apk"
 APK_DIR.mkdir(parents=True, exist_ok=True)
 ANDROID_LATEST_RELEASE_MANIFEST = APK_DIR / "android-latest.json"
+APK_VERSION_FILENAME_RE = re.compile(
+    r"^(?P<prefix>.+)-(?P<version_name>v?\d+(?:\.\d+)*)(?:\+(?P<version_code>\d+))?\.apk$",
+    re.IGNORECASE,
+)
 
 # --- Dev/test bootstrap user (env-gated) ---
 BOOTSTRAP_TEST_USER = os.getenv("BOOTSTRAP_TEST_USER", "0") == "1"
@@ -2796,26 +2800,66 @@ def apk_download():
 
 
 def _load_android_release_manifest() -> tuple[dict | None, tuple[Response, int] | None]:
-    if not ANDROID_LATEST_RELEASE_MANIFEST.is_file():
-        return None, (jsonify({"error": "Android release manifest not found"}), 404)
+    manifest = None
+    manifest_error = None
+    if ANDROID_LATEST_RELEASE_MANIFEST.is_file():
+        try:
+            manifest = json.loads(ANDROID_LATEST_RELEASE_MANIFEST.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError) as exc:
+            manifest_error = exc
 
-    try:
-        manifest = json.loads(ANDROID_LATEST_RELEASE_MANIFEST.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        return None, (jsonify({"error": f"Invalid Android release manifest: {exc}"}), 500)
+    artifact_path = _find_latest_android_release_artifact()
+    if artifact_path is None:
+        if manifest_error is not None:
+            return None, (jsonify({"error": f"Invalid Android release manifest: {manifest_error}"}), 500)
+        if manifest is not None:
+            artifact_file_name = manifest.get("artifactFileName")
+            if isinstance(artifact_file_name, str) and artifact_file_name.strip():
+                return None, (jsonify({"error": f"Android release artifact missing: {artifact_file_name}"}), 500)
+        return None, (jsonify({"error": "Android release artifact not found"}), 404)
 
-    artifact_file_name = manifest.get("artifactFileName")
-    if not isinstance(artifact_file_name, str) or not artifact_file_name.strip():
-        return None, (jsonify({"error": "Android release manifest missing artifactFileName"}), 500)
-
-    artifact_path = APK_DIR / artifact_file_name
-    if not artifact_path.is_file():
-        return None, (jsonify({"error": f"Android release artifact missing: {artifact_file_name}"}), 500)
-
-    payload = dict(manifest)
-    payload["artifactPath"] = f"apk/{artifact_file_name}"
-    payload["artifactUrl"] = url_for("apk_file", filename=artifact_file_name, _external=True)
+    payload = _build_android_release_payload(artifact_path, manifest=manifest)
     return payload, None
+
+
+def _find_latest_android_release_artifact() -> Path | None:
+    apk_paths = [path for path in APK_DIR.glob("*.apk") if path.is_file()]
+    if not apk_paths:
+        return None
+    apk_paths.sort(key=lambda path: (path.stat().st_mtime, path.name), reverse=True)
+    return apk_paths[0]
+
+
+def _build_android_release_payload(artifact_path: Path, manifest: dict | None = None) -> dict:
+    stat_result = artifact_path.stat()
+    published_at = datetime.utcfromtimestamp(stat_result.st_mtime).replace(microsecond=0).isoformat() + "Z"
+    payload = {
+        "artifactFileName": artifact_path.name,
+        "artifactPath": f"apk/{artifact_path.name}",
+        "artifactUrl": url_for("apk_file", filename=artifact_path.name, _external=True),
+        "buildDate": published_at,
+        "publishedAt": published_at,
+    }
+
+    if isinstance(manifest, dict) and manifest.get("artifactFileName") == artifact_path.name:
+        payload.update(manifest)
+        payload["artifactFileName"] = artifact_path.name
+        payload["artifactPath"] = f"apk/{artifact_path.name}"
+        payload["artifactUrl"] = url_for("apk_file", filename=artifact_path.name, _external=True)
+        payload.setdefault("buildDate", published_at)
+        payload.setdefault("publishedAt", published_at)
+        return payload
+
+    match = APK_VERSION_FILENAME_RE.match(artifact_path.name)
+    if match:
+        version_name = match.group("version_name")
+        if version_name:
+            payload["versionName"] = version_name.lstrip("v")
+        version_code = match.group("version_code")
+        if version_code:
+            payload["versionCode"] = int(version_code)
+
+    return payload
 
 
 @app.route("/admin/users")
