@@ -6,7 +6,7 @@ Use this guide when preparing test data for the **life counter** workflow.
 ## Goal state for life-counter testing
 Before validating life-counter behavior, make sure the app has:
 
-1. At least **4 active players**.
+1. At least **3 active players**. (currently the most frequent real-life use case)
 2. At least **1 deck per player** (preferably 2+ so deck selection can be tested).
 3. Decks with a real decklist (imported from URL or pasted list), not only a name.
 4. A game that includes all players/decks so `/play_game` and life-counter flows are fully exercisable.

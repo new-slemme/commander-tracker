@@ -21,7 +21,7 @@
       {% if manifest.buildDate %}
         <div class="muted mb-3">Built: <span class="text-white">{{ manifest.buildDate }}</span></div>
       {% endif %}
-      <a class="btn btn-primary" href="{{ manifest.artifactUrl }}" download>
+      <a class="btn btn-primary" href="{{ url_for('apk_file', filename=manifest.artifactFileName) }}" download="{{ manifest.artifactFileName }}">
         Download APK
       </a>
     </div>
