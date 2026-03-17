@@ -5960,6 +5960,65 @@ def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: in
     return payload
 
 
+def _serialize_admin_user(user: User, *, pending_request: RegistrationRequest | None = None) -> dict:
+    pod_memberships = []
+    if user.player:
+        memberships = (
+            PodMembership.query
+            .join(Pod, Pod.id == PodMembership.pod_id)
+            .filter(PodMembership.player_id == user.player.id)
+            .order_by(Pod.name.asc())
+            .all()
+        )
+        pod_memberships = [
+            {
+                "pod_id": membership.pod_id,
+                "pod_name": membership.pod.name,
+                "role": membership.role,
+                "is_active": bool(membership.pod.is_active),
+            }
+            for membership in memberships
+        ]
+
+    requested_pod = pending_request.requested_pod if pending_request else None
+    return {
+        "user_id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "is_admin": bool(user.is_admin),
+        "is_active": bool(user.is_active),
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "approved_at": user.approved_at.isoformat() if user.approved_at else None,
+        "player_id": user.player.id if user.player else None,
+        "player_name": user.player.name if user.player else None,
+        "pods": pod_memberships,
+        "registration_request": (
+            {
+                "request_id": pending_request.id,
+                "requested_pod_id": pending_request.requested_pod_id,
+                "requested_pod_name": requested_pod.name if requested_pod else None,
+                "requested_pod_active": bool(requested_pod.is_active) if requested_pod else None,
+                "created_at": pending_request.created_at.isoformat() if pending_request.created_at else None,
+            } if pending_request else None
+        ),
+    }
+
+
+def _serialize_registration_request(registration_request: RegistrationRequest) -> dict:
+    user = registration_request.user
+    requested_pod = registration_request.requested_pod
+    return {
+        "request_id": registration_request.id,
+        "user_id": registration_request.user_id,
+        "username": user.username if user else None,
+        "display_name": user.display_name if user else None,
+        "created_at": registration_request.created_at.isoformat() if registration_request.created_at else None,
+        "requested_pod_id": registration_request.requested_pod_id,
+        "requested_pod_name": requested_pod.name if requested_pod else None,
+        "requested_pod_active": bool(requested_pod.is_active) if requested_pod else None,
+    }
+
+
 def _api_json_payload() -> dict | None:
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -5980,6 +6039,133 @@ def _api_deck_owner_id_from_payload(payload: dict, current_user: User) -> int | 
     if not current_user.player:
         return None
     return current_user.player.id
+
+
+def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[dict | None, tuple[Response, int] | None]:
+    participants_raw = payload.get("participants")
+    winner_id = payload.get("winner_id")
+    if not isinstance(participants_raw, list) or len(participants_raw) < 2 or len(participants_raw) > 6:
+        return None, (jsonify({"error": "participants must contain between 2 and 6 entries"}), 400)
+    if not isinstance(winner_id, int):
+        return None, (jsonify({"error": "winner_id is required"}), 400)
+
+    normalized_participants = []
+    seen_player_ids = set()
+    for index, participant_raw in enumerate(participants_raw):
+        if not isinstance(participant_raw, dict):
+            return None, (jsonify({"error": "participants must contain objects"}), 400)
+        player_id = participant_raw.get("player_id")
+        deck_id = participant_raw.get("deck_id")
+        seat_position = participant_raw.get("seat_position")
+        if not isinstance(player_id, int) or not db.session.get(Player, player_id):
+            return None, (jsonify({"error": "participants.player_id must reference an existing player"}), 400)
+        if not isinstance(deck_id, int):
+            return None, (jsonify({"error": "participants.deck_id must be an integer"}), 400)
+        deck = db.session.get(Deck, deck_id)
+        if not deck:
+            return None, (jsonify({"error": "participants.deck_id must reference an existing deck"}), 400)
+        if deck.player_id != player_id:
+            return None, (jsonify({"error": "participant deck must belong to participant player"}), 400)
+        if player_id in seen_player_ids:
+            return None, (jsonify({"error": "Duplicate players are not allowed"}), 400)
+        seen_player_ids.add(player_id)
+        if seat_position is None:
+            seat_position = index + 1
+        if not isinstance(seat_position, int) or seat_position < 1 or seat_position > 6:
+            return None, (jsonify({"error": "seat_position must be an integer between 1 and 6"}), 400)
+        normalized_participants.append({
+            "player_id": player_id,
+            "deck_id": deck_id,
+            "seat_position": seat_position,
+        })
+
+    if winner_id not in seen_player_ids:
+        return None, (jsonify({"error": "Winner must be a participant"}), 400)
+
+    seat_validation_error, _ = validate_participant_seat_positions(normalized_participants)
+    if seat_validation_error:
+        return None, (jsonify({"error": seat_validation_error}), 400)
+
+    starting_player_id = payload.get("starting_player_id")
+    if starting_player_id is not None:
+        if not isinstance(starting_player_id, int) or starting_player_id not in seen_player_ids:
+            return None, (jsonify({"error": "starting_player_id must reference a participant"}), 400)
+
+    win_type_raw = payload.get("win_type")
+    win_type = canonicalize_win_type(win_type_raw, unknown_default="other")
+
+    ending_turn = payload.get("ending_turn")
+    if ending_turn is not None:
+        if not isinstance(ending_turn, int) or ending_turn < 1 or ending_turn > 500:
+            return None, (jsonify({"error": "ending_turn must be an integer between 1 and 500"}), 400)
+
+    note = payload.get("note")
+    if note is not None:
+        if not isinstance(note, str):
+            return None, (jsonify({"error": "note must be a string"}), 400)
+        note = note.strip() or None
+
+    date_value = payload.get("date")
+    game_date = None
+    if isinstance(date_value, str) and date_value.strip():
+        date_text = date_value.strip()
+        for parser in (
+            lambda value: datetime.fromisoformat(value.replace("Z", "+00:00")),
+            lambda value: datetime.strptime(value, "%Y-%m-%d"),
+        ):
+            try:
+                game_date = parser(date_text)
+                break
+            except ValueError:
+                continue
+        if game_date is None:
+            return None, (jsonify({"error": "date must be ISO-8601 or YYYY-MM-DD"}), 400)
+    else:
+        game_date = datetime.utcnow()
+
+    participant_flags_by_player: dict[int, str] = {}
+    for participant_raw in participants_raw:
+        player_id = participant_raw["player_id"]
+        salt_count = participant_raw.get("salt_count", 0)
+        mana_fucked = participant_raw.get("mana_fucked", False)
+        misplayed = participant_raw.get("misplayed", False)
+        commander_damage = participant_raw.get("commander_damage", {})
+
+        if not isinstance(salt_count, int) or isinstance(salt_count, bool) or salt_count < 0:
+            return None, (jsonify({"error": "salt_count must be a non-negative integer"}), 400)
+        if not isinstance(mana_fucked, bool):
+            return None, (jsonify({"error": "mana_fucked must be boolean"}), 400)
+        if not isinstance(misplayed, bool):
+            return None, (jsonify({"error": "misplayed must be boolean"}), 400)
+
+        flags_payload = {
+            "salt_count": salt_count,
+            "mana_fucked": mana_fucked,
+            "misplayed": misplayed,
+        }
+        sanitized_card_state = sanitize_card_state_payload(
+            {"commander_damage": commander_damage},
+            seen_player_ids,
+        ) if commander_damage else None
+        if sanitized_card_state:
+            flags_payload["card_state"] = sanitized_card_state
+
+        participant_flags_by_player[player_id] = json.dumps(
+            flags_payload,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+    return {
+        "participants": normalized_participants,
+        "winner_id": winner_id,
+        "starting_player_id": starting_player_id,
+        "win_type": win_type,
+        "ending_turn": ending_turn,
+        "note": note,
+        "date": game_date,
+        "participant_flags_by_player": participant_flags_by_player,
+    }, None
 
 
 @app.route("/api/login", methods=["POST"])
@@ -6009,6 +6195,7 @@ def api_login():
         "display_name": user.display_name,
         "is_admin": user.is_admin,
         "player_id": user.player.id if user.player else None,
+        "can_access_registration_requests": can_access_registration_request_queue(user),
     })
 
 
@@ -6030,6 +6217,7 @@ def api_me():
         "display_name": u.display_name,
         "is_admin": u.is_admin,
         "player_id": u.player.id if u.player else None,
+        "can_access_registration_requests": can_access_registration_request_queue(u),
     })
 
 
@@ -6131,6 +6319,527 @@ def api_stats():
         "scope": scope,
         "pod_name": active_pod.name if active_pod else None,
     })
+
+
+@app.route("/api/saltmine")
+@api_login_required
+def api_saltmine():
+    game_q, scope, active_pod = game_query_for_scope()
+
+    scoped_games = game_q.all()
+    scoped_game_ids = [g.id for g in scoped_games]
+    participants = (
+        GameParticipant.query
+        .filter(GameParticipant.game_id.in_(scoped_game_ids if scoped_game_ids else [-1]))
+        .all()
+    )
+
+    game_salt_stats: dict[int, dict[str, int | bool | None]] = {}
+    player_salt_stats: dict[int, dict[str, int]] = {}
+    deck_salt_stats: dict[int, dict[str, int]] = {}
+
+    for gp in participants:
+        parsed_flags = participant_flags_snapshot(gp)
+        salt_count = participant_salt_count(parsed_flags)
+        salted = salt_count > 0
+
+        game_entry = game_salt_stats.setdefault(gp.game_id, {
+            "salted_players": 0,
+            "participants": 0,
+            "any_salted": False,
+            "salt_clicks": 0,
+            "legacy_salt_rating": None,
+            "has_legacy_salt": False,
+            "sort_salted_players": 0,
+            "sort_salt_clicks": 0,
+            "sort_has_salt": 0,
+        })
+        game_entry["participants"] += 1
+        if salted:
+            game_entry["salted_players"] += 1
+            game_entry["any_salted"] = True
+        game_entry["salt_clicks"] += salt_count
+
+        player_entry = player_salt_stats.setdefault(gp.player_id, {
+            "salted_games": 0,
+            "games": 0,
+            "salt_clicks": 0,
+        })
+        player_entry["games"] += 1
+        if salted:
+            player_entry["salted_games"] += 1
+        player_entry["salt_clicks"] += salt_count
+
+        deck_entry = deck_salt_stats.setdefault(gp.deck_id, {
+            "salted_games": 0,
+            "games": 0,
+            "salt_clicks": 0,
+        })
+        deck_entry["games"] += 1
+        if salted:
+            deck_entry["salted_games"] += 1
+        deck_entry["salt_clicks"] += salt_count
+
+    for game in scoped_games:
+        stats = game_salt_stats.setdefault(game.id, {
+            "salted_players": 0,
+            "participants": 0,
+            "any_salted": False,
+            "salt_clicks": 0,
+            "legacy_salt_rating": None,
+            "has_legacy_salt": False,
+            "sort_salted_players": 0,
+            "sort_salt_clicks": 0,
+            "sort_has_salt": 0,
+        })
+        legacy_salt = game.salt_rating is not None
+        stats["legacy_salt_rating"] = game.salt_rating
+        stats["has_legacy_salt"] = legacy_salt
+        stats["sort_salted_players"] = int(stats["salted_players"])
+        stats["sort_salt_clicks"] = int(stats["salt_clicks"])
+        stats["sort_has_salt"] = int(stats["any_salted"] or legacy_salt)
+
+    salty_games = sorted(
+        scoped_games,
+        key=lambda game: (
+            int(game_salt_stats[game.id]["sort_salted_players"]),
+            int(game_salt_stats[game.id]["sort_salt_clicks"]),
+            int(game_salt_stats[game.id]["sort_has_salt"]),
+            game.date,
+        ),
+        reverse=True,
+    )
+    salty_games = [game for game in salty_games if game_salt_stats[game.id]["sort_has_salt"]][:10]
+
+    player_ids = list(player_salt_stats.keys())
+    players_by_id = {
+        p.id: p for p in Player.query.filter(Player.id.in_(player_ids if player_ids else [-1])).all()
+    }
+    salty_players = []
+    for player_id, stats in player_salt_stats.items():
+        games_played = int(stats["games"])
+        salted_games = int(stats["salted_games"])
+        if games_played < 3 or player_id not in players_by_id:
+            continue
+        salty_players.append({
+            "player_id": player_id,
+            "player_name": players_by_id[player_id].name,
+            "salt_rate": round((salted_games / games_played) * 100, 1),
+            "salted_games": salted_games,
+            "games_played": games_played,
+            "salt_clicks": int(stats["salt_clicks"]),
+        })
+    salty_players.sort(
+        key=lambda row: (row["salt_rate"], row["salted_games"], row["games_played"], row["player_name"].lower()),
+        reverse=True,
+    )
+    salty_players = salty_players[:10]
+
+    deck_ids = list(deck_salt_stats.keys())
+    decks_by_id = {
+        d.id: d for d in Deck.query.filter(Deck.id.in_(deck_ids if deck_ids else [-1])).all()
+    }
+    salty_decks = []
+    for deck_id, stats in deck_salt_stats.items():
+        games_played = int(stats["games"])
+        salted_games = int(stats["salted_games"])
+        if games_played < 3 or deck_id not in decks_by_id:
+            continue
+        deck = decks_by_id[deck_id]
+        salty_decks.append({
+            "deck_id": deck_id,
+            "deck_name": deck.name,
+            "commander": deck.commander_name or deck.commander,
+            "owner_name": deck.owner.name,
+            "owner_id": deck.player_id,
+            "salt_rate": round((salted_games / games_played) * 100, 1),
+            "salted_games": salted_games,
+            "games_played": games_played,
+            "salt_clicks": int(stats["salt_clicks"]),
+        })
+    salty_decks.sort(
+        key=lambda row: (row["salt_rate"], row["salted_games"], row["games_played"], row["deck_name"].lower()),
+        reverse=True,
+    )
+    salty_decks = salty_decks[:10]
+
+    sp = (
+        db.session.query(
+            func.count(Game.id).label("games"),
+            func.sum(
+                case(
+                    (Game.winner_id == Game.starting_player_id, 1),
+                    else_=0,
+                )
+            ).label("wins")
+        )
+        .filter(Game.starting_player_id.isnot(None))
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
+        .first()
+    )
+    start_games = int(sp.games or 0)
+    start_wins = int(sp.wins or 0)
+    start_winrate = round((start_wins / start_games) * 100, 1) if start_games else None
+
+    seat_winrate_rows = (
+        db.session.query(
+            GameParticipant.seat_position.label("seat_position"),
+            func.count(GameParticipant.id).label("games"),
+            func.sum(
+                case(
+                    (Game.winner_id == GameParticipant.player_id, 1),
+                    else_=0,
+                )
+            ).label("wins"),
+        )
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
+        .filter(GameParticipant.seat_position.isnot(None))
+        .group_by(GameParticipant.seat_position)
+        .order_by(GameParticipant.seat_position.asc())
+        .all()
+    )
+    seat_winrates = []
+    for row in seat_winrate_rows:
+        games = int(row.games or 0)
+        wins = int(row.wins or 0)
+        seat_winrates.append({
+            "seat_position": int(row.seat_position),
+            "games": games,
+            "wins": wins,
+            "winrate": round((wins / games) * 100, 1) if games else None,
+        })
+
+    scoped_participants = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
+        .all()
+    )
+    deck_tags_cache: dict[int, dict[str, bool]] = {}
+    deck_mechanics_by_id = {}
+    for deck in Deck.query.all():
+        tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
+        deck_mechanics_by_id[deck.id] = derive_deck_mechanics(tags)
+
+    participants_by_game_id: dict[int, list[GameParticipant]] = {}
+    capability_uses_wins = {
+        key: {"uses": 0, "wins": 0}
+        for key in ("monarch", "poison", "energy", "experience")
+    }
+    activation_correlation = {
+        key: {"activated_games_with_capability": 0, "games_with_capability": 0}
+        for key in ("monarch", "poison")
+    }
+
+    for gp in scoped_participants:
+        mechanics = deck_mechanics_by_id.get(gp.deck_id)
+        if not mechanics:
+            continue
+        gp.deck_mechanics = mechanics
+        participants_by_game_id.setdefault(gp.game_id, []).append(gp)
+        for key in capability_uses_wins:
+            if not mechanics[key]:
+                continue
+            capability_uses_wins[key]["uses"] += 1
+            if gp.game and gp.game.winner_id == gp.player_id:
+                capability_uses_wins[key]["wins"] += 1
+
+    for participants_in_game in participants_by_game_id.values():
+        game_activation = compute_game_mechanic_activation(participants_in_game)
+        if game_activation["monarch_capable_present"]:
+            activation_correlation["monarch"]["games_with_capability"] += 1
+            if game_activation["monarch_activated"]:
+                activation_correlation["monarch"]["activated_games_with_capability"] += 1
+        if game_activation["poison_capable_present"]:
+            activation_correlation["poison"]["games_with_capability"] += 1
+            if game_activation["poison_activated"]:
+                activation_correlation["poison"]["activated_games_with_capability"] += 1
+
+    mechanic_stats = []
+    for key, counts in capability_uses_wins.items():
+        uses = int(counts["uses"])
+        wins = int(counts["wins"])
+        stat = {
+            "mechanic": key,
+            "uses": uses,
+            "wins": wins,
+            "winrate": round((wins / uses) * 100, 1) if uses else None,
+        }
+        if key in activation_correlation:
+            capability_games = int(activation_correlation[key]["games_with_capability"])
+            activated_games = int(activation_correlation[key]["activated_games_with_capability"])
+            stat["games_with_capability"] = capability_games
+            stat["activated_games"] = activated_games
+            stat["activation_rate"] = round((activated_games / capability_games) * 100, 1) if capability_games else None
+        mechanic_stats.append(stat)
+
+    return jsonify({
+        "scope": scope,
+        "pod_name": active_pod.name if active_pod else None,
+        "starting_player": {
+            "games": start_games,
+            "wins": start_wins,
+            "winrate": start_winrate,
+            "seat_winrates": seat_winrates,
+        },
+        "salty_players": salty_players,
+        "salty_decks": salty_decks,
+        "salty_games": [
+            {
+                "game_id": game.id,
+                "date": game.date.isoformat(),
+                "winner_name": game.winner.name,
+                "win_type": game.win_type,
+                "salted_players": int(game_salt_stats[game.id]["salted_players"]),
+                "participants": int(game_salt_stats[game.id]["participants"]),
+                "salt_clicks": int(game_salt_stats[game.id]["salt_clicks"]),
+                "legacy_salt_rating": game_salt_stats[game.id]["legacy_salt_rating"],
+                "starting_player_name": game.starting_player.name if game.starting_player else None,
+            }
+            for game in salty_games
+        ],
+        "mechanic_stats": mechanic_stats,
+    })
+
+
+@app.route("/api/admin/users")
+@api_login_required
+def api_admin_users():
+    current_user = get_current_user()
+    if not current_user or not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+
+    pod_id = request.args.get("pod_id", type=int)
+    available_pods = Pod.query.order_by(Pod.is_active.desc(), Pod.name.asc()).all()
+
+    pending_requests = (
+        RegistrationRequest.query
+        .join(User, RegistrationRequest.user_id == User.id)
+        .filter(
+            RegistrationRequest.status == "pending",
+            User.is_active == False,  # noqa: E712
+        )
+        .order_by(RegistrationRequest.created_at.asc())
+        .all()
+    )
+    if pod_id:
+        pending_requests = [request_item for request_item in pending_requests if request_item.requested_pod_id == pod_id]
+    pending_requests_by_user_id = {request_item.user_id: request_item for request_item in pending_requests}
+    pending_users = [
+        _serialize_admin_user(request_item.user, pending_request=request_item)
+        for request_item in pending_requests
+        if request_item.user
+    ]
+    pending_user_ids = {row["user_id"] for row in pending_users}
+
+    active_users = User.query.filter_by(is_active=True).order_by(User.created_at.desc()).all()
+    if pod_id:
+        active_users = [
+            user for user in active_users
+            if user.player and PodMembership.query.filter_by(player_id=user.player.id, pod_id=pod_id).first()
+        ]
+
+    inactive_users = User.query.filter_by(is_active=False).order_by(User.created_at.desc()).all()
+    if pod_id:
+        inactive_users = [
+            user for user in inactive_users
+            if (
+                user.id in pending_requests_by_user_id or
+                (user.player and PodMembership.query.filter_by(player_id=user.player.id, pod_id=pod_id).first())
+            )
+        ]
+
+    return jsonify({
+        "selected_pod_id": pod_id,
+        "pods": [{"id": pod.id, "name": pod.name, "is_active": bool(pod.is_active)} for pod in available_pods],
+        "pending_users": pending_users,
+        "active_users": [_serialize_admin_user(user) for user in active_users],
+        "inactive_users": [
+            _serialize_admin_user(user, pending_request=pending_requests_by_user_id.get(user.id))
+            for user in inactive_users
+            if user.id not in pending_user_ids
+        ],
+    })
+
+
+@app.route("/api/admin/users/<int:user_id>/approve", methods=["POST"])
+@api_login_required
+def api_admin_approve_user(user_id):
+    current_user = get_current_user()
+    if not current_user or not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+    registration_request = RegistrationRequest.query.filter_by(user_id=user_id).first()
+    if not registration_request:
+        return jsonify({"error": "No pending registration request found for that user."}), 404
+
+    status, approved_user = approve_user_from_registration_request(registration_request, current_user.id)
+    if status in {"missing_request", "missing_user"}:
+        return jsonify({"error": "No pending registration request found for that user."}), 404
+    if status == "not_pending":
+        return jsonify({"error": "Registration request is no longer pending."}), 409
+    if status == "name_collision":
+        return jsonify({"error": f"Can't approve: display name '{approved_user.display_name}' is already used by a Player."}), 409
+    if status == "inactive_pod":
+        return jsonify({"error": "Can't approve: requested pod is inactive."}), 409
+    if status == "missing_pod":
+        return jsonify({"error": "Can't approve: no valid pod is available for this registration request."}), 409
+
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>/deny", methods=["POST"])
+@api_login_required
+def api_admin_deny_user(user_id):
+    current_user = get_current_user()
+    if not current_user or not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+    registration_request = RegistrationRequest.query.filter_by(user_id=user_id).first()
+    if not registration_request:
+        return jsonify({"error": "No pending registration request found for that user."}), 404
+    if not can_deny_registration_request(current_user, registration_request):
+        return jsonify({"error": deny_registration_request_permission_message(current_user, registration_request)}), 403
+
+    status, denied_user = deny_user_from_registration_request(registration_request, current_user.id)
+    if status == "missing_user":
+        return jsonify({"error": "No pending registration request found for that user."}), 404
+    if status == "not_pending":
+        return jsonify({"error": "Only pending users can be denied."}), 409
+
+    return jsonify({"ok": True, "username": denied_user.username}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>/deactivate", methods=["POST"])
+@api_login_required
+def api_admin_deactivate_user(user_id):
+    current_user = get_current_user()
+    if not current_user or not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+    if current_user.id == user.id:
+        return jsonify({"error": "You can't deactivate your own account."}), 409
+
+    user.is_active = False
+    db.session.commit()
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+@api_login_required
+def api_admin_delete_user(user_id):
+    current_user = get_current_user()
+    if not current_user or not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+    if current_user.id == user.id:
+        return jsonify({"error": "You can't delete your own account."}), 409
+
+    linked_player = user.player
+    if linked_player:
+        linked_player.user_id = None
+
+    RegistrationRequest.query.filter_by(reviewed_by_user_id=user.id).update(
+        {RegistrationRequest.reviewed_by_user_id: None},
+        synchronize_session=False,
+    )
+    RegistrationRequest.query.filter_by(user_id=user.id).delete()
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/admin/users/<int:user_id>/toggle-admin", methods=["POST"])
+@api_login_required
+def api_admin_toggle_admin(user_id):
+    current_user = get_current_user()
+    if not current_user or not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+    user = db.session.get(User, user_id)
+    if not user:
+        return jsonify({"error": "Not found"}), 404
+    if current_user.id == user.id:
+        return jsonify({"error": "You can't change your own admin status here."}), 409
+
+    user.is_admin = not user.is_admin
+    db.session.commit()
+    return jsonify({"ok": True, "is_admin": bool(user.is_admin)}), 200
+
+
+@app.route("/api/registration-requests")
+@api_login_required
+def api_registration_requests():
+    current_user = get_current_user()
+    if not can_access_registration_request_queue(current_user):
+        return jsonify({"error": "Forbidden"}), 403
+
+    pending_query = (
+        RegistrationRequest.query
+        .join(User, RegistrationRequest.user_id == User.id)
+        .filter(
+            RegistrationRequest.status == "pending",
+            User.is_active == False,  # noqa: E712
+        )
+    )
+    if not current_user.is_admin:
+        manageable_pod_ids = {
+            membership.pod_id
+            for membership in PodMembership.query.filter_by(player_id=current_user.player.id, role="podmaster").all()
+        }
+        pending_query = pending_query.filter(
+            RegistrationRequest.requested_pod_id.in_(manageable_pod_ids if manageable_pod_ids else [-1])
+        )
+
+    pending = pending_query.order_by(RegistrationRequest.created_at.asc()).all()
+    return jsonify({
+        "requests": [_serialize_registration_request(registration_request) for registration_request in pending]
+    })
+
+
+@app.route("/api/registration-requests/<int:request_id>/approve", methods=["POST"])
+@api_login_required
+def api_approve_registration_request(request_id):
+    current_user = get_current_user()
+    registration_request = db.session.get(RegistrationRequest, request_id)
+    if not registration_request:
+        return jsonify({"error": "Not found"}), 404
+    if not can_approve_registration_request(current_user, registration_request):
+        return jsonify({"error": "Forbidden"}), 403
+
+    status, approved_user = approve_user_from_registration_request(registration_request, current_user.id if current_user else None)
+    if status in {"missing_request", "missing_user"}:
+        return jsonify({"error": "Not found"}), 404
+    if status == "not_pending":
+        return jsonify({"error": "Registration request is no longer pending."}), 409
+    if status == "name_collision":
+        return jsonify({"error": f"Can't approve: display name '{approved_user.display_name}' is already used by a Player."}), 409
+    if status == "inactive_pod":
+        return jsonify({"error": "Can't approve: requested pod is inactive."}), 409
+    if status == "missing_pod":
+        return jsonify({"error": "Can't approve: no valid pod is available for this registration request."}), 409
+
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/registration-requests/<int:request_id>/deny", methods=["POST"])
+@api_login_required
+def api_deny_registration_request(request_id):
+    current_user = get_current_user()
+    registration_request = db.session.get(RegistrationRequest, request_id)
+    if not registration_request:
+        return jsonify({"error": "Not found"}), 404
+    if not can_deny_registration_request(current_user, registration_request):
+        return jsonify({"error": deny_registration_request_permission_message(current_user, registration_request)}), 403
+
+    status, denied_user = deny_user_from_registration_request(registration_request, current_user.id if current_user else None)
+    if status == "missing_user":
+        return jsonify({"error": "Not found"}), 404
+    if status == "not_pending":
+        return jsonify({"error": "Only pending users can be denied."}), 409
+
+    return jsonify({"ok": True, "username": denied_user.username}), 200
 
 
 @app.route("/api/players", methods=["GET", "POST"])
@@ -6585,18 +7294,81 @@ def api_player_export(player_id):
     })
 
 
-@app.route("/api/games")
+@app.route("/api/games", methods=["GET", "POST"])
 @api_login_required
 def api_games_list():
+    current_user = get_current_user()
+    if request.method == "POST":
+        payload = _api_json_payload()
+        if payload is None:
+            return jsonify({"error": "Invalid request body"}), 400
+        parsed_payload, error = _api_parse_manual_game_payload(payload, current_user)
+        if error is not None:
+            return error
+
+        active_pod = get_active_pod()
+        if not active_pod:
+            return jsonify({"error": "No active pod available"}), 400
+
+        game = Game(
+            winner_id=parsed_payload["winner_id"],
+            starting_player_id=parsed_payload["starting_player_id"],
+            win_type=parsed_payload["win_type"],
+            ending_turn=parsed_payload["ending_turn"],
+            note=parsed_payload["note"],
+            date=parsed_payload["date"],
+            pod_id=active_pod.id,
+        )
+        db.session.add(game)
+        db.session.flush()
+
+        for participant in parsed_payload["participants"]:
+            participant_flags_json = parsed_payload["participant_flags_by_player"].get(participant["player_id"])
+            hot_fields = participant_hot_fields_from_flags(participant_flags_json)
+            db.session.add(
+                GameParticipant(
+                    game_id=game.id,
+                    player_id=participant["player_id"],
+                    deck_id=participant["deck_id"],
+                    seat_position=participant["seat_position"],
+                    flags_json=participant_flags_json,
+                    salt_count=int(hot_fields["salt_count"]),
+                    mana_fucked=bool(hot_fields["mana_fucked"]),
+                    misplayed=bool(hot_fields["misplayed"]),
+                    life_delta_total=int(hot_fields["life_delta_total"]),
+                )
+            )
+
+        db.session.commit()
+        return api_game_detail(game.id)
+
     game_q, scope, active_pod = game_query_for_scope()
     player_id = request.args.get("player_id", type=int)
     deck_id = request.args.get("deck_id", type=int)
     winner_id = request.args.get("winner_id", type=int)
+    date_from_raw = request.args.get("date_from", "").strip()
+    date_to_raw = request.args.get("date_to", "").strip()
     page = request.args.get("page", 1, type=int)
     per_page = min(request.args.get("per_page", 25, type=int), 100)
+    date_from = None
+    date_to = None
+    try:
+        if date_from_raw:
+            date_from = datetime.strptime(date_from_raw, "%Y-%m-%d")
+    except ValueError:
+        date_from = None
+    try:
+        if date_to_raw:
+            date_to = datetime.strptime(date_to_raw, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    except ValueError:
+        date_to = None
     q = game_q
     if winner_id:
         q = q.filter(Game.winner_id == winner_id)
+    if date_from:
+        q = q.filter(Game.date >= date_from)
+    if date_to:
+        q = q.filter(Game.date <= date_to)
     if player_id:
         gp_player = aliased(GameParticipant)
         q = q.join(gp_player, gp_player.game_id == Game.id).filter(gp_player.player_id == player_id)
@@ -6644,13 +7416,35 @@ def api_games_list():
     })
 
 
-@app.route("/api/games/<int:game_id>")
+@app.route("/api/games/<int:game_id>", methods=["GET", "DELETE"])
 @api_login_required
 def api_game_detail(game_id):
+    current_user = get_current_user()
     game = db.session.get(Game, game_id)
     if not game:
         return jsonify({"error": "Not found"}), 404
+    if request.method == "DELETE":
+        if not current_user.is_admin:
+            return jsonify({"error": "Forbidden"}), 403
+        GameParticipant.query.filter_by(game_id=game_id).delete()
+        db.session.delete(game)
+        db.session.commit()
+        return jsonify({"ok": True}), 200
     parts = GameParticipant.query.filter_by(game_id=game.id).all()
+    valid_player_ids = {part.player_id for part in parts}
+
+    def commander_damage_for(participant: GameParticipant) -> dict[str, int]:
+        payload = {}
+        if participant.flags_json:
+            try:
+                loaded = json.loads(participant.flags_json)
+            except json.JSONDecodeError:
+                loaded = {}
+            if isinstance(loaded, dict):
+                payload = loaded
+        sanitized_card_state = sanitize_card_state_payload(payload.get("card_state", {}), valid_player_ids) or {}
+        return sanitized_card_state.get("commander_damage", {})
+
     return jsonify({
         "id": game.id,
         "date": game.date.isoformat(),
@@ -6658,6 +7452,7 @@ def api_game_detail(game_id):
         "win_type": game.win_type,
         "ending_turn": game.ending_turn,
         "note": game.note,
+        "starting_player": {"id": game.starting_player_id, "name": game.starting_player.name} if game.starting_player else None,
         "participants": [
             {
                 "player_id": gp.player_id,
@@ -6671,6 +7466,7 @@ def api_game_detail(game_id):
                 "salt_count": gp.salt_count,
                 "mana_fucked": gp.mana_fucked,
                 "misplayed": gp.misplayed,
+                "commander_damage": commander_damage_for(gp),
             }
             for gp in parts
         ],
