@@ -2808,7 +2808,9 @@ def _load_android_release_manifest() -> tuple[dict | None, tuple[Response, int] 
         except (json.JSONDecodeError, OSError) as exc:
             manifest_error = exc
 
-    artifact_path = _find_latest_android_release_artifact()
+    artifact_path = _find_manifest_android_release_artifact(manifest)
+    if artifact_path is None:
+        artifact_path = _find_latest_android_release_artifact()
     if artifact_path is None:
         if manifest_error is not None:
             return None, (jsonify({"error": f"Invalid Android release manifest: {manifest_error}"}), 500)
@@ -2820,6 +2822,25 @@ def _load_android_release_manifest() -> tuple[dict | None, tuple[Response, int] 
 
     payload = _build_android_release_payload(artifact_path, manifest=manifest)
     return payload, None
+
+
+def _find_manifest_android_release_artifact(manifest: dict | None) -> Path | None:
+    if not isinstance(manifest, dict):
+        return None
+
+    artifact_file_name = manifest.get("artifactFileName")
+    if not isinstance(artifact_file_name, str):
+        return None
+
+    artifact_file_name = artifact_file_name.strip()
+    if not artifact_file_name:
+        return None
+
+    artifact_path = APK_DIR / Path(artifact_file_name).name
+    if artifact_path.is_file():
+        return artifact_path
+
+    return None
 
 
 def _find_latest_android_release_artifact() -> Path | None:
@@ -5884,6 +5905,61 @@ def _serialize_deck_detail(deck: Deck) -> dict:
     return payload
 
 
+def _serialize_pod_summary(pod: Pod, current_user: User | None, active_pod_id: int | None = None) -> dict:
+    membership = None
+    if current_user and current_user.player:
+        membership = PodMembership.query.filter_by(pod_id=pod.id, player_id=current_user.player.id).first()
+
+    games_count = Game.query.filter_by(pod_id=pod.id).count()
+    member_count = PodMembership.query.filter_by(pod_id=pod.id).count()
+    accessible_pod_ids = {candidate.id for candidate in get_accessible_pods(current_user)}
+    return {
+        "id": pod.id,
+        "name": pod.name,
+        "slug": pod.slug,
+        "is_active": bool(pod.is_active),
+        "is_active_selection": bool(active_pod_id == pod.id),
+        "member_count": member_count,
+        "games_count": games_count,
+        "my_role": membership.role if membership else None,
+        "can_manage": can_manage_pod(current_user, pod.id),
+        "can_switch": bool(pod.is_active and pod.id in accessible_pod_ids),
+        "can_retire": bool(current_user and current_user.is_admin and pod.slug != DEFAULT_POD_SLUG and pod.is_active),
+        "can_restore": bool(current_user and current_user.is_admin and not pod.is_active),
+        "can_delete": bool(current_user and current_user.is_admin and pod.slug != DEFAULT_POD_SLUG and games_count == 0),
+    }
+
+
+def _serialize_pod_member(membership: PodMembership, current_user: User | None) -> dict:
+    return {
+        "player_id": membership.player_id,
+        "player_name": membership.player.name,
+        "role": membership.role,
+        "can_remove": can_manage_pod(current_user, membership.pod_id),
+        "can_change_role": bool(current_user and current_user.is_admin and can_manage_pod(current_user, membership.pod_id)),
+    }
+
+
+def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: int | None = None) -> dict:
+    memberships = (
+        PodMembership.query
+        .filter_by(pod_id=pod.id)
+        .join(Player, Player.id == PodMembership.player_id)
+        .order_by(text("CASE WHEN pod_membership.role = 'podmaster' THEN 0 ELSE 1 END"), Player.name.asc())
+        .all()
+    )
+    member_ids = {membership.player_id for membership in memberships}
+    available_players = [
+        {"id": player.id, "name": player.name}
+        for player in Player.query.order_by(Player.name.asc()).all()
+        if player.id not in member_ids
+    ]
+    payload = _serialize_pod_summary(pod, current_user, active_pod_id=active_pod_id)
+    payload["members"] = [_serialize_pod_member(membership, current_user) for membership in memberships]
+    payload["available_players"] = available_players
+    return payload
+
+
 def _api_json_payload() -> dict | None:
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -6094,6 +6170,237 @@ def api_players():
             "deck_count": deck_count,
         })
     return jsonify(result)
+
+
+@app.route("/api/pods", methods=["GET", "POST"])
+@api_login_required
+def api_pods():
+    current_user = get_current_user()
+    active_pod = get_active_pod()
+
+    if request.method == "POST":
+        if not current_user.is_admin:
+            return jsonify({"error": "Forbidden"}), 403
+
+        payload = _api_json_payload()
+        if payload is None:
+            return jsonify({"error": "Invalid request body"}), 400
+
+        name = (payload.get("name") or "").strip()
+        slug_input = (payload.get("slug") or "").strip().lower()
+        slug = slug_input or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        if not slug:
+            return jsonify({"error": "slug is required"}), 400
+        if Pod.query.filter((Pod.name == name) | (Pod.slug == slug)).first():
+            return jsonify({"error": "Pod with same name or slug already exists."}), 409
+
+        pod = Pod(name=name, slug=slug, is_active=True)
+        db.session.add(pod)
+        db.session.flush()
+        for player in Player.query.all():
+            ensure_membership(pod.id, player.id, role="member")
+        db.session.commit()
+        return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None)), 201
+
+    pods_list = get_accessible_pods(current_user)
+    return jsonify({
+        "active_pod_id": active_pod.id if active_pod else None,
+        "can_create_pod": bool(current_user and current_user.is_admin),
+        "pods": [
+            _serialize_pod_summary(pod, current_user, active_pod_id=active_pod.id if active_pod else None)
+            for pod in pods_list
+        ],
+    })
+
+
+@app.route("/api/pods/<int:pod_id>", methods=["GET", "PATCH", "DELETE"])
+@api_login_required
+def api_pod_detail(pod_id):
+    current_user = get_current_user()
+    active_pod = get_active_pod()
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        return jsonify({"error": "Not found"}), 404
+
+    allowed_ids = {candidate.id for candidate in get_accessible_pods(current_user)}
+    if request.method == "GET":
+        if pod.id not in allowed_ids and not current_user.is_admin:
+            return jsonify({"error": "Forbidden"}), 403
+        return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None))
+
+    if request.method == "PATCH":
+        if not can_manage_pod(current_user, pod_id):
+            return jsonify({"error": "Forbidden"}), 403
+
+        payload = _api_json_payload()
+        if payload is None:
+            return jsonify({"error": "Invalid request body"}), 400
+
+        new_name = (payload.get("name") or "").strip()
+        if not new_name:
+            return jsonify({"error": "name is required"}), 400
+        duplicate = Pod.query.filter(Pod.id != pod_id, Pod.name == new_name).first()
+        if duplicate:
+            return jsonify({"error": "A pod with that name already exists."}), 409
+
+        pod.name = new_name
+        db.session.commit()
+        return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None))
+
+    if not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+    if pod.slug == DEFAULT_POD_SLUG:
+        return jsonify({"error": "The default pod cannot be deleted."}), 409
+
+    games_count = Game.query.filter_by(pod_id=pod_id).count()
+    if games_count > 0:
+        return jsonify({"error": "Cannot delete pod with recorded games. Retire it instead."}), 409
+
+    PodMembership.query.filter_by(pod_id=pod_id).delete()
+    if session.get("active_pod_id") == pod_id:
+        session.pop("active_pod_id", None)
+        session.modified = True
+    db.session.delete(pod)
+    db.session.commit()
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/api/pods/<int:pod_id>/switch", methods=["POST"])
+@api_login_required
+def api_switch_pod(pod_id):
+    current_user = get_current_user()
+    pod = db.session.get(Pod, pod_id)
+    if not pod or not pod.is_active:
+        return jsonify({"error": "Not found"}), 404
+
+    allowed_ids = {candidate.id for candidate in get_accessible_pods(current_user)}
+    if pod.id not in allowed_ids:
+        return jsonify({"error": "Forbidden"}), 403
+
+    session["active_pod_id"] = pod.id
+    session.modified = True
+    return jsonify({
+        "ok": True,
+        "active_pod_id": pod.id,
+        "pod": _serialize_pod_summary(pod, current_user, active_pod_id=pod.id),
+    })
+
+
+@app.route("/api/pods/<int:pod_id>/retire", methods=["POST"])
+@api_login_required
+def api_retire_pod(pod_id):
+    current_user = get_current_user()
+    if not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        return jsonify({"error": "Not found"}), 404
+    if pod.slug == DEFAULT_POD_SLUG:
+        return jsonify({"error": "The default pod cannot be retired."}), 409
+
+    pod.is_active = False
+    db.session.commit()
+    if session.get("active_pod_id") == pod_id:
+        session.pop("active_pod_id", None)
+        session.modified = True
+    return jsonify(_serialize_pod_summary(pod, current_user, active_pod_id=None))
+
+
+@app.route("/api/pods/<int:pod_id>/restore", methods=["POST"])
+@api_login_required
+def api_restore_pod(pod_id):
+    current_user = get_current_user()
+    if not current_user.is_admin:
+        return jsonify({"error": "Forbidden"}), 403
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        return jsonify({"error": "Not found"}), 404
+
+    pod.is_active = True
+    db.session.commit()
+    active_pod = get_active_pod()
+    return jsonify(_serialize_pod_summary(pod, current_user, active_pod_id=active_pod.id if active_pod else None))
+
+
+@app.route("/api/pods/<int:pod_id>/members", methods=["POST"])
+@api_login_required
+def api_add_pod_member(pod_id):
+    current_user = get_current_user()
+    if not can_manage_pod(current_user, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod or not pod.is_active:
+        return jsonify({"error": "Not found"}), 404
+
+    payload = _api_json_payload()
+    if payload is None:
+        return jsonify({"error": "Invalid request body"}), 400
+
+    player_id = payload.get("player_id")
+    if not isinstance(player_id, int):
+        return jsonify({"error": "player_id must be an integer"}), 400
+
+    role = (payload.get("role") or "member").strip().lower()
+    if role not in {"member", "podmaster"}:
+        role = "member"
+    if role == "podmaster" and not current_user.is_admin:
+        role = "member"
+
+    player = db.session.get(Player, player_id)
+    if not player:
+        return jsonify({"error": "Player not found."}), 404
+
+    ensure_membership(pod_id, player_id, role=role)
+    db.session.commit()
+    active_pod = get_active_pod()
+    return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None)), 200
+
+
+@app.route("/api/pods/<int:pod_id>/members/<int:player_id>", methods=["PATCH", "DELETE"])
+@api_login_required
+def api_pod_member_detail(pod_id, player_id):
+    current_user = get_current_user()
+    if not can_manage_pod(current_user, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+
+    membership = PodMembership.query.filter_by(pod_id=pod_id, player_id=player_id).first()
+    if not membership:
+        return jsonify({"error": "Not found"}), 404
+
+    if request.method == "PATCH":
+        payload = _api_json_payload()
+        if payload is None:
+            return jsonify({"error": "Invalid request body"}), 400
+
+        role = (payload.get("role") or "member").strip().lower()
+        if role not in {"member", "podmaster"}:
+            role = "member"
+        if role == "podmaster" and not current_user.is_admin:
+            return jsonify({"error": "Forbidden"}), 403
+        membership.role = role
+        db.session.commit()
+    else:
+        if membership.role == "podmaster":
+            podmasters_left = PodMembership.query.filter_by(pod_id=pod_id, role="podmaster").count()
+            if podmasters_left <= 1 and not current_user.is_admin:
+                return jsonify({"error": "At least one podmaster must remain. Ask an admin."}), 409
+        db.session.delete(membership)
+        db.session.commit()
+        if session.get("active_pod_id") == pod_id:
+            session.pop("active_pod_id", None)
+            session.modified = True
+
+    pod = db.session.get(Pod, pod_id)
+    if not pod:
+        return jsonify({"ok": True}), 200
+    active_pod = get_active_pod()
+    return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None)), 200
 
 
 @app.route("/api/players/<int:player_id>", methods=["GET", "PATCH", "DELETE"])

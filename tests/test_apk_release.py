@@ -9,6 +9,39 @@ import app
 
 
 class AndroidReleaseManifestTests(unittest.TestCase):
+    def test_prefers_manifest_artifact_even_when_generic_apk_is_newer(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            apk_dir = Path(tmpdir)
+            manifest_apk = apk_dir / "edh-son-0.8+16.apk"
+            generic_apk = apk_dir / "app-release.apk"
+            manifest_path = apk_dir / "android-latest.json"
+
+            manifest_apk.write_bytes(b"release")
+            generic_apk.write_bytes(b"generic")
+            os.utime(manifest_apk, (100, 100))
+            os.utime(generic_apk, (200, 200))
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "applicationId": "de.slemme.edhcompanion",
+                        "versionCode": 16,
+                        "versionName": "0.8",
+                        "artifactFileName": manifest_apk.name,
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with patch.object(app, "APK_DIR", apk_dir), patch.object(app, "ANDROID_LATEST_RELEASE_MANIFEST", manifest_path):
+                with app.app.test_request_context():
+                    payload, error = app._load_android_release_manifest()
+
+            self.assertIsNone(error)
+            assert payload is not None
+            self.assertEqual(payload["artifactFileName"], manifest_apk.name)
+            self.assertEqual(payload["versionName"], "0.8")
+            self.assertEqual(payload["versionCode"], 16)
+
     def test_prefers_newest_apk_in_directory_when_manifest_is_stale(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             apk_dir = Path(tmpdir)
