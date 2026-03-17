@@ -5880,6 +5880,7 @@ def _serialize_deck_detail(deck: Deck) -> dict:
             "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
         })
     payload["recent_games"] = recent_games
+    payload["decklist_text"] = deck.decklist_text or ""
     return payload
 
 
@@ -6056,9 +6057,27 @@ def api_stats():
     })
 
 
-@app.route("/api/players")
+@app.route("/api/players", methods=["GET", "POST"])
 @api_login_required
 def api_players():
+    if request.method == "POST":
+        payload = _api_json_payload()
+        if not payload:
+            return jsonify({"error": "Invalid request body"}), 400
+        name = (payload.get("name") or "").strip()
+        if not name:
+            return jsonify({"error": "name is required"}), 400
+        if Player.query.filter_by(name=name).first():
+            return jsonify({"error": "A player with that name already exists"}), 409
+        player = Player(name=name)
+        db.session.add(player)
+        db.session.flush()
+        default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+        if default_pod:
+            ensure_membership(default_pod.id, player.id)
+        db.session.commit()
+        return jsonify({"id": player.id, "name": player.name, "wins": 0, "played": 0, "winrate": 0.0, "deck_count": 0}), 201
+
     players_list = Player.query.order_by(Player.name.asc()).all()
     result = []
     for p in players_list:
@@ -6077,12 +6096,49 @@ def api_players():
     return jsonify(result)
 
 
-@app.route("/api/players/<int:player_id>")
+@app.route("/api/players/<int:player_id>", methods=["GET", "PATCH", "DELETE"])
 @api_login_required
 def api_player_detail(player_id):
     player = db.session.get(Player, player_id)
     if not player:
         return jsonify({"error": "Not found"}), 404
+
+    if request.method == "PATCH":
+        if not current_user.is_admin:
+            return jsonify({"error": "Forbidden"}), 403
+        payload = _api_json_payload()
+        if not payload:
+            return jsonify({"error": "Invalid request body"}), 400
+        new_name = (payload.get("name") or "").strip()
+        if not new_name:
+            return jsonify({"error": "name is required"}), 400
+        if new_name != player.name and Player.query.filter_by(name=new_name).first():
+            return jsonify({"error": "A player with that name already exists"}), 409
+        player.name = new_name
+        db.session.commit()
+        return jsonify({"id": player.id, "name": player.name}), 200
+
+    if request.method == "DELETE":
+        if not current_user.is_admin:
+            return jsonify({"error": "Forbidden"}), 403
+        if player.user_id is not None:
+            return jsonify({"error": "Cannot delete a user-linked player"}), 409
+        played = GameParticipant.query.filter_by(player_id=player_id).count()
+        won = Game.query.filter_by(winner_id=player_id).count()
+        started = Game.query.filter_by(starting_player_id=player_id).count()
+        if played > 0 or won > 0 or started > 0:
+            return jsonify({"error": "Cannot delete a player who appears in recorded games"}), 409
+        for d in player.decks:
+            used = GameParticipant.query.filter_by(deck_id=d.id).count()
+            if used > 0:
+                return jsonify({"error": f"Cannot delete player: deck '{d.name}' has recorded games"}), 409
+        for d in list(player.decks):
+            db.session.delete(d)
+        PodMembership.query.filter_by(player_id=player_id).delete()
+        db.session.delete(player)
+        db.session.commit()
+        return jsonify({"ok": True}), 200
+
     decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
     games_played = GameParticipant.query.filter_by(player_id=player.id).count()
     games_won = Game.query.filter_by(winner_id=player.id).count()
@@ -6135,6 +6191,90 @@ def api_player_detail(player_id):
         "winrate": winrate,
         "decks": deck_list,
         "recent_games": recent_games,
+    })
+
+
+@app.route("/api/players/<int:player_id>/export")
+@api_login_required
+def api_player_export(player_id):
+    player = db.session.get(Player, player_id)
+    if not player:
+        return jsonify({"error": "Not found"}), 404
+    decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
+    games_played = GameParticipant.query.filter_by(player_id=player.id).count()
+    games_won = Game.query.filter_by(winner_id=player.id).count()
+    games_started = Game.query.filter_by(starting_player_id=player.id).count()
+    winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
+    decks_data = []
+    for d in decks:
+        deck_wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+        deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_losses = max(0, deck_games - deck_wins)
+        deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
+        tags = {}
+        try:
+            tags = json.loads(d.tags_json or "{}")
+        except (ValueError, TypeError):
+            pass
+        decks_data.append({
+            "id": d.id,
+            "name": d.name,
+            "commander": d.commander_name or d.commander,
+            "color_identity": d.color_identity,
+            "retired": d.retired,
+            "planned": d.planned,
+            "decklist": d.decklist_text or "",
+            "stats": {
+                "games": deck_games,
+                "wins": deck_wins,
+                "losses": deck_losses,
+                "winrate": deck_winrate,
+            },
+            "tags": tags,
+        })
+    participations = (
+        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+        .filter(GameParticipant.player_id == player.id)
+        .order_by(Game.date.desc())
+        .all()
+    )
+    games_data = []
+    for gp in participations:
+        game = gp.game
+        participant_count = GameParticipant.query.filter_by(game_id=game.id).count()
+        games_data.append({
+            "game_id": game.id,
+            "date": game.date.isoformat() if game.date else None,
+            "won": game.winner_id == player.id,
+            "deck_id": gp.deck_id,
+            "deck_name": gp.deck.name if gp.deck else None,
+            "commander": (gp.deck.commander_name or gp.deck.commander) if gp.deck else None,
+            "participant_count": participant_count,
+            "win_type": canonicalize_win_type(game.win_type) if game.win_type else None,
+            "salt_count": gp.salt_count,
+            "mana_fucked": gp.mana_fucked,
+            "misplayed": gp.misplayed,
+            "life_delta": gp.life_delta_total,
+        })
+    return jsonify({
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "player": {
+            "id": player.id,
+            "name": player.name,
+            "linked_account": player.user_id is not None,
+        },
+        "stats": {
+            "games_played": games_played,
+            "games_won": games_won,
+            "games_started": games_started,
+            "winrate": winrate,
+        },
+        "decks": decks_data,
+        "games": games_data,
     })
 
 
@@ -6306,13 +6446,23 @@ def api_decks():
     return jsonify(result)
 
 
-@app.route("/api/decks/<int:deck_id>", methods=["GET", "PATCH", "PUT"])
+@app.route("/api/decks/<int:deck_id>", methods=["GET", "PATCH", "PUT", "DELETE"])
 @api_login_required
 def api_deck_detail(deck_id):
     current_user = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         return jsonify({"error": "Not found"}), 404
+
+    if request.method == "DELETE":
+        if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
+            return jsonify({"error": "Forbidden"}), 403
+        used = GameParticipant.query.filter_by(deck_id=deck.id).count()
+        if used > 0:
+            return jsonify({"error": "Cannot delete a deck that has been used in recorded games."}), 409
+        db.session.delete(deck)
+        db.session.commit()
+        return jsonify({"ok": True}), 200
 
     if request.method in {"PATCH", "PUT"}:
         if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
