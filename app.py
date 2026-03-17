@@ -45,6 +45,9 @@ COMMANDER_ART_DIR = ART_DIR / "commander_art"
 COMMANDER_ART_DIR.mkdir(parents=True, exist_ok=True)
 CARD_ART_DIR = ART_DIR / "card_art"
 CARD_ART_DIR.mkdir(parents=True, exist_ok=True)
+APK_DIR = Path(__file__).resolve().parent / "apk"
+APK_DIR.mkdir(parents=True, exist_ok=True)
+ANDROID_LATEST_RELEASE_MANIFEST = APK_DIR / "android-latest.json"
 
 # --- Dev/test bootstrap user (env-gated) ---
 BOOTSTRAP_TEST_USER = os.getenv("BOOTSTRAP_TEST_USER", "0") == "1"
@@ -2778,6 +2781,34 @@ def profile():
 @app.route("/art/<path:filename>")
 def art(filename):
     return send_from_directory(ART_DIR, filename)
+
+
+@app.route("/apk/<path:filename>")
+def apk_file(filename):
+    return send_from_directory(APK_DIR, filename, as_attachment=True)
+
+
+def _load_android_release_manifest() -> tuple[dict | None, tuple[Response, int] | None]:
+    if not ANDROID_LATEST_RELEASE_MANIFEST.is_file():
+        return None, (jsonify({"error": "Android release manifest not found"}), 404)
+
+    try:
+        manifest = json.loads(ANDROID_LATEST_RELEASE_MANIFEST.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        return None, (jsonify({"error": f"Invalid Android release manifest: {exc}"}), 500)
+
+    artifact_file_name = manifest.get("artifactFileName")
+    if not isinstance(artifact_file_name, str) or not artifact_file_name.strip():
+        return None, (jsonify({"error": "Android release manifest missing artifactFileName"}), 500)
+
+    artifact_path = APK_DIR / artifact_file_name
+    if not artifact_path.is_file():
+        return None, (jsonify({"error": f"Android release artifact missing: {artifact_file_name}"}), 500)
+
+    payload = dict(manifest)
+    payload["artifactPath"] = f"apk/{artifact_file_name}"
+    payload["artifactUrl"] = url_for("apk_file", filename=artifact_file_name, _external=True)
+    return payload, None
 
 
 @app.route("/admin/users")
@@ -5872,6 +5903,14 @@ def api_me():
         "is_admin": u.is_admin,
         "player_id": u.player.id if u.player else None,
     })
+
+
+@app.route("/api/mobile/releases/android/latest")
+def api_android_latest_release():
+    payload, error = _load_android_release_manifest()
+    if error is not None:
+        return error
+    return jsonify(payload)
 
 
 @app.route("/api/stats")
