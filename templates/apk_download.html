@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="mb-4">
+  <h1 class="card-head-title title-font mb-1">Android App</h1>
+  <div class="muted">Download and install the Commandersohn Android app</div>
+</div>
+
+{% if available %}
+  <div class="stats-card mb-4">
+    <div class="stats-card-head">
+      <div class="muted">Latest release</div>
+      {% if manifest.versionName %}
+        <div class="stats-chip">v{{ manifest.versionName }}</div>
+      {% endif %}
+    </div>
+    <div class="p-3">
+      {% if manifest.versionCode %}
+        <div class="muted mb-1">Version code: <span class="text-white">{{ manifest.versionCode }}</span></div>
+      {% endif %}
+      {% if manifest.buildDate %}
+        <div class="muted mb-3">Built: <span class="text-white">{{ manifest.buildDate }}</span></div>
+      {% endif %}
+      <a class="btn btn-primary" href="{{ manifest.artifactUrl }}" download>
+        Download APK
+      </a>
+    </div>
+  </div>
+
+  <div class="stats-card mb-4">
+    <div class="stats-card-head">
+      <div class="muted">Installation instructions</div>
+    </div>
+    <div class="p-3">
+      <ol class="mb-0" style="padding-left: 1.25rem; color: var(--bs-secondary-color);">
+        <li class="mb-2">Download the APK file using the button above.</li>
+        <li class="mb-2">On your Android device, open <strong class="text-white">Settings → Security</strong> (or <strong class="text-white">Privacy</strong>) and enable <strong class="text-white">Install unknown apps</strong> for your browser or file manager.</li>
+        <li class="mb-2">Open the downloaded APK file and tap <strong class="text-white">Install</strong>.</li>
+        <li>Launch <strong class="text-white">Commandersohn</strong> from your app drawer.</li>
+      </ol>
+    </div>
+  </div>
+{% else %}
+  <div class="stats-card mb-4">
+    <div class="p-3">
+      <div class="muted">No Android release is currently available.</div>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

@@ -2788,6 +2788,13 @@ def apk_file(filename):
     return send_from_directory(APK_DIR, filename, as_attachment=True)
 
 
+@app.route("/apk")
+def apk_download():
+    payload, error = _load_android_release_manifest()
+    available = error is None
+    return render_template("apk_download.html", manifest=payload, available=available)
+
+
 def _load_android_release_manifest() -> tuple[dict | None, tuple[Response, int] | None]:
     if not ANDROID_LATEST_RELEASE_MANIFEST.is_file():
         return None, (jsonify({"error": "Android release manifest not found"}), 404)
