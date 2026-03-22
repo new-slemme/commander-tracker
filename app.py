@@ -72,7 +72,7 @@ COMMON_WEAK_PASSWORDS = {
     "admin123",
 }
 
-MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 4096
+MAX_PARTICIPANT_FLAGS_PAYLOAD_BYTES = 204800  # 200KB — supports up to 4 players × 500 turns of stats
 ALLOWED_PARTICIPANT_FLAG_KEYS = {
     "mana_fucked",
     "misplayed",
