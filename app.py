@@ -486,6 +486,7 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     use_sigtaara = db.Column(db.Boolean, default=False, nullable=False)
+    use_light_theme = db.Column(db.Boolean, default=False, nullable=False)
     mana_fucked_salt_value = db.Column(db.Integer, nullable=False, default=1)
     misplayed_salt_value = db.Column(db.Integer, nullable=False, default=1)
 
@@ -1274,6 +1275,19 @@ with app.app_context():
             )
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('018_active_game_table')")
+            )
+
+        if "019_user_light_theme_preference" not in applied:
+            user_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(user)")).fetchall()
+            }
+            if "use_light_theme" not in user_cols:
+                db.session.execute(
+                    text("ALTER TABLE user ADD COLUMN use_light_theme BOOLEAN NOT NULL DEFAULT 0")
+                )
+
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('019_user_light_theme_preference')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -2494,12 +2508,14 @@ def inject_pod_context():
             "nav_active_pod": None,
             "nav_available_pods": [],
             "use_sigtaara": False,
+            "use_light_theme": False,
         }
 
     return {
         "nav_active_pod": get_active_pod(),
         "nav_available_pods": get_accessible_pods(user),
         "use_sigtaara": bool(user.use_sigtaara),
+        "use_light_theme": bool(user.use_light_theme),
         "can_access_registration_requests": can_access_registration_request_queue(user),
     }
 
@@ -2534,6 +2550,7 @@ def require_login():
                 session["display_name"] = u.display_name
                 session["is_admin"] = u.is_admin
                 session["use_sigtaara"] = u.use_sigtaara
+                session["use_light_theme"] = u.use_light_theme
                 get_active_pod()
                 return None
 
@@ -2657,6 +2674,7 @@ def login():
             session["display_name"] = user.display_name
             session["is_admin"] = user.is_admin
             session["use_sigtaara"] = user.use_sigtaara
+            session["use_light_theme"] = user.use_light_theme
             get_active_pod()
 
             next_url = request.args.get("next")
@@ -2718,6 +2736,7 @@ def profile():
         if action == "update_profile":
             new_display = request.form.get("display_name", "").strip()
             use_sigtaara = request.form.get("use_sigtaara") == "on"
+            use_light_theme = request.form.get("use_light_theme") == "on"
             mana_fucked_salt_value_raw = (request.form.get("mana_fucked_salt_value") or "").strip()
             misplayed_salt_value_raw = (request.form.get("misplayed_salt_value") or "").strip()
 
@@ -2762,6 +2781,7 @@ def profile():
 
             u.display_name = new_display
             u.use_sigtaara = use_sigtaara
+            u.use_light_theme = use_light_theme
             u.mana_fucked_salt_value = mana_fucked_salt_value
             u.misplayed_salt_value = misplayed_salt_value
             if u.player:
@@ -2770,6 +2790,7 @@ def profile():
             db.session.commit()
             session["display_name"] = new_display
             session["use_sigtaara"] = use_sigtaara
+            session["use_light_theme"] = use_light_theme
             flash("Profile updated.")
             return redirect(url_for("profile"))
 
@@ -6150,11 +6171,49 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
         if sanitized_card_state:
             flags_payload["card_state"] = sanitized_card_state
 
+        monarch = participant_raw.get("monarch")
+        if isinstance(monarch, bool):
+            flags_payload["monarch"] = monarch
+
+        poison = participant_raw.get("poison")
+        if isinstance(poison, int) and not isinstance(poison, bool) and poison >= 0:
+            flags_payload["poison"] = poison
+
+        turn_stats_raw = participant_raw.get("turn_stats")
+        if isinstance(turn_stats_raw, list):
+            parsed_turn_stats = []
+            for entry in turn_stats_raw:
+                if not isinstance(entry, dict):
+                    continue
+                stat: dict = {}
+                turn_num = entry.get("turn")
+                if isinstance(turn_num, int) and not isinstance(turn_num, bool) and 1 <= turn_num <= 500:
+                    stat["turn"] = turn_num
+                life_delta = entry.get("life_delta")
+                if isinstance(life_delta, int) and not isinstance(life_delta, bool):
+                    stat["life_delta"] = life_delta
+                for bool_key in ("mana_fucked", "misplayed"):
+                    val = entry.get(bool_key)
+                    if isinstance(val, bool):
+                        stat[bool_key] = val
+                turn_seconds = entry.get("turn_seconds")
+                if isinstance(turn_seconds, int) and not isinstance(turn_seconds, bool) and turn_seconds >= 0:
+                    stat["turn_seconds"] = turn_seconds
+                if stat:
+                    parsed_turn_stats.append(stat)
+            if parsed_turn_stats:
+                flags_payload["turn_stats"] = parsed_turn_stats[:MAX_PER_PLAYER_TURN_STATS]
+
         participant_flags_by_player[player_id] = json.dumps(
             flags_payload,
             separators=(",", ":"),
             sort_keys=True,
         )
+
+    duration_seconds = payload.get("duration_seconds")
+    if duration_seconds is not None:
+        if not isinstance(duration_seconds, int) or isinstance(duration_seconds, bool) or duration_seconds < 0:
+            return None, (jsonify({"error": "duration_seconds must be a non-negative integer"}), 400)
 
     return {
         "participants": normalized_participants,
@@ -6164,6 +6223,7 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
         "ending_turn": ending_turn,
         "note": note,
         "date": game_date,
+        "duration_seconds": duration_seconds,
         "participant_flags_by_player": participant_flags_by_player,
     }, None
 
@@ -6188,6 +6248,7 @@ def api_login():
     session["display_name"] = user.display_name
     session["is_admin"] = user.is_admin
     session["use_sigtaara"] = user.use_sigtaara
+    session["use_light_theme"] = user.use_light_theme
     get_active_pod()
     return jsonify({
         "user_id": user.id,
@@ -7318,6 +7379,7 @@ def api_games_list():
             note=parsed_payload["note"],
             date=parsed_payload["date"],
             pod_id=active_pod.id,
+            duration_seconds=parsed_payload["duration_seconds"],
         )
         db.session.add(game)
         db.session.flush()

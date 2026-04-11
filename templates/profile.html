@@ -120,6 +120,14 @@
           <div class="help-text mt-1">Applies the Old Tongue font across the app.</div>
         </div>
 
+        <div class="form-check form-switch profile-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="use_light_theme" name="use_light_theme" {% if user.use_light_theme %}checked{% endif %}>
+          <label class="form-check-label" for="use_light_theme">
+            Use light theme
+          </label>
+          <div class="help-text mt-1">Switches the app to a light colour scheme.</div>
+        </div>
+
         <button class="btn btn-primary btn-lg"
                 type="submit"
                 style="border-radius:14px; font-weight:800;">

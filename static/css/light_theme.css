@@ -1,0 +1,170 @@
+/* Light theme – overrides base.css CSS variables */
+:root {
+    --darkest: #f2f3f7;
+    --darkest-trans: #f2f3f7e0;
+    --darker: #e5e7ef;
+    --darker-trans: #e5e7efd9;
+    --base: #c6dbea;
+    --base-trans: #c6dbeaa8;
+    --light: #465493;
+
+    --green: #3a6b54;
+    --green-trans: #3a6b54a8;
+    --blue: #1e3a5f;
+    --blue-trans: #1e3a5fa8;
+    --red: #A63232;
+    --red-trans: #A63232A8;
+    --purple: #5A3A6B;
+    --purple-trans: #5A3A6Ba8;
+    --orange: #FF6B35;
+    --orange-trans: #FF6B35a8;
+    --yellow: #F2C94C;
+    --yellow-trans: #F2C94Ca8;
+
+    --font-base: #10121a;
+    --font-base-trans: #10121a7d;
+    --font-highlight: #e55c36;
+    --font-highlight-trans: #e55c36a8;
+    --font-danger: #e53636;
+    --font-danger-trans: #e53636a8;
+    --font-warning: #FF9900;
+    --font-warning-trans: #FF9900a8;
+    --font-accent: #6e7cb7;
+
+    --shadow-sm:  0 0 14px rgba(0,0,0,0.10);
+    --shadow-md:  0 0 22px rgba(0,0,0,0.14);
+    --shadow-lg:  0 0 28px rgba(0,0,0,0.18);
+
+    --border-color:        rgba(16,18,26,0.15);
+    --border-color-subtle: rgba(16,18,26,0.10);
+    --border-color-strong: rgba(16,18,26,0.22);
+}
+
+body {
+    background-color: var(--darkest);
+    color: var(--font-base);
+}
+
+/* Navbar */
+.navbar {
+    background: var(--darker-trans);
+    border-bottom: 1px solid rgba(16,18,26,0.10);
+}
+
+/* Links */
+a { color: var(--font-base); }
+a:hover { color: #000; }
+
+/* Cards */
+.card {
+    background: rgba(229,231,239,0.70);
+    border: 1px solid var(--border-color);
+    color: var(--font-base);
+    box-shadow: 0 0 10px rgba(16,18,26,0.08);
+}
+
+/* Tables */
+.table {
+    --bs-table-bg: var(--darker);
+    color: var(--font-base);
+    border-color: var(--border-color);
+}
+.table thead { background-color: var(--darkest); color: #10121a; }
+.table td, .table th { border-color: var(--border-color); }
+.table-dark {
+    --bs-table-bg: var(--darker);
+    --bs-table-striped-bg: rgba(0,0,0,0.03);
+    --bs-table-hover-bg: rgba(0,0,0,0.04);
+    --bs-table-border-color: var(--border-color);
+}
+
+/* Forms */
+.form-control, .form-select {
+    background-color: #fff;
+    border-color: var(--border-color-strong);
+    color: var(--font-base);
+}
+.form-control:focus, .form-select:focus {
+    background-color: #fff;
+    color: var(--font-base);
+    border-color: #10121a;
+    box-shadow: 0 0 0 0.25rem rgba(16,18,26,0.12);
+}
+.form-label { color: var(--font-base); }
+
+/* Buttons */
+.btn-primary {
+    background-color: #10121a;
+    border-color: #10121a;
+    color: #f2f3f7;
+}
+.btn-primary:hover {
+    background-color: #2a2d3e;
+    border-color: #2a2d3e;
+    color: #f2f3f7;
+}
+
+/* List group */
+.list-group-item {
+    background-color: var(--darker);
+    border-color: var(--border-color);
+    color: var(--font-base);
+}
+
+/* Stat value */
+.stat-value { color: #10121a; }
+
+/* App badge */
+.app-badge b { color: #10121a; }
+
+/* Deck tiles */
+.deck-name { color: #10121a; }
+.deck-meta .strong { color: #10121a; }
+.stat-chips b { color: #10121a; }
+
+/* Drawer */
+.menu-drawer {
+    background: var(--darker);
+    border-left: 1px solid var(--border-color);
+}
+.drawer-header { border-bottom: 1px solid rgba(16,18,26,0.10); }
+.drawer-title { color: #10121a; }
+.drawer-close { background: rgba(0,0,0,0.06); color: #10121a; }
+.drawer-item { background: rgba(0,0,0,0.02); border: 1px solid var(--border-color); color: var(--font-base); }
+.drawer-item:hover { color: #000; border-color: var(--border-color-strong); background: rgba(0,0,0,0.04); }
+.drawer-divider { background: rgba(16,18,26,0.10); }
+
+/* Pod switcher */
+.nav-pod-pill { background: var(--base-trans); border-color: var(--base); color: #10121a; }
+.nav-pod-pill__label { color: var(--font-base); }
+.nav-pod-menu { background: var(--darker); border-color: var(--border-color); }
+.nav-pod-option { color: var(--font-base); }
+.nav-pod-option:hover { background: rgba(0,0,0,0.05); color: #000; }
+.nav-pod-option.is-active { color: #10121a; }
+
+/* Scope indicator */
+.scope-indicator { background: rgba(242,243,247,0.95); border-color: var(--border-color); }
+
+/* Toast */
+.app-toast { background: var(--darker) !important; border: 1px solid var(--border-color) !important; }
+
+/* Empty card */
+.empty-card { background: rgba(198,219,234,0.25); }
+
+/* Menu button (hamburger) – dark icon on light bg */
+.menu-btn {
+    filter: none;
+}
+
+/* bg-dark override */
+.bg-dark { background-color: var(--base) !important; }
+
+/* rank-badge */
+.rank-badge { background: rgba(0,0,0,0.06); color: #10121a; }
+
+/* Spotlight overlay */
+.spotlight { background: var(--darker); }
+.spotlight .overlay { background: linear-gradient(90deg, rgba(229,231,239,0.88), rgba(229,231,239,0.55)); }
+
+/* Leader card overlay */
+.leader-card::before { background: linear-gradient(135deg, rgba(255,255,255,0.75), rgba(255,255,255,0.35)); }

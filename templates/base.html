@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="{{ 'light' if use_light_theme else 'dark' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
@@ -7,10 +7,13 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-    <meta name="theme-color" content="#10121a">
+    <meta name="theme-color" content="{{ '#f2f3f7' if use_light_theme else '#10121a' }}">
     <title>Commandersohn</title>
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/base.css') }}" rel="stylesheet">
+    {% if use_light_theme %}
+    <link href="{{ url_for('static', filename='css/light_theme.css') }}" rel="stylesheet">
+    {% endif %}
 </head>
 
 <body class="{% if use_sigtaara %}sigtaara-ui{% endif %}">
