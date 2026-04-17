@@ -834,17 +834,51 @@
 
   // --- Card image hydration ---
   async function scryfallCardImageByName(name) {
-    const res = await fetch(`/api/card-art?name=${encodeURIComponent(name)}`);
-    if (!res.ok) return null;
-    const payload = await res.json().catch(() => ({}));
-    return payload?.image || null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, attempt * 1500));
+      try {
+        const res = await fetch(`/api/card-art?name=${encodeURIComponent(name)}`);
+        if (res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          return payload?.image || null;
+        }
+        if (res.status === 404) return null;
+      } catch (_) {}
+    }
+    return null;
   }
 
   async function hydrateDeckCardImages() {
     const entries = Array.from(document.querySelectorAll('.deck-card-entry[data-card-name]'));
     if (!entries.length) return;
 
+    // Limit concurrent requests to avoid overwhelming Scryfall rate limits.
+    const MAX_CONCURRENT = 5;
+    let active = 0;
+    const waiting = [];
+    function acquire() {
+      return new Promise(resolve => {
+        if (active < MAX_CONCURRENT) { active++; resolve(); }
+        else waiting.push(resolve);
+      });
+    }
+    function release() {
+      active--;
+      if (waiting.length) { active++; waiting.shift()(); }
+    }
+
     const cache = new Map();
+    function fetchImage(name) {
+      if (!cache.has(name)) {
+        cache.set(name, (async () => {
+          await acquire();
+          try { return await scryfallCardImageByName(name); }
+          finally { release(); }
+        })().catch(() => null));
+      }
+      return cache.get(name);
+    }
+
     await Promise.all(entries.map(async (entry) => {
       const name = (entry.getAttribute('data-card-name') || '').trim();
       const preferredImage = (entry.getAttribute('data-preferred-image') || '').trim();
@@ -856,11 +890,7 @@
         return;
       }
 
-      if (!cache.has(name)) {
-        cache.set(name, scryfallCardImageByName(name).catch(() => null));
-      }
-
-      const src = await cache.get(name);
+      const src = await fetchImage(name);
       if (src) {
         img.src = src;
       } else {
