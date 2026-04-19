@@ -4013,66 +4013,59 @@ def games():
     # --------
     # Stats panel — aggregates over the full filtered set
     # --------
-    try:
-        game_id_q = q.with_entities(Game.id)
+    all_game_ids = [row[0] for row in q.with_entities(Game.id).all()]
+    _ids = all_game_ids if all_game_ids else [-1]
 
-        avg_turns_val = db.session.query(func.avg(Game.ending_turn)).filter(
-            Game.id.in_(game_id_q),
-            Game.ending_turn.isnot(None),
-        ).scalar()
+    avg_turns_val = db.session.query(func.avg(Game.ending_turn)).filter(
+        Game.id.in_(_ids),
+        Game.ending_turn.isnot(None),
+    ).scalar()
 
-        avg_duration_val = db.session.query(func.avg(Game.duration_seconds)).filter(
-            Game.id.in_(game_id_q),
-            Game.duration_seconds.isnot(None),
-        ).scalar()
+    avg_duration_val = db.session.query(func.avg(Game.duration_seconds)).filter(
+        Game.id.in_(_ids),
+        Game.duration_seconds.isnot(None),
+    ).scalar()
 
-        win_type_rows = (
-            db.session.query(Game.win_type, func.count(Game.id))
-            .filter(Game.id.in_(game_id_q))
-            .group_by(Game.win_type)
-            .all()
+    win_type_rows = (
+        db.session.query(Game.win_type, func.count(Game.id))
+        .filter(Game.id.in_(_ids))
+        .group_by(Game.win_type)
+        .all()
+    )
+    win_type_counts = {(r[0] or "unknown"): r[1] for r in win_type_rows}
+    win_type_sorted = sorted(win_type_counts.items(), key=lambda x: x[1], reverse=True)
+
+    color_win_rows = (
+        db.session.query(Deck.color_identity, func.count(Game.id))
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(
+            Game.id.in_(_ids),
+            Game.winner_id == GameParticipant.player_id,
+            Deck.color_identity.isnot(None),
+            Deck.color_identity != "",
         )
-        win_type_counts = {(r[0] or "unknown"): r[1] for r in win_type_rows}
-        win_type_sorted = sorted(win_type_counts.items(), key=lambda x: x[1], reverse=True)
+        .group_by(Deck.color_identity)
+        .order_by(func.count(Game.id).desc())
+        .limit(8)
+        .all()
+    )
+    color_wins = [{"identity": r[0], "wins": r[1]} for r in color_win_rows]
 
-        color_win_rows = (
-            db.session.query(Deck.color_identity, func.count(Game.id))
-            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-            .join(Game, Game.id == GameParticipant.game_id)
-            .filter(
-                Game.id.in_(game_id_q),
-                Game.winner_id == GameParticipant.player_id,
-                Deck.color_identity.isnot(None),
-                Deck.color_identity != "",
-            )
-            .group_by(Deck.color_identity)
-            .order_by(func.count(Game.id).desc())
-            .limit(8)
-            .all()
+    timeline_rows = (
+        db.session.query(
+            func.strftime("%Y-%m", Game.date),
+            func.count(Game.id),
         )
-        color_wins = [{"identity": r[0], "wins": r[1]} for r in color_win_rows]
-
-        timeline_rows = (
-            db.session.query(
-                func.strftime("%Y-%m", Game.date),
-                func.count(Game.id),
-            )
-            .filter(Game.id.in_(game_id_q))
-            .group_by(func.strftime("%Y-%m", Game.date))
-            .order_by(func.strftime("%Y-%m", Game.date))
-            .all()
-        )
-        activity_timeline = [{"month": r[0], "count": r[1]} for r in timeline_rows]
-    except Exception:
-        win_type_sorted = []
-        win_type_counts = {}
-        color_wins = []
-        activity_timeline = []
-        avg_turns_val = None
-        avg_duration_val = None
+        .filter(Game.id.in_(_ids))
+        .group_by(func.strftime("%Y-%m", Game.date))
+        .order_by(func.strftime("%Y-%m", Game.date))
+        .all()
+    )
+    activity_timeline = [{"month": r[0], "count": r[1]} for r in timeline_rows]
 
     games_stats = {
-        "total": pagination.total,
+        "total": len(all_game_ids),
         "avg_turns": round(avg_turns_val, 1) if avg_turns_val else None,
         "avg_duration": int(avg_duration_val) if avg_duration_val else None,
         "win_types": win_type_sorted,
