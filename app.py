@@ -4092,6 +4092,8 @@ def players():
             "winrate": winrate,
             "deck_count": deck_count,
             "joined_on": joined_on,
+            "won": won,
+            "played": played,
         }
 
         deck_used = (
@@ -4178,6 +4180,71 @@ def player_detail(player_id):
         games_won=games_won,
         games_started=games_started,
         winrate=winrate,
+    )
+
+
+@app.route("/compare")
+def compare_players():
+    a_id = request.args.get("a", type=int)
+    b_id = request.args.get("b", type=int)
+    if not a_id or not b_id or a_id == b_id:
+        flash("Select two different players to compare.", "warning")
+        return redirect(url_for("players"))
+
+    player_a = db.session.get(Player, a_id)
+    player_b = db.session.get(Player, b_id)
+    if not player_a or not player_b:
+        abort(404)
+
+    def _stats(p):
+        played = GameParticipant.query.filter_by(player_id=p.id).count()
+        won = Game.query.filter_by(winner_id=p.id).count()
+        deck_count = Deck.query.filter_by(player_id=p.id).count()
+        winrate = round((won / played) * 100, 1) if played else 0.0
+        return {"played": played, "won": won, "deck_count": deck_count, "winrate": winrate}
+
+    stats_a = _stats(player_a)
+    stats_b = _stats(player_b)
+
+    # Games where both players participated
+    a_game_ids = db.session.query(GameParticipant.game_id).filter_by(player_id=a_id)
+    b_game_ids = db.session.query(GameParticipant.game_id).filter_by(player_id=b_id)
+    shared_games_q = (
+        Game.query
+        .filter(Game.id.in_(a_game_ids), Game.id.in_(b_game_ids))
+        .order_by(Game.date.desc())
+        .all()
+    )
+
+    h2h_a_wins = sum(1 for g in shared_games_q if g.winner_id == a_id)
+    h2h_b_wins = sum(1 for g in shared_games_q if g.winner_id == b_id)
+    h2h_other = len(shared_games_q) - h2h_a_wins - h2h_b_wins
+
+    shared_games = []
+    for g in shared_games_q:
+        gp_a = GameParticipant.query.filter_by(game_id=g.id, player_id=a_id).first()
+        gp_b = GameParticipant.query.filter_by(game_id=g.id, player_id=b_id).first()
+        winner = db.session.get(Player, g.winner_id)
+        shared_games.append({
+            "game_id": g.id,
+            "date": g.date,
+            "winner_id": g.winner_id,
+            "winner_name": winner.name if winner else "Unknown",
+            "deck_a": gp_a.deck.name if gp_a and gp_a.deck else "Unknown",
+            "deck_b": gp_b.deck.name if gp_b and gp_b.deck else "Unknown",
+            "participant_count": GameParticipant.query.filter_by(game_id=g.id).count(),
+        })
+
+    return render_template(
+        "compare.html",
+        player_a=player_a,
+        player_b=player_b,
+        stats_a=stats_a,
+        stats_b=stats_b,
+        h2h_a_wins=h2h_a_wins,
+        h2h_b_wins=h2h_b_wins,
+        h2h_other=h2h_other,
+        shared_games=shared_games,
     )
 
 
