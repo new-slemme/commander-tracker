@@ -2,6 +2,18 @@
 {% block content %}
     <link href="{{ url_for('static', filename='css/games.css') }}" rel="stylesheet">
 
+{# Mana symbol SVG helper #}
+{% macro mana_svg(letter) -%}
+  {% set m = {
+    'W': 'mtg-white-symbol-color.svg',
+    'U': 'mtg-blue-symbol-color.svg',
+    'B': 'mtg-black-symbol-color.svg',
+    'R': 'mtg-red-symbol-color.svg',
+    'G': 'mtg-green-symbol-color.svg'
+  } %}
+  {{ url_for('static', filename='mtg-svg/' ~ m.get(letter, 'mtg-black-symbol-color.svg')) }}
+{%- endmacro %}
+
 <div class="container pb-4">
 
   <!-- Header / Hero Card -->
@@ -138,6 +150,91 @@
       <a class="btn btn-sm {% if scope == "all" %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('games', scope='all') }}">All Pods</a>
     </div>
   </div>
+
+  <!-- Stats panel -->
+  {% set gs = games_stats %}
+  {% if gs.total >= 3 %}
+  <div class="games-stats-panel mb-4">
+
+    <!-- Summary row -->
+    <div class="gsp-summary">
+      <div class="gsp-stat">
+        <span class="gsp-val">{{ gs.total }}</span>
+        <span class="gsp-lbl">Games</span>
+      </div>
+      {% if gs.avg_turns is not none %}
+      <div class="gsp-stat">
+        <span class="gsp-val">{{ gs.avg_turns }}</span>
+        <span class="gsp-lbl">Avg turns</span>
+      </div>
+      {% endif %}
+      {% if gs.avg_duration is not none %}
+      <div class="gsp-stat">
+        <span class="gsp-val">{{ gs.avg_duration // 60 }}m</span>
+        <span class="gsp-lbl">Avg duration</span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if gs.win_types %}
+    <!-- Win type breakdown -->
+    <div class="gsp-section">
+      <div class="gsp-section-label">Win types</div>
+      <div class="gsp-wintype-bar">
+        {% for wtype, cnt in gs.win_types %}
+          {% set pct = (cnt / gs.win_types_total * 100) | round(1) %}
+          <div class="gsp-wt-seg gsp-wt--{{ wtype }}"
+               style="width:{{ pct }}%"
+               title="{{ wtype | replace('_',' ') | title }}: {{ cnt }} ({{ pct }}%)">
+            {% if pct >= 14 %}<span class="gsp-wt-label">{{ wtype | replace('_',' ') | title }}&nbsp;{{ pct }}%</span>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="gsp-wintype-legend">
+        {% for wtype, cnt in gs.win_types %}
+          {% set pct = (cnt / gs.win_types_total * 100) | round(1) %}
+          <span class="gsp-legend-item gsp-wt--{{ wtype }}">
+            <span class="gsp-legend-dot"></span>{{ wtype | replace('_',' ') | title }} {{ pct }}%
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if gs.color_wins %}
+    <!-- Color identity win rates -->
+    <div class="gsp-section">
+      <div class="gsp-section-label">Color identity wins</div>
+      <div class="gsp-color-wins">
+        {% set cw_max = gs.color_wins[0].wins %}
+        {% for cw in gs.color_wins %}
+        <div class="gsp-cw-row">
+          <div class="gsp-cw-identity">
+            {% for c in cw.identity %}
+              <img src="{{ mana_svg(c) }}" class="gsp-mana-sym" alt="{{ c }}" title="{{ c }}">
+            {% endfor %}
+          </div>
+          <div class="gsp-cw-bar-wrap">
+            <div class="gsp-cw-bar" style="width:{{ (cw.wins / cw_max * 100) | round }}%"></div>
+          </div>
+          <div class="gsp-cw-count">{{ cw.wins }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if gs.activity_timeline | length > 1 %}
+    <!-- Activity timeline -->
+    <div class="gsp-section">
+      <div class="gsp-section-label">Activity</div>
+      <div class="gsp-timeline" id="gsp-timeline"
+           data-timeline="{{ gs.activity_timeline | tojson }}"></div>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endif %}
 
   <!-- Games -->
   {% if games|length == 0 %}
@@ -439,8 +536,26 @@
           if (details) details.open = false;
         });
       });
-    })();   
-    
+    })();
+
+  // Activity timeline bar chart
+  (function() {
+    const el = document.getElementById('gsp-timeline');
+    if (!el) return;
+    let data;
+    try { data = JSON.parse(el.dataset.timeline); } catch(_) { return; }
+    if (!data || !data.length) return;
+    const max = Math.max(...data.map(d => d.count));
+    el.innerHTML = data.map(d => {
+      const h = Math.max(4, Math.round(d.count / max * 56));
+      return `<div class="gsp-tl-col" title="${d.month}: ${d.count} game${d.count !== 1 ? 's' : ''}">` +
+             `<span class="gsp-tl-count">${d.count}</span>` +
+             `<div class="gsp-tl-bar" style="height:${h}px"></div>` +
+             `<span class="gsp-tl-label">${d.month.slice(5)}</span>` +
+             `</div>`;
+    }).join('');
+  })();
+
 </script>
 
 {% endblock %}

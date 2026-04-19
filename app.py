@@ -4010,6 +4010,69 @@ def games():
     )
     player_counts = {gid: c for gid, c in counts}
 
+    # --------
+    # Stats panel — aggregates over the full filtered set
+    # --------
+    game_id_sq = q.with_entities(Game.id).subquery()
+
+    avg_turns_val = db.session.query(func.avg(Game.ending_turn)).filter(
+        Game.id.in_(game_id_sq),
+        Game.ending_turn.isnot(None),
+    ).scalar()
+
+    avg_duration_val = db.session.query(func.avg(Game.duration_seconds)).filter(
+        Game.id.in_(game_id_sq),
+        Game.duration_seconds.isnot(None),
+    ).scalar()
+
+    win_type_rows = (
+        db.session.query(Game.win_type, func.count(Game.id))
+        .filter(Game.id.in_(game_id_sq))
+        .group_by(Game.win_type)
+        .all()
+    )
+    win_type_counts = {(r[0] or "unknown"): r[1] for r in win_type_rows}
+    win_type_sorted = sorted(win_type_counts.items(), key=lambda x: x[1], reverse=True)
+
+    color_win_rows = (
+        db.session.query(Deck.color_identity, func.count(Game.id))
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(
+            Game.id.in_(game_id_sq),
+            Game.winner_id == GameParticipant.player_id,
+            Deck.color_identity.isnot(None),
+            Deck.color_identity != "",
+        )
+        .group_by(Deck.color_identity)
+        .order_by(func.count(Game.id).desc())
+        .limit(8)
+        .all()
+    )
+    color_wins = [{"identity": r[0], "wins": r[1]} for r in color_win_rows]
+
+    timeline_rows = (
+        db.session.query(
+            func.strftime("%Y-%m", Game.date),
+            func.count(Game.id),
+        )
+        .filter(Game.id.in_(game_id_sq))
+        .group_by(func.strftime("%Y-%m", Game.date))
+        .order_by(func.strftime("%Y-%m", Game.date))
+        .all()
+    )
+    activity_timeline = [{"month": r[0], "count": r[1]} for r in timeline_rows]
+
+    games_stats = {
+        "total": pagination.total,
+        "avg_turns": round(avg_turns_val, 1) if avg_turns_val else None,
+        "avg_duration": int(avg_duration_val) if avg_duration_val else None,
+        "win_types": win_type_sorted,
+        "win_types_total": sum(win_type_counts.values()) if win_type_counts else 0,
+        "color_wins": color_wins,
+        "activity_timeline": activity_timeline,
+    }
+
     return render_template(
         "games.html",
         games=games_page,
@@ -4029,6 +4092,7 @@ def games():
         per_page=per_page,
         scope=scope,
         active_pod=active_pod,
+        games_stats=games_stats,
     )
 
 @app.route("/games/<int:game_id>")
