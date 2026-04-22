@@ -541,8 +541,26 @@ function renderCommanderDamageSources(playerId){
   const sourcesContainer = document.querySelector(`.commander-damage-sources[data-player="${pid}"]`);
   if(!sourcesContainer) return;
   const sourceIds = getCommanderSourceIdsForTarget(pid);
-  sourcesContainer.innerHTML = "";
 
+  // Fast path: if source list is unchanged, only update value spans
+  const existingRows = sourcesContainer.querySelectorAll('.commander-damage-source-row');
+  const existingSourceIds = Array.from(existingRows).map(r => r.dataset.sourcePlayer);
+  const needsRebuild = existingSourceIds.length !== sourceIds.length ||
+    !sourceIds.every((id, i) => id === existingSourceIds[i]);
+
+  if(!needsRebuild){
+    sourceIds.forEach((sourceId)=>{
+      const row = sourcesContainer.querySelector(`.commander-damage-source-row[data-source-player="${sourceId}"]`);
+      if(row){
+        const valueEl = row.querySelector('.counter-chip-value');
+        if(valueEl) valueEl.textContent = String(getCommanderDamageBySource(pid, sourceId));
+      }
+    });
+    return;
+  }
+
+  // Full rebuild when source list changes (player count change or first render)
+  sourcesContainer.innerHTML = "";
   sourceIds.forEach((sourceId)=>{
     const sourceCard = cards.find((card)=>String(card.dataset.player) === sourceId);
     const sourceName = sourceCard?.querySelector('.player-name')?.textContent?.trim() || `Player ${sourceId}`;
@@ -932,37 +950,27 @@ function initializeTimers(){
 }
 
 function renderTimers(){
-  if(timerState.mode === "chess_clock"){
-    cards.forEach(card=>{
-      const pid = String(card.dataset.player);
-      const el = document.getElementById("timer-" + pid);
-      if(!el) return;
+  const mode = timerState.mode;
+  cards.forEach(card=>{
+    const pid = String(card.dataset.player);
+    const el = document.getElementById("timer-" + pid);
+    if(!el) return;
+    if(mode === "chess_clock"){
       card.classList.remove("rope-active");
       el.textContent = formatMs(timerState.chessClocksMs[pid] || 0);
       el.classList.toggle("active", pid === String(active));
       el.classList.toggle("low-time", (timerState.chessClocksMs[pid] || 0) <= 10000);
-    });
-  }else if(timerState.mode === "turn_timer"){
-    cards.forEach(card=>{
-      const pid = String(card.dataset.player);
-      const el = document.getElementById("timer-" + pid);
-      if(!el) return;
-
+    }else if(mode === "turn_timer"){
       const isActive = pid === String(active);
       card.classList.toggle("rope-active", isActive);
       el.textContent = formatMs(timerState.ropeRemainingMs);
       el.classList.toggle("active", isActive);
       el.classList.toggle("low-time", isActive && timerState.ropeRemainingMs <= 10000);
-    });
-  }else{
-    cards.forEach(card=>{
-      const pid = String(card.dataset.player);
-      const el = document.getElementById("timer-" + pid);
-      if(!el) return;
+    }else{
       card.classList.remove("rope-active");
       el.classList.remove("active", "low-time");
-    });
-  }
+    }
+  });
 
   const center = document.getElementById("centralTurnTimer");
   if(center){

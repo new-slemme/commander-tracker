@@ -517,7 +517,7 @@ class Deck(db.Model):
     # legacy / user-entered fallback
     commander = db.Column(db.String(100), nullable=False)
 
-    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False, index=True)
 
     # Robust commander support (best-effort filled via Scryfall)
     commander_name = db.Column(db.String(120))
@@ -564,7 +564,7 @@ class Game(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.DateTime, default=datetime.utcnow)
 
-    winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
+    winner_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False, index=True)
     winner = db.relationship(
         "Player",
         foreign_keys="Game.winner_id",
@@ -604,7 +604,7 @@ class Pod(db.Model):
 class PodMembership(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=False)
-    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False, index=True)
     role = db.Column(db.String(20), nullable=False, default="member")
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
@@ -634,8 +634,8 @@ class RegistrationRequest(db.Model):
 class GameParticipant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
-    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False)
-    deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False, index=True)
+    deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False, index=True)
     seat_position = db.Column(db.Integer, nullable=True)
     flags_json = db.Column(db.Text, nullable=True)
     salt_count = db.Column(db.Integer, nullable=False, default=0)
@@ -1313,6 +1313,21 @@ with app.app_context():
         db.session.commit()
 
     run_schema_migrations()
+
+    def ensure_indexes():
+        stmts = [
+            "CREATE INDEX IF NOT EXISTS ix_gameparticipant_player_id ON game_participant (player_id)",
+            "CREATE INDEX IF NOT EXISTS ix_gameparticipant_deck_id   ON game_participant (deck_id)",
+            "CREATE INDEX IF NOT EXISTS ix_deck_player_id            ON deck (player_id)",
+            "CREATE INDEX IF NOT EXISTS ix_game_winner_id            ON game (winner_id)",
+            "CREATE INDEX IF NOT EXISTS ix_podmembership_player_id   ON pod_membership (player_id)",
+        ]
+        with db.engine.connect() as conn:
+            for s in stmts:
+                conn.execute(text(s))
+            conn.commit()
+
+    ensure_indexes()
 
     if os.getenv("AUTO_CREATE_DB") == "1":
         db.create_all()
@@ -3340,12 +3355,25 @@ def index():
     current_user = get_current_user()
     available_pods = get_accessible_pods(current_user)
 
-    # Player stats
+    # Player stats — aggregate queries instead of per-player counts
     players = Player.query.all()
+    wins_by_player = dict(
+        db.session.query(Game.winner_id, func.count(Game.id))
+        .filter(Game.id.in_(game_ids_subquery))
+        .group_by(Game.winner_id)
+        .all()
+    )
+    played_by_player = dict(
+        db.session.query(GameParticipant.player_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_ids_subquery))
+        .group_by(GameParticipant.player_id)
+        .all()
+    )
     player_stats = []
     for p in players:
-        wins = game_q.filter_by(winner_id=p.id).count()
-        played = GameParticipant.query.join(Game).filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery)).count()
+        wins = wins_by_player.get(p.id, 0)
+        played = played_by_player.get(p.id, 0)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"player": p, "wins": wins, "played": played, "winrate": winrate})
 
@@ -3374,16 +3402,26 @@ def index():
             row["most_played_deck"] = None
             row["bg_art"] = None
 
-    # Deck stats
+    # Deck stats — aggregate queries instead of per-deck counts
     decks = Deck.query.all()
+    uses_by_deck = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_ids_subquery))
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+    wins_by_deck = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_ids_subquery), Game.winner_id == GameParticipant.player_id)
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
     deck_stats = []
     for d in decks:
-        wins = (
-            GameParticipant.query.join(Game)
-            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id, Game.id.in_(game_ids_subquery))
-            .count()
-        )
-        uses = GameParticipant.query.join(Game).filter(GameParticipant.deck_id == d.id, Game.id.in_(game_ids_subquery)).count()
+        wins = wins_by_deck.get(d.id, 0)
+        uses = uses_by_deck.get(d.id, 0)
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate})
 
@@ -3392,7 +3430,11 @@ def index():
 
     # Recent games
     recent_games = game_q.order_by(Game.date.desc()).limit(10).all()
-    game_parts = {g.id: GameParticipant.query.filter_by(game_id=g.id).all() for g in recent_games}
+    _recent_ids = [g.id for g in recent_games]
+    _all_parts = GameParticipant.query.filter(GameParticipant.game_id.in_(_recent_ids)).all() if _recent_ids else []
+    game_parts: dict[int, list] = {}
+    for _p in _all_parts:
+        game_parts.setdefault(_p.game_id, []).append(_p)
 
     # Deck Spotlight: deck that won last (winner's deck in most recent game)
     last_winning_deck = None
@@ -4285,11 +4327,34 @@ def compare_players():
     h2h_b_wins = sum(1 for g in shared_games_q if g.winner_id == b_id)
     h2h_other = len(shared_games_q) - h2h_a_wins - h2h_b_wins
 
+    shared_game_ids = [g.id for g in shared_games_q]
+    _ab_parts = (
+        GameParticipant.query
+        .filter(
+            GameParticipant.game_id.in_(shared_game_ids),
+            GameParticipant.player_id.in_([a_id, b_id]),
+        )
+        .all()
+    ) if shared_game_ids else []
+    _parts_by_game: dict[int, dict[int, GameParticipant]] = {}
+    for _part in _ab_parts:
+        _parts_by_game.setdefault(_part.game_id, {})[_part.player_id] = _part
+
+    _part_counts = dict(
+        db.session.query(GameParticipant.game_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.game_id.in_(shared_game_ids))
+        .group_by(GameParticipant.game_id)
+        .all()
+    ) if shared_game_ids else {}
+
+    winner_ids = {g.winner_id for g in shared_games_q}
+    _winners = {p.id: p for p in Player.query.filter(Player.id.in_(winner_ids)).all()} if winner_ids else {}
+
     shared_games = []
     for g in shared_games_q:
-        gp_a = GameParticipant.query.filter_by(game_id=g.id, player_id=a_id).first()
-        gp_b = GameParticipant.query.filter_by(game_id=g.id, player_id=b_id).first()
-        winner = db.session.get(Player, g.winner_id)
+        gp_a = _parts_by_game.get(g.id, {}).get(a_id)
+        gp_b = _parts_by_game.get(g.id, {}).get(b_id)
+        winner = _winners.get(g.winner_id)
         shared_games.append({
             "game_id": g.id,
             "date": g.date,
@@ -4297,7 +4362,7 @@ def compare_players():
             "winner_name": winner.name if winner else "Unknown",
             "deck_a": gp_a.deck.name if gp_a and gp_a.deck else "Unknown",
             "deck_b": gp_b.deck.name if gp_b and gp_b.deck else "Unknown",
-            "participant_count": GameParticipant.query.filter_by(game_id=g.id).count(),
+            "participant_count": _part_counts.get(g.id, 0),
         })
 
     return render_template(
