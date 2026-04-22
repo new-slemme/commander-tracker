@@ -121,3 +121,30 @@
   .player-row:focus-visible {
     background: rgba(255,255,255,0.03);
   }
+
+  /* Comparison checkbox */
+  .compare-check-wrap {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding-right: 4px;
+  }
+
+  .compare-check {
+    width: 17px;
+    height: 17px;
+    cursor: pointer;
+    accent-color: var(--font-base);
+    opacity: 0.55;
+    transition: opacity 0.15s;
+  }
+
+  .compare-check:checked,
+  .compare-check:hover {
+    opacity: 1;
+  }
+
+  /* Compare button */
+  .compare-btn-hidden {
+    display: none !important;
+  }

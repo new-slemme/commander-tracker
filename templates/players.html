@@ -19,6 +19,13 @@
       </div>
 
       <div class="players-actions">
+        <!-- Compare button (shown when 2 players selected) -->
+        <a id="compare-btn"
+           href="#"
+           class="btn btn-primary app-btn compare-btn-hidden">
+          Compare 2 Players
+        </a>
+
         <!-- Add Guest -->
         <form method="post" action="{{ url_for('add_player') }}" class="add-guest-wrap m-0">
           <input class="form-control"
@@ -63,8 +70,16 @@
         <div class="player-row"
              role="link"
              tabindex="0"
-             onclick="window.location.href='{{ url_for('player_detail', player_id=p.id) }}'"
+             data-player-id="{{ p.id }}"
+             onclick="if(!event.target.closest('.compare-check-wrap'))window.location.href='{{ url_for('player_detail', player_id=p.id) }}'"
              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); window.location.href='{{ url_for('player_detail', player_id=p.id) }}';}">
+          <div class="compare-check-wrap" onclick="event.stopPropagation()">
+            <input type="checkbox"
+                   class="compare-check"
+                   data-id="{{ p.id }}"
+                   data-name="{{ p.name }}"
+                   aria-label="Select {{ p.name }} for comparison">
+          </div>
           <div class="player-left">
             <div class="player-name">{{ p.name }}</div>
 
@@ -80,9 +95,10 @@
                 <span class="muted">@{{ p.username }}</span>
               {% endif %}
               {% set stats = player_stats.get(p.id, {}) %}
+              <span class="muted">· {{ stats.get('won', 0) }}W / {{ stats.get('played', 0) }}G</span>
               <span class="muted">· {{ stats.get('winrate', 0.0) }}% WR</span>
               <span class="muted">· {{ stats.get('deck_count', 0) }} decks</span>
-              <span class="muted">· Joined on {{ stats.get('joined_on').strftime('%Y-%m-%d') if stats.get('joined_on') else 'n/a' }}</span>
+              <span class="muted">· Joined {{ stats.get('joined_on').strftime('%Y-%m-%d') if stats.get('joined_on') else 'n/a' }}</span>
             </div>
           </div>
 
@@ -120,5 +136,36 @@
   </div>
 
 </div>
+
+<script>
+(function () {
+  const btn = document.getElementById('compare-btn');
+  const compareUrl = '{{ url_for("compare_players") }}';
+
+  function updateCompareBtn() {
+    const checked = Array.from(document.querySelectorAll('.compare-check:checked'));
+    if (checked.length === 2) {
+      const [a, b] = checked;
+      btn.href = compareUrl + '?a=' + a.dataset.id + '&b=' + b.dataset.id;
+      btn.textContent = 'Compare ' + a.dataset.name + ' vs ' + b.dataset.name;
+      btn.classList.remove('compare-btn-hidden');
+    } else {
+      btn.href = '#';
+      btn.textContent = 'Compare 2 Players';
+      btn.classList.add('compare-btn-hidden');
+    }
+    // Prevent selecting more than 2
+    if (checked.length >= 2) {
+      document.querySelectorAll('.compare-check:not(:checked)').forEach(cb => cb.disabled = true);
+    } else {
+      document.querySelectorAll('.compare-check').forEach(cb => cb.disabled = false);
+    }
+  }
+
+  document.querySelectorAll('.compare-check').forEach(cb => {
+    cb.addEventListener('change', updateCompareBtn);
+  });
+})();
+</script>
 
 {% endblock %}

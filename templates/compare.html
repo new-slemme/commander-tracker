@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .cmp-hero { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .cmp-hero__name { font-size: 1.35rem; font-weight: 800; color: #fff; }
+  .cmp-hero__vs { font-size: 1.1rem; color: var(--font-base-trans); font-weight: 700; flex-shrink: 0; }
+
+  .cmp-grid {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 10px 14px;
+    align-items: center;
+  }
+
+  .cmp-stat-label {
+    grid-column: 2;
+    text-align: center;
+    color: var(--font-base-trans);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 2px 0;
+  }
+
+  .cmp-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(143,153,197,0.18);
+    background: var(--darker);
+    text-align: center;
+  }
+
+  .cmp-val.winner {
+    border-color: rgba(143,153,197,0.55);
+    background: rgba(143,153,197,0.1);
+    color: #e8ecff;
+  }
+
+  /* H2H bar */
+  .h2h-wrap {
+    border-radius: 18px;
+    border: 1px solid rgba(143,153,197,0.22);
+    background: var(--darker);
+    padding: 20px 20px 16px;
+    box-shadow: 0 0 18px rgba(0,0,0,0.3);
+  }
+
+  .h2h-bar-track {
+    display: flex;
+    height: 12px;
+    border-radius: 999px;
+    overflow: hidden;
+    gap: 2px;
+    background: rgba(143,153,197,0.1);
+  }
+
+  .h2h-bar-a { background: #8f99c5; transition: width 0.4s; }
+  .h2h-bar-other { background: rgba(143,153,197,0.25); transition: width 0.4s; }
+  .h2h-bar-b { background: #5b7fc4; transition: width 0.4s; }
+
+  .h2h-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 8px;
+    gap: 8px;
+  }
+
+  .h2h-label {
+    font-size: 0.82rem;
+    color: var(--font-base-trans);
+    max-width: 38%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .h2h-label b { color: #fff; font-size: 1.1rem; display: block; }
+  .h2h-label.right { text-align: right; }
+  .h2h-label.center { text-align: center; max-width: none; flex: 0 0 auto; }
+
+  /* Shared games list */
+  .shared-game-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid rgba(143,153,197,0.14);
+    cursor: pointer;
+    transition: background 0.12s;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .shared-game-row:first-child { border-top: 0; }
+  .shared-game-row:hover { background: rgba(255,255,255,0.03); }
+
+  .shared-game-date { color: var(--font-base-trans); font-size: 0.85rem; min-width: 90px; }
+
+  .shared-game-decks {
+    flex: 1;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+    font-size: 0.9rem;
+    flex-wrap: wrap;
+  }
+
+  .shared-game-deck { color: var(--font-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+  .shared-game-sep { color: var(--font-base-trans); font-size: 0.75rem; flex-shrink: 0; }
+
+  .shared-game-winner {
+    font-size: 0.82rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .winner-a { background: rgba(143,153,197,0.18); border: 1px solid rgba(143,153,197,0.4); color: #e8ecff; }
+  .winner-b { background: rgba(91,127,196,0.18); border: 1px solid rgba(91,127,196,0.4); color: #b8ceff; }
+  .winner-other { background: rgba(143,153,197,0.08); border: 1px solid rgba(143,153,197,0.2); color: var(--font-base-trans); }
+
+  .players-count { color: var(--font-base-trans); font-size: 0.8rem; flex-shrink: 0; }
+</style>
+
+<div class="container pb-4">
+
+  <div class="app-hero mb-4">
+    <div class="app-hero__head">
+      <div>
+        <p class="eyebrow mb-1">Head-to-Head</p>
+        <div class="cmp-hero">
+          <span class="cmp-hero__name">{{ player_a.name }}</span>
+          <span class="cmp-hero__vs">vs</span>
+          <span class="cmp-hero__name">{{ player_b.name }}</span>
+        </div>
+      </div>
+      <div>
+        <a href="{{ url_for('players') }}" class="btn btn-outline-secondary btn-sm">← All Players</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- H2H summary -->
+  {% set total_h2h = shared_games|length %}
+  <div class="h2h-wrap mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="m-0 fw-bold text-white">Head-to-Head</h5>
+      <span class="muted2 small">{{ total_h2h }} game{{ 's' if total_h2h != 1 else '' }} together</span>
+    </div>
+
+    {% if total_h2h > 0 %}
+      {% set pct_a = (h2h_a_wins / total_h2h * 100) | round(0) %}
+      {% set pct_b = (h2h_b_wins / total_h2h * 100) | round(0) %}
+      {% set pct_other = (h2h_other / total_h2h * 100) | round(0) %}
+
+      <div class="h2h-bar-track">
+        <div class="h2h-bar-a" style="width: {{ pct_a }}%"></div>
+        <div class="h2h-bar-other" style="width: {{ pct_other }}%"></div>
+        <div class="h2h-bar-b" style="width: {{ pct_b }}%"></div>
+      </div>
+      <div class="h2h-labels">
+        <div class="h2h-label">
+          <b>{{ h2h_a_wins }}</b>{{ player_a.name }}
+        </div>
+        {% if h2h_other > 0 %}
+          <div class="h2h-label center">
+            <b>{{ h2h_other }}</b>Other
+          </div>
+        {% endif %}
+        <div class="h2h-label right">
+          <b>{{ h2h_b_wins }}</b>{{ player_b.name }}
+        </div>
+      </div>
+    {% else %}
+      <div class="muted2 small">These players haven't been in a game together yet.</div>
+    {% endif %}
+  </div>
+
+  <!-- Overall stat comparison -->
+  <div class="mb-4">
+    <div class="section-head mb-3">
+      <h5 class="m-0 fw-bold">Overall Stats</h5>
+    </div>
+
+    {% macro cmp_row(label, val_a, val_b, higher_is_better=true) %}
+      {% if higher_is_better %}
+        {% set a_wins = val_a > val_b %}
+        {% set b_wins = val_b > val_a %}
+      {% else %}
+        {% set a_wins = val_a < val_b %}
+        {% set b_wins = val_b < val_a %}
+      {% endif %}
+      <div class="cmp-val {{ 'winner' if a_wins else '' }}">{{ val_a }}</div>
+      <div class="cmp-stat-label">{{ label }}</div>
+      <div class="cmp-val {{ 'winner' if b_wins else '' }}">{{ val_b }}</div>
+    {% endmacro %}
+
+    <div class="cmp-grid">
+      <div class="cmp-val" style="text-align:center; font-size:1.05rem; border-color:rgba(143,153,197,0.35)">{{ player_a.name }}</div>
+      <div></div>
+      <div class="cmp-val" style="text-align:center; font-size:1.05rem; border-color:rgba(91,127,196,0.35)">{{ player_b.name }}</div>
+
+      {{ cmp_row('Games Played', stats_a.played, stats_b.played) }}
+      {{ cmp_row('Wins', stats_a.won, stats_b.won) }}
+      {{ cmp_row('Win %', stats_a.winrate, stats_b.winrate) }}
+      {{ cmp_row('Decks', stats_a.deck_count, stats_b.deck_count) }}
+    </div>
+  </div>
+
+  <!-- Shared games -->
+  {% if shared_games %}
+    <div class="section-head mb-2">
+      <h5 class="m-0 fw-bold">Games Together</h5>
+    </div>
+
+    <div class="player-card">
+      {% for g in shared_games %}
+        <a class="shared-game-row" href="{{ url_for('game_detail', game_id=g.game_id) }}">
+          <span class="shared-game-date">{{ g.date.strftime('%Y-%m-%d') }}</span>
+          <div class="shared-game-decks">
+            <span class="shared-game-deck" title="{{ g.deck_a }}">{{ g.deck_a }}</span>
+            <span class="shared-game-sep">vs</span>
+            <span class="shared-game-deck" title="{{ g.deck_b }}">{{ g.deck_b }}</span>
+          </div>
+          <span class="players-count">{{ g.participant_count }}p</span>
+          {% if g.winner_id == player_a.id %}
+            <span class="shared-game-winner winner-a">{{ player_a.name }} won</span>
+          {% elif g.winner_id == player_b.id %}
+            <span class="shared-game-winner winner-b">{{ player_b.name }} won</span>
+          {% else %}
+            <span class="shared-game-winner winner-other">{{ g.winner_name }} won</span>
+          {% endif %}
+        </a>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
