@@ -891,12 +891,23 @@
       if (!name || !img) return;
 
       if (preferredImage) {
+        img.onerror = async () => {
+          img.onerror = null;
+          const fallbackSrc = await fetchImage(name);
+          if (fallbackSrc && fallbackSrc !== preferredImage) {
+            img.onerror = () => entry.classList.add('deck-card-missing-image');
+            img.src = fallbackSrc;
+            return;
+          }
+          entry.classList.add('deck-card-missing-image');
+        };
         img.src = preferredImage;
         return;
       }
 
       const src = await fetchImage(name);
       if (src) {
+        img.onerror = () => entry.classList.add('deck-card-missing-image');
         img.src = src;
       } else {
         entry.classList.add('deck-card-missing-image');
