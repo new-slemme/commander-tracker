@@ -164,6 +164,29 @@ LEGACY_TIMED_MODE_MAP = {
 }
 
 
+def _check_card_art_storage_health() -> None:
+    if not CARD_ART_DIR.exists():
+        app.logger.error(
+            "startup card art storage check failed: directory does not exist path=%s",
+            CARD_ART_DIR,
+        )
+        return
+    if not CARD_ART_DIR.is_dir():
+        app.logger.error(
+            "startup card art storage check failed: path is not a directory path=%s",
+            CARD_ART_DIR,
+        )
+        return
+    if not os.access(CARD_ART_DIR, os.W_OK):
+        app.logger.warning(
+            "startup card art storage check warning: directory is not writable path=%s",
+            CARD_ART_DIR,
+        )
+
+
+_check_card_art_storage_health()
+
+
 def canonicalize_win_type(value: str | None, *, unknown_default: str | None = None) -> str | None:
     raw = (value or "").strip().lower()
     if not raw:
@@ -1984,13 +2007,14 @@ def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]
 
         try:
             out_path.write_bytes(data)
-        except OSError as exc:
+        except (FileNotFoundError, PermissionError, IsADirectoryError, NotADirectoryError, OSError) as exc:
             app.logger.error(
-                "cache_card_art_by_name write failed path=%s exception=%s",
+                "cache_card_art_by_name write failed path=%s exception=%s detail=%s",
                 out_path,
                 exc.__class__.__name__,
+                str(exc),
             )
-            return None, "write_failed", 500
+            return None, "storage_write_failed", 500
         return web_path, None, 200
 
     except HTTPError as exc:
@@ -4942,10 +4966,10 @@ def add_deck():
 def api_card_art():
     card_name = (request.args.get("name") or "").strip()
     if not card_name:
-        return jsonify({"image": None, "failure_reason": "not_found"}), 404
+        return jsonify({"image": None, "failure_reason": "not_found", "error_code": "not_found"}), 404
 
     image, failure_reason, status_code = cache_card_art_by_name(card_name)
-    payload = {"image": image, "failure_reason": failure_reason}
+    payload = {"image": image, "failure_reason": failure_reason, "error_code": failure_reason}
     return jsonify(payload), status_code
 
 
