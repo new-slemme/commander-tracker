@@ -858,7 +858,7 @@
     if (!entries.length) return;
 
     // Limit concurrent requests to avoid overwhelming Scryfall rate limits.
-    const MAX_CONCURRENT = 5;
+    const MAX_CONCURRENT = 2;
     let active = 0;
     const waiting = [];
     function acquire() {
