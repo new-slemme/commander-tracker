@@ -54,11 +54,16 @@
 
         <ul class="dropdown-menu dropdown-menu-end banner-menu">
         <li>
+          <a class="dropdown-item" href="{{ url_for('deck_editor', deck_id=deck.id) }}">
+            Open Deck Editor
+          </a>
+        </li>
+        <li>
           <button type="button"
                   class="dropdown-item"
                   data-bs-toggle="modal"
                   data-bs-target="#editDeckModal">
-            Edit deck
+            Edit metadata
           </button>
         </li>
 

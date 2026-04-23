@@ -1,0 +1,739 @@
+{% extends "base.html" %}
+{% block content %}
+<link href="{{ url_for('static', filename='css/deck_editor.css') }}" rel="stylesheet">
+
+{# ── Initialise deck state from server-rendered decklist ── #}
+<script>
+(function () {
+  const raw = {{ decklist_data | tojson }};
+  const sections = { commander: [], mainboard: [], sideboard: [], maybeboard: [] };
+
+  if (raw.mode === 'parsed') {
+    for (const sec of (raw.sections || [])) {
+      const key = sec.key;
+      if (!sections[key]) sections[key] = [];
+      for (const e of (sec.entries || [])) {
+        sections[key].push({ name: e.name, qty: e.quantity || 1 });
+      }
+    }
+  }
+
+  window._EDITOR_INIT = {
+    deckId:    {{ deck.id }},
+    deckName:  {{ deck.name | tojson }},
+    commander: {{ (deck.commander_name or deck.commander or '') | tojson }},
+    sections:  sections,
+    hasCcauto: {{ 'true' if has_ccauto else 'false' }},
+  };
+})();
+</script>
+
+{# ── Top bar ── #}
+<div class="editor-topbar">
+  <a class="editor-topbar-back" href="{{ url_for('deck_detail', deck_id=deck.id) }}">
+    ‹ Back
+  </a>
+
+  <div class="editor-topbar-title">
+    <input id="editorNameInput" class="editor-name-input" type="text"
+           value="{{ deck.name }}" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="editor-topbar-actions">
+    <span id="editorCountBadge" class="editor-count-badge count-low">0 cards</span>
+    <span id="editorUnsavedDot" class="editor-unsaved-dot" title="Unsaved changes">● Unsaved</span>
+    <button id="editorSaveBtn" class="btn btn-success btn-sm" style="min-height:36px;font-weight:800;">
+      Save
+    </button>
+  </div>
+</div>
+
+{# ── Shell ── #}
+<div class="editor-shell">
+
+  {# Tab bar (mobile only) #}
+  <div class="editor-tab-bar">
+    <button class="editor-tab-btn" id="tabBtnDeck" data-panel="deck">
+      My Deck <span id="tabDeckCount"></span>
+    </button>
+    <button class="editor-tab-btn active" id="tabBtnSearch" data-panel="search">
+      Search Cards
+    </button>
+  </div>
+
+  <div class="editor-panels">
+
+    {# ── Search panel ── #}
+    <div class="editor-search-panel panel-active" id="panelSearch">
+      <div class="editor-search-inner">
+
+        <div class="editor-search-controls">
+          <div class="editor-search-input-wrap">
+            <input id="editorSearchInput" class="form-control bg-dark text-light border-secondary"
+                   type="search" placeholder="Search cards…" autocomplete="off" autocorrect="off"
+                   autocapitalize="off" spellcheck="false">
+            <div id="editorAutocompleteMenu" class="editor-autocomplete-menu" style="display:none;"></div>
+          </div>
+
+          {% if has_ccauto %}
+          <div class="editor-source-pills">
+            <button class="editor-source-pill active" data-source="all">All</button>
+            <button class="editor-source-pill" data-source="scryfall">Scryfall</button>
+            <button class="editor-source-pill" data-source="custom">Custom</button>
+          </div>
+          {% endif %}
+        </div>
+
+        <div id="editorSearchResults" class="editor-search-results">
+          <div class="search-state-msg" id="searchPlaceholder">
+            Type a card name to search
+          </div>
+        </div>
+
+        {% if has_ccauto %}
+        <div class="sets-browser" id="setsBrowser">
+          <button class="sets-browser-toggle" id="setsBrowserToggle">
+            <span>Browse Custom Sets</span>
+            <span id="setsBrowserArrow">▾</span>
+          </button>
+          <div class="sets-browser-body" id="setsBrowserBody">
+            <div class="search-state-msg" id="setsPlaceholder">Loading…</div>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+
+    {# ── Deck panel ── #}
+    <div class="editor-deck-panel" id="panelDeck">
+
+      {# Commander field at top of deck panel #}
+      <div class="editor-commander-wrap">
+        <div class="editor-commander-label">Commander</div>
+        <div style="position:relative;">
+          <input id="editorCommanderInput" class="editor-commander-input form-control"
+                 type="text" autocomplete="off" autocorrect="off"
+                 autocapitalize="off" spellcheck="false"
+                 placeholder="Start typing a card name…">
+          <div id="editorCommanderMenu" class="editor-autocomplete-menu" style="display:none;"></div>
+        </div>
+      </div>
+
+      <div class="editor-deck-inner" id="editorDeckInner">
+        {# Sections rendered by JS #}
+      </div>
+    </div>
+
+  </div>{# /editor-panels #}
+</div>{# /editor-shell #}
+
+{# ── Card detail bottom sheet (mobile) ── #}
+<div class="card-sheet-overlay" id="cardSheetOverlay"></div>
+<div class="card-sheet" id="cardSheet">
+  <div class="card-sheet-handle"></div>
+  <div class="card-sheet-inner">
+    <div class="card-sheet-art" id="cardSheetArt"></div>
+    <div class="card-sheet-info">
+      <div class="card-sheet-name" id="cardSheetName"></div>
+      <div class="card-sheet-type" id="cardSheetType"></div>
+      <div class="card-sheet-oracle" id="cardSheetOracle"></div>
+    </div>
+  </div>
+</div>
+
+{# ── Save toast ── #}
+<div class="editor-toast" id="editorToast"></div>
+
+<script>
+/* =============================================================
+   Deck Editor — all logic in one IIFE
+   ============================================================= */
+(function () {
+  const INIT      = window._EDITOR_INIT;
+  const DECK_ID   = INIT.deckId;
+  const SECTIONS  = ['commander', 'mainboard', 'sideboard', 'maybeboard'];
+  const SECTION_LABELS = {
+    commander: 'Commander',
+    mainboard: 'Mainboard',
+    sideboard: 'Sideboard',
+    maybeboard: 'Maybeboard',
+  };
+
+  /* ── State ── */
+  const state = {
+    name:      INIT.deckName,
+    commander: INIT.commander,
+    sections:  JSON.parse(JSON.stringify(INIT.sections)),
+    dirty:     false,
+  };
+
+  /* ── DOM refs ── */
+  const nameInput      = document.getElementById('editorNameInput');
+  const saveBtn        = document.getElementById('editorSaveBtn');
+  const countBadge     = document.getElementById('editorCountBadge');
+  const unsavedDot     = document.getElementById('editorUnsavedDot');
+  const tabDeckCount   = document.getElementById('tabDeckCount');
+  const searchInput    = document.getElementById('editorSearchInput');
+  const acMenu         = document.getElementById('editorAutocompleteMenu');
+  const searchResults  = document.getElementById('editorSearchResults');
+  const searchPH       = document.getElementById('searchPlaceholder');
+  const deckInner      = document.getElementById('editorDeckInner');
+  const cmdInput       = document.getElementById('editorCommanderInput');
+  const cmdMenu        = document.getElementById('editorCommanderMenu');
+
+  /* ── Image cache ── */
+  const imgCache = new Map();
+
+  function fetchArt(name) {
+    if (!imgCache.has(name)) {
+      imgCache.set(name, fetch(`/api/card-art?name=${encodeURIComponent(name)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => d?.image || null)
+        .catch(() => null));
+    }
+    return imgCache.get(name);
+  }
+
+  function fetchCardDetail(name) {
+    return fetch(`/api/cards/named?exact=${encodeURIComponent(name)}`)
+      .then(r => r.ok ? r.json() : null)
+      .catch(() => null);
+  }
+
+  /* ── Dirty tracking ── */
+  function markDirty() {
+    state.dirty = true;
+    unsavedDot.classList.add('visible');
+  }
+
+  function markClean() {
+    state.dirty = false;
+    unsavedDot.classList.remove('visible');
+  }
+
+  window.addEventListener('beforeunload', e => {
+    if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  /* ── Card count ── */
+  function totalCards() {
+    return SECTIONS.reduce((sum, s) =>
+      sum + state.sections[s].reduce((a, c) => a + c.qty, 0), 0);
+  }
+
+  function updateCountBadge() {
+    const n = totalCards();
+    countBadge.textContent = `${n} / 100`;
+    countBadge.className = 'editor-count-badge ' +
+      (n === 100 ? 'count-ok' : n > 100 ? 'count-high' : 'count-low');
+    if (tabDeckCount) tabDeckCount.textContent = `(${n})`;
+  }
+
+  /* ── Serialise to plaintext ── */
+  function toPlaintext() {
+    const lines = [];
+    for (const sec of SECTIONS) {
+      const entries = state.sections[sec] || [];
+      if (!entries.length) continue;
+      lines.push(sec.charAt(0).toUpperCase() + sec.slice(1) + ':');
+      for (const e of entries) lines.push(`${e.qty} ${e.name}`);
+      lines.push('');
+    }
+    return lines.join('\n');
+  }
+
+  /* ── Deck mutations ── */
+  function findCard(section, name) {
+    const key = name.toLowerCase();
+    return state.sections[section].find(c => c.name.toLowerCase() === key);
+  }
+
+  function addCard(name, section) {
+    const existing = findCard(section, name);
+    if (existing) {
+      existing.qty++;
+    } else {
+      state.sections[section].push({ name, qty: 1 });
+    }
+    markDirty();
+    renderDeck();
+    updateCountBadge();
+  }
+
+  function setQty(section, name, qty) {
+    const card = findCard(section, name);
+    if (!card) return;
+    if (qty <= 0) {
+      removeCard(section, name);
+      return;
+    }
+    card.qty = qty;
+    markDirty();
+    renderDeck();
+    updateCountBadge();
+  }
+
+  function removeCard(section, name) {
+    const key = name.toLowerCase();
+    state.sections[section] = state.sections[section].filter(
+      c => c.name.toLowerCase() !== key
+    );
+    markDirty();
+    renderDeck();
+    updateCountBadge();
+  }
+
+  /* ── Render deck panel ── */
+  const sectionCollapsed = { sideboard: true, maybeboard: true };
+
+  function renderDeck() {
+    deckInner.innerHTML = '';
+
+    for (const sec of SECTIONS) {
+      const cards = state.sections[sec] || [];
+      const total = cards.reduce((a, c) => a + c.qty, 0);
+
+      const section = document.createElement('div');
+      section.className = 'deck-section';
+
+      const header = document.createElement('div');
+      header.className = 'deck-section-header';
+      header.innerHTML = `
+        <span class="deck-section-title">${SECTION_LABELS[sec]}</span>
+        <span class="deck-section-count">${total} cards</span>
+        <span class="deck-section-arrow">${sectionCollapsed[sec] ? '▸' : '▾'}</span>`;
+      header.addEventListener('click', () => {
+        sectionCollapsed[sec] = !sectionCollapsed[sec];
+        renderDeck();
+      });
+      section.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'deck-section-body' + (sectionCollapsed[sec] ? ' collapsed' : '');
+
+      if (!cards.length) {
+        const empty = document.createElement('div');
+        empty.className = 'deck-empty-section';
+        empty.textContent = 'No cards';
+        body.appendChild(empty);
+      }
+
+      for (const card of cards) {
+        const row = document.createElement('div');
+        row.className = 'deck-card-row';
+
+        const thumb = document.createElement('img');
+        thumb.className = 'deck-card-thumb';
+        thumb.alt = card.name;
+        thumb.loading = 'lazy';
+        fetchArt(card.name).then(src => { if (src) thumb.src = src; });
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'deck-card-row-name';
+        nameEl.textContent = card.name;
+        nameEl.addEventListener('click', () => openCardSheet(card.name));
+
+        const qtyControls = document.createElement('div');
+        qtyControls.className = 'deck-qty-controls';
+
+        const minus = document.createElement('button');
+        minus.className = 'deck-qty-btn';
+        minus.textContent = '−';
+        minus.addEventListener('click', () => setQty(sec, card.name, card.qty - 1));
+
+        const qtyEl = document.createElement('span');
+        qtyEl.className = 'deck-qty-display';
+        qtyEl.textContent = card.qty;
+
+        const plus = document.createElement('button');
+        plus.className = 'deck-qty-btn';
+        plus.textContent = '+';
+        plus.addEventListener('click', () => setQty(sec, card.name, card.qty + 1));
+
+        qtyControls.append(minus, qtyEl, plus);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'deck-remove-btn';
+        removeBtn.textContent = '×';
+        removeBtn.title = 'Remove';
+        removeBtn.addEventListener('click', () => removeCard(sec, card.name));
+
+        row.append(thumb, nameEl, qtyControls, removeBtn);
+        body.appendChild(row);
+      }
+
+      section.appendChild(body);
+      deckInner.appendChild(section);
+    }
+  }
+
+  /* ── Bottom sheet ── */
+  const overlay   = document.getElementById('cardSheetOverlay');
+  const cardSheet = document.getElementById('cardSheet');
+  const sheetName = document.getElementById('cardSheetName');
+  const sheetType = document.getElementById('cardSheetType');
+  const sheetOracle = document.getElementById('cardSheetOracle');
+  const sheetArt  = document.getElementById('cardSheetArt');
+
+  function openCardSheet(name) {
+    sheetName.textContent = name;
+    sheetType.textContent = '';
+    sheetOracle.textContent = '';
+    sheetArt.innerHTML = '';
+
+    overlay.classList.add('open');
+    cardSheet.classList.add('open');
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+
+    fetchCardDetail(name).then(card => {
+      if (!card) return;
+      sheetType.textContent = card.type_line || '';
+      sheetOracle.textContent = card.oracle_text || '';
+      const imgUrl = card.image_uris?.normal || card.image_uris?.small;
+      if (imgUrl) {
+        const img = document.createElement('img');
+        img.src = imgUrl;
+        img.alt = name;
+        sheetArt.appendChild(img);
+      }
+    });
+  }
+
+  function closeCardSheet() {
+    overlay.classList.remove('visible');
+    cardSheet.classList.remove('open');
+    setTimeout(() => overlay.classList.remove('open'), 200);
+  }
+
+  overlay.addEventListener('click', closeCardSheet);
+  cardSheet.querySelector('.card-sheet-handle').addEventListener('click', closeCardSheet);
+
+  /* ── Search ── */
+  let currentSource = 'all';
+  let searchTimer;
+
+  // Source pill toggle
+  document.querySelectorAll('.editor-source-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.editor-source-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      currentSource = pill.dataset.source;
+      const q = searchInput.value.trim();
+      if (q.length >= 2) runSearch(q);
+    });
+  });
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const q = searchInput.value.trim();
+    acMenu.style.display = 'none';
+    if (q.length < 2) {
+      searchResults.innerHTML = '';
+      searchResults.appendChild(searchPH);
+      searchPH.textContent = 'Type a card name to search';
+      return;
+    }
+    searchTimer = setTimeout(() => {
+      // Autocomplete dropdown
+      fetch(`/api/cards/autocomplete?q=${encodeURIComponent(q)}&source=${currentSource}`)
+        .then(r => r.json())
+        .then(data => {
+          const names = (data.data || []).slice(0, 10);
+          if (!names.length) { acMenu.style.display = 'none'; return; }
+          acMenu.innerHTML = '';
+          for (const name of names) {
+            const btn = document.createElement('button');
+            btn.className = 'editor-autocomplete-item';
+            btn.textContent = name;
+            btn.addEventListener('mousedown', e => {
+              e.preventDefault();
+              searchInput.value = name;
+              acMenu.style.display = 'none';
+              runSearch(name, true);
+            });
+            acMenu.appendChild(btn);
+          }
+          acMenu.style.display = '';
+        })
+        .catch(() => {});
+
+      runSearch(q);
+    }, 250);
+  });
+
+  document.addEventListener('click', e => {
+    if (!searchInput.contains(e.target) && !acMenu.contains(e.target)) {
+      acMenu.style.display = 'none';
+    }
+  });
+
+  function runSearch(q, exact = false) {
+    searchResults.innerHTML = '<div class="search-state-msg">Searching…</div>';
+    const url = exact
+      ? `/api/cards/named?exact=${encodeURIComponent(q)}`
+      : `/api/cards/autocomplete?q=${encodeURIComponent(q)}&source=${currentSource}`;
+
+    if (exact) {
+      fetch(url).then(r => r.ok ? r.json() : null).then(card => {
+        if (!card || card.error) {
+          searchResults.innerHTML = '<div class="search-state-msg">No results</div>';
+          return;
+        }
+        renderSearchResults([card.name]);
+      }).catch(() => {
+        searchResults.innerHTML = '<div class="search-state-msg">Search failed</div>';
+      });
+    } else {
+      fetch(url).then(r => r.json()).then(data => {
+        const names = (data.data || []).slice(0, 20);
+        if (!names.length) {
+          searchResults.innerHTML = '<div class="search-state-msg">No results</div>';
+          return;
+        }
+        renderSearchResults(names);
+      }).catch(() => {
+        searchResults.innerHTML = '<div class="search-state-msg">Search failed</div>';
+      });
+    }
+  }
+
+  function renderSearchResults(names) {
+    searchResults.innerHTML = '';
+    for (const name of names) {
+      const row = document.createElement('div');
+      row.className = 'search-result-row';
+
+      const thumb = document.createElement('img');
+      thumb.className = 'search-result-thumb';
+      thumb.alt = name;
+      thumb.loading = 'lazy';
+      fetchArt(name).then(src => { if (src) thumb.src = src; });
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'search-result-name';
+      nameEl.textContent = name;
+      nameEl.addEventListener('click', () => openCardSheet(name));
+
+      const controls = document.createElement('div');
+      controls.className = 'search-result-controls';
+
+      const secSel = document.createElement('select');
+      secSel.className = 'search-section-select form-select form-select-sm bg-dark text-light border-secondary';
+      for (const [key, label] of Object.entries(SECTION_LABELS)) {
+        const opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = label === 'Mainboard' ? 'Main' :
+                          label === 'Sideboard' ? 'Side' :
+                          label === 'Maybeboard' ? 'Maybe' : label;
+        secSel.appendChild(opt);
+      }
+      secSel.value = 'mainboard';
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'search-add-btn';
+      addBtn.textContent = '+';
+      addBtn.title = 'Add to deck';
+      addBtn.addEventListener('click', () => {
+        addCard(name, secSel.value);
+        // Brief visual feedback
+        addBtn.textContent = '✓';
+        setTimeout(() => { addBtn.textContent = '+'; }, 700);
+        // Switch to deck tab on mobile
+        if (window.innerWidth < 992) switchTab('deck');
+      });
+
+      controls.append(secSel, addBtn);
+      row.append(thumb, nameEl, controls);
+      searchResults.appendChild(row);
+    }
+  }
+
+  /* ── Sets browser ── */
+  {% if has_ccauto %}
+  let setsLoaded = false;
+  const setsBrowserToggle = document.getElementById('setsBrowserToggle');
+  const setsBrowserBody   = document.getElementById('setsBrowserBody');
+  const setsPlaceholder   = document.getElementById('setsPlaceholder');
+
+  setsBrowserToggle.addEventListener('click', () => {
+    const open = setsBrowserBody.classList.toggle('open');
+    document.getElementById('setsBrowserArrow').textContent = open ? '▴' : '▾';
+    if (open && !setsLoaded) loadSets();
+  });
+
+  function loadSets() {
+    setsLoaded = true;
+    fetch('/api/ccauto/sets')
+      .then(r => r.json())
+      .then(sets => {
+        setsBrowserBody.innerHTML = '';
+        if (!sets.length) {
+          setsBrowserBody.innerHTML = '<div class="search-state-msg" style="padding:8px 0;">No custom sets found</div>';
+          return;
+        }
+        for (const s of sets) {
+          const chip = document.createElement('button');
+          chip.className = 'set-chip';
+          chip.textContent = s.display_name || s.name;
+          if (s.card_count) {
+            const cnt = document.createElement('span');
+            cnt.style.cssText = 'opacity:.6;font-size:.75rem;';
+            cnt.textContent = `(${s.card_count})`;
+            chip.appendChild(cnt);
+          }
+          chip.addEventListener('click', () => loadSetCards(s.name));
+          setsBrowserBody.appendChild(chip);
+        }
+      })
+      .catch(() => {
+        setsBrowserBody.innerHTML = '<div class="search-state-msg" style="padding:8px 0;">Failed to load sets</div>';
+      });
+  }
+
+  function loadSetCards(setName) {
+    searchResults.innerHTML = '<div class="search-state-msg">Loading set…</div>';
+    fetch(`/api/ccauto/sets/${encodeURIComponent(setName)}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(cards => {
+        const names = cards.map(c => c.name || '').filter(Boolean);
+        if (!names.length) {
+          searchResults.innerHTML = '<div class="search-state-msg">No cards in this set</div>';
+          return;
+        }
+        renderSearchResults(names);
+      })
+      .catch(() => {
+        searchResults.innerHTML = '<div class="search-state-msg">Failed to load set</div>';
+      });
+  }
+  {% endif %}
+
+  /* ── Commander autocomplete ── */
+  let cmdTimer;
+
+  cmdInput.value = state.commander;
+
+  cmdInput.addEventListener('input', () => {
+    clearTimeout(cmdTimer);
+    state.commander = cmdInput.value.trim();
+    markDirty();
+    const q = cmdInput.value.trim();
+    if (q.length < 2) { cmdMenu.style.display = 'none'; return; }
+    cmdTimer = setTimeout(() => {
+      fetch(`/api/cards/autocomplete?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+          const names = (data.data || []).slice(0, 10);
+          if (!names.length) { cmdMenu.style.display = 'none'; return; }
+          cmdMenu.innerHTML = '';
+          for (const name of names) {
+            const btn = document.createElement('button');
+            btn.className = 'editor-autocomplete-item';
+            btn.textContent = name;
+            btn.addEventListener('mousedown', e => {
+              e.preventDefault();
+              cmdInput.value = name;
+              state.commander = name;
+              cmdMenu.style.display = 'none';
+              markDirty();
+            });
+            cmdMenu.appendChild(btn);
+          }
+          cmdMenu.style.display = '';
+        }).catch(() => {});
+    }, 200);
+  });
+
+  document.addEventListener('click', e => {
+    if (!cmdInput.contains(e.target) && !cmdMenu.contains(e.target)) {
+      cmdMenu.style.display = 'none';
+    }
+  });
+
+  /* ── Tab switching (mobile) ── */
+  function switchTab(which) {
+    const searchPanel = document.getElementById('panelSearch');
+    const deckPanel   = document.getElementById('panelDeck');
+    const tabSearch   = document.getElementById('tabBtnSearch');
+    const tabDeck     = document.getElementById('tabBtnDeck');
+
+    if (which === 'search') {
+      searchPanel.classList.add('panel-active');
+      deckPanel.classList.remove('panel-active');
+      tabSearch.classList.add('active');
+      tabDeck.classList.remove('active');
+      searchInput.focus();
+    } else {
+      deckPanel.classList.add('panel-active');
+      searchPanel.classList.remove('panel-active');
+      tabDeck.classList.add('active');
+      tabSearch.classList.remove('active');
+    }
+  }
+
+  document.getElementById('tabBtnSearch').addEventListener('click', () => switchTab('search'));
+  document.getElementById('tabBtnDeck').addEventListener('click', () => switchTab('deck'));
+
+  /* ── Name input ── */
+  nameInput.addEventListener('input', () => {
+    state.name = nameInput.value;
+    markDirty();
+  });
+
+  /* ── Save ── */
+  function showToast(msg, isError) {
+    const toast = document.getElementById('editorToast');
+    toast.textContent = msg;
+    toast.className = 'editor-toast ' + (isError ? 'toast-error' : 'toast-success');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => toast.classList.add('show'));
+    });
+    setTimeout(() => {
+      toast.classList.remove('show');
+    }, 2800);
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+
+    const payload = {
+      name: state.name.trim() || INIT.deckName,
+      commander: state.commander.trim(),
+      decklist_text: toPlaintext(),
+    };
+
+    try {
+      const res = await fetch(`/api/decks/${DECK_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast('⚠ ' + (data.error || 'Save failed'), true);
+      } else {
+        markClean();
+        showToast('✓ Saved', false);
+      }
+    } catch (err) {
+      showToast('⚠ Network error', true);
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  });
+
+  /* ── Init ── */
+  updateCountBadge();
+  renderDeck();
+
+  // On desktop, show deck panel too
+  if (window.innerWidth >= 992) {
+    document.getElementById('panelDeck').classList.add('panel-active');
+  }
+
+})();
+</script>
+{% endblock %}
