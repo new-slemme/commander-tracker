@@ -18,7 +18,10 @@ from datetime import datetime
 import json
 import os
 import re
+import random
 import requests
+import threading
+import time
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -45,6 +48,8 @@ COMMANDER_ART_DIR = ART_DIR / "commander_art"
 COMMANDER_ART_DIR.mkdir(parents=True, exist_ok=True)
 CARD_ART_DIR = ART_DIR / "card_art"
 CARD_ART_DIR.mkdir(parents=True, exist_ok=True)
+CARD_ART_INDEX_FILE = CARD_ART_DIR / "name_index.json"
+CARD_ART_FAILURE_FILE = CARD_ART_DIR / "failure_index.json"
 APK_DIR = Path(__file__).resolve().parent / "apk"
 APK_DIR.mkdir(parents=True, exist_ok=True)
 ANDROID_LATEST_RELEASE_MANIFEST = APK_DIR / "android-latest.json"
@@ -100,6 +105,10 @@ KNOWN_DECK_TAG_KEYS = (
 TRUST_LEGACY_DECK_TAGS = False
 
 CCAUTO_BASE_URL = os.getenv("CCAUTO_BASE_URL", "").rstrip("/")
+
+CARD_ART_CACHE_LOCK = threading.Lock()
+CARD_ART_NAME_INDEX: dict[str, str] = {}
+CARD_ART_FAILURE_INDEX: dict[str, dict[str, float | int | str]] = {}
 
 COMMANDER_BRACKET_FAST_MANA = {
     "mana crypt",
@@ -1391,6 +1400,138 @@ def _safe_filename(s: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", s).strip("_")
 
 
+def _card_art_cache_key(card_name: str) -> str:
+    return (card_name or "").strip().lower()
+
+
+def _load_json_index(path: Path) -> dict:
+    try:
+        if not path.exists():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_json_index(path: Path, payload: dict) -> None:
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True), encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def _initialize_card_art_indexes() -> None:
+    global CARD_ART_NAME_INDEX, CARD_ART_FAILURE_INDEX
+    with CARD_ART_CACHE_LOCK:
+        CARD_ART_NAME_INDEX = {
+            str(k): str(v)
+            for k, v in _load_json_index(CARD_ART_INDEX_FILE).items()
+            if isinstance(k, str) and isinstance(v, str) and v.startswith("/art/card_art/")
+        }
+        loaded_failures = _load_json_index(CARD_ART_FAILURE_FILE)
+        cleaned: dict[str, dict[str, float | int | str]] = {}
+        now = time.time()
+        for key, value in loaded_failures.items():
+            if not isinstance(key, str) or not isinstance(value, dict):
+                continue
+            reason = value.get("reason")
+            status = value.get("status")
+            expires_at = value.get("expires_at")
+            if not isinstance(reason, str) or not isinstance(status, int):
+                continue
+            if not isinstance(expires_at, (int, float)) or expires_at <= now:
+                continue
+            cleaned[key] = {"reason": reason, "status": status, "expires_at": float(expires_at)}
+        CARD_ART_FAILURE_INDEX = cleaned
+        _save_json_index(CARD_ART_FAILURE_FILE, CARD_ART_FAILURE_INDEX)
+
+
+def _get_card_art_web_path_from_index(card_name: str) -> str | None:
+    key = _card_art_cache_key(card_name)
+    if not key:
+        return None
+    with CARD_ART_CACHE_LOCK:
+        cached_path = CARD_ART_NAME_INDEX.get(key)
+    if not cached_path:
+        return None
+    disk_path = ART_DIR / cached_path.removeprefix("/art/")
+    if disk_path.exists() and disk_path.stat().st_size > 0:
+        return cached_path
+    with CARD_ART_CACHE_LOCK:
+        CARD_ART_NAME_INDEX.pop(key, None)
+        _save_json_index(CARD_ART_INDEX_FILE, CARD_ART_NAME_INDEX)
+    return None
+
+
+def _set_card_art_web_path_index(card_name: str, web_path: str) -> None:
+    key = _card_art_cache_key(card_name)
+    if not key or not web_path:
+        return
+    with CARD_ART_CACHE_LOCK:
+        CARD_ART_NAME_INDEX[key] = web_path
+        _save_json_index(CARD_ART_INDEX_FILE, CARD_ART_NAME_INDEX)
+
+
+def _failure_ttl_seconds(reason: str) -> int:
+    if reason == "upstream_rate_limited":
+        return 90
+    if reason in ("upstream_timeout", "upstream_failure"):
+        return 300
+    if reason == "not_found":
+        return 21600
+    return 300
+
+
+def _set_card_art_failure_index(card_name: str, reason: str, status: int) -> None:
+    key = _card_art_cache_key(card_name)
+    if not key or not reason:
+        return
+    payload = {
+        "reason": reason,
+        "status": int(status),
+        "expires_at": float(time.time() + _failure_ttl_seconds(reason)),
+    }
+    with CARD_ART_CACHE_LOCK:
+        CARD_ART_FAILURE_INDEX[key] = payload
+        _save_json_index(CARD_ART_FAILURE_FILE, CARD_ART_FAILURE_INDEX)
+
+
+def _pop_card_art_failure_index(card_name: str) -> tuple[str | None, int] | None:
+    key = _card_art_cache_key(card_name)
+    if not key:
+        return None
+    now = time.time()
+    with CARD_ART_CACHE_LOCK:
+        payload = CARD_ART_FAILURE_INDEX.get(key)
+        if not payload:
+            return None
+        expires_at = payload.get("expires_at")
+        if not isinstance(expires_at, (int, float)) or float(expires_at) <= now:
+            CARD_ART_FAILURE_INDEX.pop(key, None)
+            _save_json_index(CARD_ART_FAILURE_FILE, CARD_ART_FAILURE_INDEX)
+            return None
+        reason = payload.get("reason")
+        status = payload.get("status")
+        if not isinstance(reason, str) or not isinstance(status, int):
+            CARD_ART_FAILURE_INDEX.pop(key, None)
+            _save_json_index(CARD_ART_FAILURE_FILE, CARD_ART_FAILURE_INDEX)
+            return None
+        return reason, status
+
+
+def _clear_card_art_failure_index(card_name: str) -> None:
+    key = _card_art_cache_key(card_name)
+    if not key:
+        return
+    with CARD_ART_CACHE_LOCK:
+        if key in CARD_ART_FAILURE_INDEX:
+            CARD_ART_FAILURE_INDEX.pop(key, None)
+            _save_json_index(CARD_ART_FAILURE_FILE, CARD_ART_FAILURE_INDEX)
+
+
+_initialize_card_art_indexes()
+
+
 def is_valid_custom_art_url(value: str) -> bool:
     candidate = (value or "").strip()
     if not candidate:
@@ -1892,10 +2033,81 @@ def _is_timeout_error(exc: BaseException) -> bool:
     return "timed out" in str(exc).lower()
 
 
+def _parse_retry_after_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        seconds = float(value)
+        return max(0.0, seconds)
+    except ValueError:
+        return None
+
+
+def _get_with_backoff(
+    url: str,
+    *,
+    timeout: int,
+    headers: dict | None = None,
+    attempts: int = 3,
+    base_backoff_seconds: float = 0.8,
+) -> requests.Response:
+    last_exc: requests.RequestException | None = None
+    for attempt in range(attempts):
+        try:
+            response = requests.get(url, timeout=timeout, headers=headers)
+            if response.status_code != 429 or attempt >= (attempts - 1):
+                return response
+            retry_after_seconds = _parse_retry_after_seconds(response.headers.get("Retry-After"))
+            backoff = retry_after_seconds if retry_after_seconds is not None else (
+                base_backoff_seconds * (2 ** attempt) + random.uniform(0.1, 0.6)
+            )
+            app.logger.warning(
+                "upstream 429; backing off %.2fs url=%s attempt=%s/%s",
+                backoff,
+                url,
+                attempt + 1,
+                attempts,
+            )
+            time.sleep(backoff)
+        except requests.Timeout as exc:
+            last_exc = exc
+            if attempt >= (attempts - 1):
+                raise
+            backoff = base_backoff_seconds * (2 ** attempt) + random.uniform(0.1, 0.4)
+            app.logger.warning(
+                "upstream timeout; retrying after %.2fs url=%s attempt=%s/%s",
+                backoff,
+                url,
+                attempt + 1,
+                attempts,
+            )
+            time.sleep(backoff)
+        except requests.RequestException as exc:
+            last_exc = exc
+            if attempt >= (attempts - 1):
+                raise
+            backoff = base_backoff_seconds * (2 ** attempt) + random.uniform(0.1, 0.4)
+            app.logger.warning(
+                "upstream request exception; retrying after %.2fs url=%s attempt=%s/%s exception=%s",
+                backoff,
+                url,
+                attempt + 1,
+                attempts,
+                exc.__class__.__name__,
+            )
+            time.sleep(backoff)
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("request retry loop exited unexpectedly")
+
+
 def _lookup_card_for_art(normalized_name: str) -> tuple[dict | None, str | None, int]:
     scryfall_url = f"https://api.scryfall.com/cards/named?exact={quote(normalized_name)}"
     try:
-        r = requests.get(scryfall_url, timeout=10)
+        r = _get_with_backoff(scryfall_url, timeout=10, attempts=4, base_backoff_seconds=0.9)
         if r.status_code == 200:
             return r.json(), None, 200
         reason, http_status = _classify_upstream_http_status(r.status_code)
@@ -1930,7 +2142,7 @@ def _lookup_card_for_art(normalized_name: str) -> tuple[dict | None, str | None,
 
     gallery_url = f"{CCAUTO_BASE_URL}/api/cards/search?q={quote(normalized_name.lower())}"
     try:
-        r = requests.get(gallery_url, timeout=5)
+        r = _get_with_backoff(gallery_url, timeout=5, attempts=3, base_backoff_seconds=0.6)
         if r.status_code != 200:
             reason, http_status = _classify_upstream_http_status(r.status_code)
             app.logger.warning(
@@ -1970,12 +2182,25 @@ def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]
     if not normalized_name:
         return None, "not_found", 404
 
+    cached_path = _get_card_art_web_path_from_index(normalized_name)
+    if cached_path:
+        return cached_path, None, 200
+
+    cached_failure = _pop_card_art_failure_index(normalized_name)
+    if cached_failure:
+        reason, status = cached_failure
+        return None, reason, status
+
     card, lookup_failure_reason, lookup_failure_status = _lookup_card_for_art(normalized_name)
     if not card:
-        return None, lookup_failure_reason or "not_found", lookup_failure_status
+        reason = lookup_failure_reason or "not_found"
+        status = lookup_failure_status or 404
+        _set_card_art_failure_index(normalized_name, reason, status)
+        return None, reason, status
 
     image_url = extract_normal_image(card)
     if not image_url:
+        _set_card_art_failure_index(normalized_name, "not_found", 404)
         return None, "not_found", 404
 
     card_id = card.get("id") or _safe_filename(normalized_name)
@@ -1985,24 +2210,39 @@ def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]
     web_path = f"/art/card_art/{filename}"
 
     if out_path.exists() and out_path.stat().st_size > 0:
+        _set_card_art_web_path_index(normalized_name, web_path)
+        _clear_card_art_failure_index(normalized_name)
         return web_path, None, 200
 
     try:
-        req = Request(
+        r = _get_with_backoff(
             image_url,
+            timeout=20,
+            attempts=4,
+            base_backoff_seconds=0.8,
             headers={
                 "User-Agent": "CommanderTracker/1.0 (https://edh.figurensohn.de)",
                 "Accept": "image/*,*/*;q=0.8",
             },
         )
-        with urlopen(req, timeout=20) as resp:
-            data = resp.read()
+        if r.status_code != 200:
+            reason, http_status = _classify_upstream_http_status(r.status_code)
+            app.logger.warning(
+                "cache_card_art_by_name download failed url=%s status=%s",
+                image_url,
+                r.status_code,
+            )
+            _set_card_art_failure_index(normalized_name, reason, http_status)
+            return None, reason, http_status
+
+        data = r.content
 
         if not data:
             app.logger.warning(
                 "cache_card_art_by_name download empty body url=%s status=200",
                 image_url,
             )
+            _set_card_art_failure_index(normalized_name, "upstream_failure", 502)
             return None, "upstream_failure", 502
 
         try:
@@ -2014,7 +2254,10 @@ def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]
                 exc.__class__.__name__,
                 str(exc),
             )
+            _set_card_art_failure_index(normalized_name, "storage_write_failed", 500)
             return None, "storage_write_failed", 500
+        _set_card_art_web_path_index(normalized_name, web_path)
+        _clear_card_art_failure_index(normalized_name)
         return web_path, None, 200
 
     except HTTPError as exc:
@@ -2025,6 +2268,7 @@ def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]
             exc.code,
             exc.__class__.__name__,
         )
+        _set_card_art_failure_index(normalized_name, reason, http_status)
         return None, reason, http_status
     except URLError as exc:
         reason = "upstream_timeout" if _is_timeout_error(exc) else "upstream_failure"
@@ -2034,13 +2278,31 @@ def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]
             image_url,
             exc.__class__.__name__,
         )
+        _set_card_art_failure_index(normalized_name, reason, http_status)
         return None, reason, http_status
+    except requests.Timeout as exc:
+        app.logger.error(
+            "cache_card_art_by_name download timeout url=%s exception=%s",
+            image_url,
+            exc.__class__.__name__,
+        )
+        _set_card_art_failure_index(normalized_name, "upstream_timeout", 504)
+        return None, "upstream_timeout", 504
+    except requests.RequestException as exc:
+        app.logger.error(
+            "cache_card_art_by_name download failed url=%s status=network exception=%s",
+            image_url,
+            exc.__class__.__name__,
+        )
+        _set_card_art_failure_index(normalized_name, "upstream_failure", 502)
+        return None, "upstream_failure", 502
     except Exception as exc:
         app.logger.error(
             "cache_card_art_by_name download failed url=%s status=unknown exception=%s",
             image_url,
             exc.__class__.__name__,
         )
+        _set_card_art_failure_index(normalized_name, "upstream_failure", 502)
         return None, "upstream_failure", 502
 
 
