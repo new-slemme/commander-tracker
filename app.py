@@ -4726,6 +4726,31 @@ def deck_export(deck_id):
     return Response(export_text + "\n", mimetype="text/plain; charset=utf-8", headers=headers)
 
 
+@app.route("/deck/<int:deck_id>/edit")
+@login_required
+def deck_editor(deck_id):
+    u = get_current_user()
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to edit this deck.")
+        return redirect(url_for("deck_detail", deck_id=deck_id))
+
+    decklist_data = _load_decklist_data(deck)
+
+    return render_template(
+        "deck_editor.html",
+        deck=deck,
+        decklist_data=decklist_data,
+        is_admin=bool(u.is_admin),
+        players=(Player.query.order_by(Player.name.asc()).all() if u.is_admin else []),
+        has_ccauto=bool(CCAUTO_BASE_URL),
+    )
+
+
 @app.route("/add_deck", methods=["POST"])
 @login_required
 def add_deck():
@@ -4827,32 +4852,79 @@ def api_gallery_image():
         return "Not found", 404
 
 
+@app.route("/api/ccauto/sets")
+def api_ccauto_sets():
+    """List custom card sets from the cc-auto gallery. Returns [] if unavailable."""
+    if not CCAUTO_BASE_URL:
+        return jsonify([])
+    try:
+        r = requests.get(f"{CCAUTO_BASE_URL}/api/sets", timeout=5)
+        if r.status_code == 200:
+            payload = r.json()
+            # cc-auto wraps lists as {object: 'list', data: [...]}
+            if isinstance(payload, dict) and "data" in payload:
+                payload = payload["data"]
+            return jsonify(payload)
+    except requests.RequestException:
+        pass
+    return jsonify([])
+
+
+@app.route("/api/ccauto/sets/<set_name>")
+def api_ccauto_set_cards(set_name):
+    """Proxy a cc-auto set's card list ({name, image_uris, …} per card)."""
+    if not CCAUTO_BASE_URL:
+        return jsonify({"error": "Custom gallery not configured"}), 404
+    try:
+        r = requests.get(f"{CCAUTO_BASE_URL}/api/sets/{quote(set_name)}/cards", timeout=10)
+        if r.status_code == 404:
+            return jsonify({"error": "Set not found"}), 404
+        if r.status_code != 200:
+            return jsonify({"error": "Gallery error"}), 502
+        payload = r.json()
+        # cc-auto wraps lists as {object: 'list', data: [...]}
+        if isinstance(payload, dict) and "data" in payload:
+            payload = payload["data"]
+        if not isinstance(payload, list):
+            return jsonify({"error": "Unexpected response shape"}), 502
+        # Rewrite image paths so the browser can reach them via our proxy
+        rewritten = [_rewrite_gallery_image_uris(c) if isinstance(c, dict) else c for c in payload]
+        return jsonify(rewritten)
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
 @app.route("/api/cards/autocomplete")
 def api_cards_autocomplete():
-    """Merge Scryfall + gallery autocomplete results."""
+    """Merge Scryfall + gallery autocomplete results.
+
+    Optional ?source=scryfall|custom|all (default: all).
+    """
     q = (request.args.get("q") or "").strip()
     if not q:
         return jsonify({"data": []})
 
+    source = (request.args.get("source") or "all").strip().lower()
     results = []
     seen = set()
 
     # Scryfall
-    try:
-        r = requests.get(
-            f"https://api.scryfall.com/cards/autocomplete?q={quote(q)}", timeout=5
-        )
-        if r.status_code == 200:
-            for name in r.json().get("data") or []:
-                key = name.lower()
-                if key not in seen:
-                    seen.add(key)
-                    results.append(name)
-    except requests.RequestException:
-        pass
+    if source in ("all", "scryfall"):
+        try:
+            r = requests.get(
+                f"https://api.scryfall.com/cards/autocomplete?q={quote(q)}", timeout=5
+            )
+            if r.status_code == 200:
+                for name in r.json().get("data") or []:
+                    key = name.lower()
+                    if key not in seen:
+                        seen.add(key)
+                        results.append(name)
+        except requests.RequestException:
+            pass
 
     # Gallery
-    if CCAUTO_BASE_URL:
+    if source in ("all", "custom") and CCAUTO_BASE_URL:
         try:
             r = requests.get(
                 f"{CCAUTO_BASE_URL}/api/cards/autocomplete?q={quote(q)}", timeout=5
