@@ -582,7 +582,7 @@
             cnt.textContent = `(${s.card_count})`;
             chip.appendChild(cnt);
           }
-          chip.addEventListener('click', () => loadSetCards(s.name));
+          chip.addEventListener('click', () => loadSetCards(s.code || s.name));
           setsBrowserBody.appendChild(chip);
         }
       })

@@ -4860,7 +4860,11 @@ def api_ccauto_sets():
     try:
         r = requests.get(f"{CCAUTO_BASE_URL}/api/sets", timeout=5)
         if r.status_code == 200:
-            return jsonify(r.json())
+            payload = r.json()
+            # cc-auto wraps lists as {object: 'list', data: [...]}
+            if isinstance(payload, dict) and "data" in payload:
+                payload = payload["data"]
+            return jsonify(payload)
     except requests.RequestException:
         pass
     return jsonify([])
@@ -4872,16 +4876,19 @@ def api_ccauto_set_cards(set_name):
     if not CCAUTO_BASE_URL:
         return jsonify({"error": "Custom gallery not configured"}), 404
     try:
-        r = requests.get(f"{CCAUTO_BASE_URL}/sets/{quote(set_name)}.json", timeout=10)
+        r = requests.get(f"{CCAUTO_BASE_URL}/api/sets/{quote(set_name)}/cards", timeout=10)
         if r.status_code == 404:
             return jsonify({"error": "Set not found"}), 404
         if r.status_code != 200:
             return jsonify({"error": "Gallery error"}), 502
-        cards = r.json()
-        if not isinstance(cards, list):
+        payload = r.json()
+        # cc-auto wraps lists as {object: 'list', data: [...]}
+        if isinstance(payload, dict) and "data" in payload:
+            payload = payload["data"]
+        if not isinstance(payload, list):
             return jsonify({"error": "Unexpected response shape"}), 502
         # Rewrite image paths so the browser can reach them via our proxy
-        rewritten = [_rewrite_gallery_image_uris(c) if isinstance(c, dict) else c for c in cards]
+        rewritten = [_rewrite_gallery_image_uris(c) if isinstance(c, dict) else c for c in payload]
         return jsonify(rewritten)
     except requests.RequestException as exc:
         return jsonify({"error": str(exc)}), 502
