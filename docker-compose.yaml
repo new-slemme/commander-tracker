@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     ports: 
       - "5000:5000"  # No direct host exposure; Traefik handles it
+    environment:
+      - CCAUTO_BASE_URL=http://cc-auto:4242
     volumes:
       - ./data:/data
       - ./apk:/app/apk
