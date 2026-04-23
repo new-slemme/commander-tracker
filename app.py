@@ -1850,28 +1850,110 @@ def extract_normal_image(card: dict) -> str | None:
     return None
 
 
-def cache_card_art_by_name(card_name: str) -> str | None:
+def _classify_upstream_http_status(status_code: int) -> tuple[str, int]:
+    if status_code == 404:
+        return "not_found", 404
+    if status_code == 429:
+        return "upstream_rate_limited", 429
+    if status_code in (408, 504):
+        return "upstream_timeout", 504
+    return "upstream_failure", 502
+
+
+def _is_timeout_error(exc: BaseException) -> bool:
+    if isinstance(exc, TimeoutError):
+        return True
+    reason = getattr(exc, "reason", None)
+    if isinstance(reason, TimeoutError):
+        return True
+    return "timed out" in str(exc).lower()
+
+
+def _lookup_card_for_art(normalized_name: str) -> tuple[dict | None, str | None, int]:
+    scryfall_url = f"https://api.scryfall.com/cards/named?exact={quote(normalized_name)}"
+    try:
+        r = requests.get(scryfall_url, timeout=10)
+        if r.status_code == 200:
+            return r.json(), None, 200
+        reason, http_status = _classify_upstream_http_status(r.status_code)
+        app.logger.warning(
+            "cache_card_art_by_name lookup failed provider=scryfall url=%s status=%s",
+            scryfall_url,
+            r.status_code,
+        )
+        if reason == "not_found" and CCAUTO_BASE_URL:
+            app.logger.info(
+                "cache_card_art_by_name scryfall miss; trying custom gallery name=%s", normalized_name
+            )
+        else:
+            return None, reason, http_status
+    except requests.Timeout as exc:
+        app.logger.error(
+            "cache_card_art_by_name lookup exception provider=scryfall url=%s exception=%s",
+            scryfall_url,
+            exc.__class__.__name__,
+        )
+        return None, "upstream_timeout", 504
+    except requests.RequestException as exc:
+        app.logger.error(
+            "cache_card_art_by_name lookup exception provider=scryfall url=%s exception=%s",
+            scryfall_url,
+            exc.__class__.__name__,
+        )
+        return None, "upstream_failure", 502
+
+    if not CCAUTO_BASE_URL:
+        return None, "not_found", 404
+
+    gallery_url = f"{CCAUTO_BASE_URL}/api/cards/search?q={quote(normalized_name.lower())}"
+    try:
+        r = requests.get(gallery_url, timeout=5)
+        if r.status_code != 200:
+            reason, http_status = _classify_upstream_http_status(r.status_code)
+            app.logger.warning(
+                "cache_card_art_by_name lookup failed provider=custom_gallery url=%s status=%s",
+                gallery_url,
+                r.status_code,
+            )
+            return None, reason, http_status
+
+        data = r.json()
+        for gallery_card in data.get("data") or []:
+            if isinstance(gallery_card, dict) and (gallery_card.get("name") or "").lower().strip() == normalized_name.lower():
+                uris = gallery_card.get("image_uris") or {}
+                normal_path = uris.get("normal") or ""
+                if normal_path.startswith("/"):
+                    normal_path = CCAUTO_BASE_URL + normal_path
+                return {**gallery_card, "image_uris": {**uris, "normal": normal_path}}, None, 200
+        return None, "not_found", 404
+    except requests.Timeout as exc:
+        app.logger.error(
+            "cache_card_art_by_name lookup exception provider=custom_gallery url=%s exception=%s",
+            gallery_url,
+            exc.__class__.__name__,
+        )
+        return None, "upstream_timeout", 504
+    except (requests.RequestException, ValueError) as exc:
+        app.logger.error(
+            "cache_card_art_by_name lookup exception provider=custom_gallery url=%s exception=%s",
+            gallery_url,
+            exc.__class__.__name__,
+        )
+        return None, "upstream_failure", 502
+
+
+def cache_card_art_by_name(card_name: str) -> tuple[str | None, str | None, int]:
     normalized_name = (card_name or "").strip()
     if not normalized_name:
-        return None
+        return None, "not_found", 404
 
-    card = scryfall_named_exact(normalized_name)
-    if not card and CCAUTO_BASE_URL:
-        gallery_card = custommtg_gallery_named_exact(normalized_name)
-        if gallery_card:
-            # Make relative image path absolute for download
-            uris = gallery_card.get("image_uris") or {}
-            normal_path = uris.get("normal") or ""
-            if normal_path.startswith("/"):
-                normal_path = CCAUTO_BASE_URL + normal_path
-            card = {**gallery_card, "image_uris": {**uris, "normal": normal_path}}
-
+    card, lookup_failure_reason, lookup_failure_status = _lookup_card_for_art(normalized_name)
     if not card:
-        return None
+        return None, lookup_failure_reason or "not_found", lookup_failure_status
 
     image_url = extract_normal_image(card)
     if not image_url:
-        return None
+        return None, "not_found", 404
 
     card_id = card.get("id") or _safe_filename(normalized_name)
     safe_name = _safe_filename(card.get("name") or normalized_name) or "card"
@@ -1880,7 +1962,7 @@ def cache_card_art_by_name(card_name: str) -> str | None:
     web_path = f"/art/card_art/{filename}"
 
     if out_path.exists() and out_path.stat().st_size > 0:
-        return web_path
+        return web_path, None, 200
 
     try:
         req = Request(
@@ -1894,18 +1976,48 @@ def cache_card_art_by_name(card_name: str) -> str | None:
             data = resp.read()
 
         if not data:
-            print("cache_card_art_by_name: empty response", image_url)
-            return None
+            app.logger.warning(
+                "cache_card_art_by_name download empty body url=%s status=200",
+                image_url,
+            )
+            return None, "upstream_failure", 502
 
-        out_path.write_bytes(data)
-        return web_path
+        try:
+            out_path.write_bytes(data)
+        except OSError as exc:
+            app.logger.error(
+                "cache_card_art_by_name write failed path=%s exception=%s",
+                out_path,
+                exc.__class__.__name__,
+            )
+            return None, "write_failed", 500
+        return web_path, None, 200
 
-    except (HTTPError, URLError) as e:
-        print("cache_card_art_by_name failed:", e, image_url)
-        return None
-    except Exception as e:
-        print("cache_card_art_by_name unexpected error:", e, image_url)
-        return None
+    except HTTPError as exc:
+        reason, http_status = _classify_upstream_http_status(exc.code)
+        app.logger.warning(
+            "cache_card_art_by_name download failed url=%s status=%s exception=%s",
+            image_url,
+            exc.code,
+            exc.__class__.__name__,
+        )
+        return None, reason, http_status
+    except URLError as exc:
+        reason = "upstream_timeout" if _is_timeout_error(exc) else "upstream_failure"
+        http_status = 504 if reason == "upstream_timeout" else 502
+        app.logger.error(
+            "cache_card_art_by_name download failed url=%s status=network exception=%s",
+            image_url,
+            exc.__class__.__name__,
+        )
+        return None, reason, http_status
+    except Exception as exc:
+        app.logger.error(
+            "cache_card_art_by_name download failed url=%s status=unknown exception=%s",
+            image_url,
+            exc.__class__.__name__,
+        )
+        return None, "upstream_failure", 502
 
 
 def _extract_deck_import_text() -> tuple[str | None, str | None]:
@@ -4830,10 +4942,11 @@ def add_deck():
 def api_card_art():
     card_name = (request.args.get("name") or "").strip()
     if not card_name:
-        return jsonify({"image": None})
+        return jsonify({"image": None, "failure_reason": "not_found"}), 404
 
-    image = cache_card_art_by_name(card_name)
-    return jsonify({"image": image})
+    image, failure_reason, status_code = cache_card_art_by_name(card_name)
+    payload = {"image": image, "failure_reason": failure_reason}
+    return jsonify(payload), status_code
 
 
 @app.route("/api/gallery-image")
