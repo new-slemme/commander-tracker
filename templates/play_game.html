@@ -44,10 +44,21 @@
               {% endfor %}
             </select>
 
-            <label class="form-label mb-1 title-font">Select Deck:</label>
-            <select name="deck{{ i }}" id="deck{{ i }}" class="form-select" disabled>
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label mb-0 title-font">Select Deck:</label>
+              <button type="button" class="borrow-btn" id="borrowBtn{{ i }}" onclick="toggleBorrowMode({{ i }})">⇄ Borrow</button>
+            </div>
+            <select id="deck{{ i }}" class="form-select" disabled>
               <option>Select player first</option>
             </select>
+            <input type="hidden" name="deck{{ i }}" id="deckHidden{{ i }}" value="">
+            <input type="hidden" name="borrow{{ i }}" id="borrowFlag{{ i }}" value="">
+            <div id="borrowSection{{ i }}" class="d-none mt-2">
+              <label class="form-label mb-1 title-font borrow-label">Borrowing from:</label>
+              <select id="borrowDeck{{ i }}" class="form-select borrow-select">
+                <option value="">Select a deck to borrow</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -134,6 +145,7 @@
 <script>
   const decksData = {{ decks_json | safe }};
   let playerCount = 2;
+  const borrowModeSlots = new Set();
 
   function isActiveSlot(i) {
     return i <= playerCount;
@@ -226,28 +238,18 @@
   }
 
   function setPlayerCardBackground(i) {
-    const playerSel = document.getElementById("player" + i);
-    const deckSel = document.getElementById("deck" + i);
-    if (!playerSel || !deckSel) return;
-
     if (!isActiveSlot(i)) return;
 
-    const tile = deckSel.closest(".player-panel")?.querySelector(".player-tile");
+    const panel = document.querySelector(`.player-panel[data-slot="${i}"]`);
+    const tile = panel?.querySelector(".player-tile");
     if (!tile) return;
 
-    if (!isActiveSlot(i)) return;
+    const deckHidden = document.getElementById("deckHidden" + i);
+    const did = deckHidden ? deckHidden.value : '';
 
-    const pid = playerSel.value;
-    const did = deckSel.value;
-
-    let art = null;
-    let artScale = "cover";
-    if (pid && did) {
-      const list = decksData[String(pid)] || [];
-      const match = list.find(x => String(x.id) === String(did));
-      art = match?.art || null;
-      artScale = match?.art_scale || "cover";
-    }
+    const match = findDeckById(did);
+    const art = match?.art || null;
+    const artScale = match?.art_scale || "cover";
 
     if (art) {
       tile.classList.add("has-bg");
@@ -332,15 +334,26 @@
     }
   }
 
+  function findDeckById(did) {
+    if (!did) return null;
+    for (const decks of Object.values(decksData)) {
+      const match = decks.find(x => String(x.id) === String(did));
+      if (match) return match;
+    }
+    return null;
+  }
+
   function refreshDeckSelect(i) {
     const playerSel = document.getElementById('player' + i);
     const deckSel = document.getElementById('deck' + i);
+    const deckHidden = document.getElementById('deckHidden' + i);
     if (!playerSel || !deckSel) return;
 
     const pid = playerSel.value;
 
     deckSel.innerHTML = '<option value="">Select deck</option>';
     deckSel.disabled = true;
+    if (deckHidden) deckHidden.value = '';
 
     if (pid && decksData[String(pid)]) {
       decksData[String(pid)].forEach(d => {
@@ -356,11 +369,70 @@
     setPlayerCardBackground(i);
   }
 
+  function refreshBorrowDeckSelect(i) {
+    const borrowSel = document.getElementById('borrowDeck' + i);
+    if (!borrowSel) return;
+
+    borrowSel.innerHTML = '<option value="">Select a deck to borrow</option>';
+
+    for (const [pid, decks] of Object.entries(decksData)) {
+      if (!decks.length) continue;
+      const group = document.createElement('optgroup');
+      group.label = decks[0].owner_name || ('Player ' + pid);
+      decks.forEach(d => {
+        group.appendChild(new Option(d.name, d.id));
+      });
+      borrowSel.appendChild(group);
+    }
+  }
+
+  function toggleBorrowMode(i) {
+    const btn = document.getElementById('borrowBtn' + i);
+    const deckSel = document.getElementById('deck' + i);
+    const deckHidden = document.getElementById('deckHidden' + i);
+    const borrowSection = document.getElementById('borrowSection' + i);
+    const borrowFlag = document.getElementById('borrowFlag' + i);
+    const borrowSel = document.getElementById('borrowDeck' + i);
+
+    if (borrowModeSlots.has(i)) {
+      // Exit borrow mode
+      borrowModeSlots.delete(i);
+      btn.classList.remove('active');
+      btn.textContent = '⇄ Borrow';
+      borrowSection.classList.add('d-none');
+      if (borrowFlag) borrowFlag.value = '';
+
+      // Re-enable normal deck select
+      const playerSel = document.getElementById('player' + i);
+      const pid = playerSel?.value;
+      deckSel.style.display = '';
+      deckSel.disabled = !pid || !decksData[String(pid)];
+      if (deckHidden) deckHidden.value = deckSel.value || '';
+    } else {
+      // Enter borrow mode
+      borrowModeSlots.add(i);
+      btn.classList.add('active');
+      btn.textContent = '✕ Own deck';
+      borrowSection.classList.remove('d-none');
+      if (borrowFlag) borrowFlag.value = '1';
+
+      // Hide normal deck select so it doesn't submit
+      deckSel.style.display = 'none';
+      if (deckHidden) deckHidden.value = borrowSel?.value || '';
+
+      refreshBorrowDeckSelect(i);
+    }
+    setPlayerCardBackground(i);
+  }
+
   function setupPlayerListeners(i) {
     const playerSel = document.getElementById('player' + i);
     if (!playerSel) return;
 
     playerSel.addEventListener('change', function() {
+      if (borrowModeSlots.has(i)) {
+        toggleBorrowMode(i); // exit borrow mode when player changes
+      }
       refreshDeckSelect(i);
       refreshStartingPlayerOptions();
       updatePlayerOptionDisabling();
@@ -369,11 +441,22 @@
 
   function setupDeckListeners(i) {
     const deckSel = document.getElementById("deck" + i);
-    if (!deckSel) return;
+    if (deckSel) {
+      deckSel.addEventListener("change", function() {
+        const deckHidden = document.getElementById("deckHidden" + i);
+        if (deckHidden) deckHidden.value = deckSel.value;
+        setPlayerCardBackground(i);
+      });
+    }
 
-    deckSel.addEventListener("change", function() {
-      setPlayerCardBackground(i);
-    });
+    const borrowSel = document.getElementById("borrowDeck" + i);
+    if (borrowSel) {
+      borrowSel.addEventListener("change", function() {
+        const deckHidden = document.getElementById("deckHidden" + i);
+        if (deckHidden) deckHidden.value = borrowSel.value;
+        setPlayerCardBackground(i);
+      });
+    }
   }
 
   function applyPlayerCount(count) {
@@ -394,6 +477,7 @@
       panel.classList.toggle('hidden', !isActive);
 
       if (!isActive) {
+        if (borrowModeSlots.has(i)) toggleBorrowMode(i);
         playerSel.value = '';
         deckSel.innerHTML = '<option>Select player first</option>';
         deckSel.disabled = true;

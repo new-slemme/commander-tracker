@@ -397,3 +397,40 @@
 
   /* Disabled options readability */
   option:disabled { color: rgba(143,153,197,0.45); }
+
+  /* Borrow deck button */
+  .borrow-btn {
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: 8px;
+    border: 1px solid rgba(143,153,197,0.4);
+    background: transparent;
+    color: rgba(170,181,235,0.75);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    flex-shrink: 0;
+  }
+  .borrow-btn:hover {
+    border-color: var(--blue);
+    color: #aab8ff;
+  }
+  .borrow-btn.active {
+    border-color: var(--orange);
+    color: var(--orange);
+    background: var(--orange-trans);
+  }
+
+  .borrow-label {
+    font-size: 0.78rem;
+    color: rgba(255,180,80,0.85);
+  }
+
+  .borrow-select {
+    border-color: rgba(255,150,60,0.5);
+  }
+  .borrow-select:focus {
+    border-color: var(--orange);
+    box-shadow: 0 0 0 0.2rem rgba(255,107,53,0.18);
+  }

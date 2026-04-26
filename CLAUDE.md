@@ -80,7 +80,7 @@ All models are defined in `app.py` and use Flask-SQLAlchemy. The database is SQL
 
 - **User** — Authentication accounts (username, password hash, active/admin flags, preferences)
 - **Player** — Game participants (1:1 optional link to User; players can exist without accounts)
-- **Deck** — MTG decks with commander info, color identity, decklist text, computed tags
+- **Deck** — MTG decks with commander info, color identity, decklist text, computed tags. `retired=True` = no longer in use; `planned=True` = planned/future build. Both are excluded from game setup and validation.
 - **Game** — Completed game records (winner, win type, participants, salt rating, timing data)
 - **Pod** — Play groups (many-to-many with Player via PodMembership)
 - **PodMembership** — Player membership in a pod with role (`member` | `podmaster`)
@@ -88,7 +88,7 @@ All models are defined in `app.py` and use Flask-SQLAlchemy. The database is SQL
 - **RegistrationRequest** — Pending user registrations with approval workflow
 - **ActiveGame** — In-progress game sessions (token, state JSON, participants JSON)
 
-**Schema changes:** The app calls `db.create_all()` at startup. Flask-Migrate/Alembic is a dependency but migration scripts are not present in the repo — schema evolution is handled by `db.create_all()` and manual SQL when needed.
+**Schema changes:** Schema evolution uses a custom `run_schema_migrations()` function (inside the `with app.app_context()` block near line 779) that tracks applied versions in a `schema_migrations` table. New columns/tables must be added there as a new `if "NNN_description" not in applied:` block with a matching `INSERT INTO schema_migrations` commit. `db.create_all()` only handles brand-new installs.
 
 ## Key Constants and Configuration (app.py top section)
 
@@ -126,6 +126,8 @@ All models are defined in `app.py` and use Flask-SQLAlchemy. The database is SQL
 **API endpoints:** `/api/game/<token>/state`, `/api/deck-import-preview`, `/api/cards/autocomplete`, `/api/cards/named`, `/api/commander-bracket`, `/api/card-art`, `/api/gallery-image`
 
 **Stats:** `/saltmine` — Leaderboard and game statistics
+
+**Other:** `/manual_game` — Enter a completed game result without the live game flow; `/compare` — Side-by-side player stat comparison; `/apk` — Android APK download page
 
 ## Game State API
 
@@ -198,6 +200,12 @@ Supports:
 - PWA manifest at `static/manifest.webmanifest`
 - `life_counter.html` is the most complex template — it contains all real-time game UI logic including responsive layouts for different player counts and viewport sizes
 
+### Theming
+
+The app has a light/dark theme toggle. `User.use_light_theme` is stored in session and checked in every template via `use_light_theme`. `base.html` sets `data-bs-theme="light|dark"` on `<html>` and conditionally loads `static/css/light_theme.css`.
+
+All colors are CSS custom properties — use variables like `--blue`, `--red`, `--green`, `--purple`, `--orange`, `--yellow`, `--font-base`, `--lightest`, `--lighter`, `--light-base` (and their `-trans` alpha variants) rather than hardcoded colors. `LIGHT_THEME.md` contains the light-mode overrides for these variables.
+
 ## Testing Conventions
 
 - Tests use Python `unittest` (not pytest fixtures, though pytest can run them)
@@ -218,6 +226,17 @@ Supports:
 - Card names in bracket/tag logic are stored and compared **lowercase**
 - Commander damage values are capped at 99; poison counters capped at 10; generic counters capped at 999
 
+## JSON REST API
+
+A full REST API (for standalone clients/mobile) is documented in `docs/API.md`. Key endpoints beyond what's listed above:
+
+- `POST /api/login`, `POST /api/logout`, `GET /api/me` — session-based auth
+- `GET /api/players`, `GET /api/players/<id>` — player list and detail
+- `GET /api/games`, `GET /api/games/<id>` — paginated game history
+- `GET /api/decks`, `POST /api/decks`, `PATCH|PUT /api/decks/<id>` — full deck CRUD
+- `GET /api/stats` — aggregated leaderboard data
+- `GET|POST /api/join/<token>` — seat-claim for mobile companion mode
+
 ## Data Setup for Testing (see also AGENTS.md)
 
 Before testing life-counter or game flows, ensure:
@@ -226,6 +245,8 @@ Before testing life-counter or game flows, ensure:
 3. Use `https://archidekt.com/decks/10697552/pirates_unmodified` as a canonical import source
 
 The `BOOTSTRAP_TEST_USER` + `AUTO_LOGIN_TEST_USER` env vars allow automated test sessions without manual login.
+
+**UI change validation:** Any change to visible in-game UI must be verified with at least one screenshot of a running game session showing all active players (life counter screen). See `AGENTS.md` for the full verification checklist.
 
 ## Git Workflow
 
