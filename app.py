@@ -5618,6 +5618,7 @@ def play_game():
                 "name": d.name,
                 "art": d.commander_art_url,
                 "art_scale": d.commander_art_scale,
+                "owner_name": p.name,
             }
             for d in active_decks
         ]
@@ -5646,9 +5647,16 @@ def start_game():
                 return "Duplicate players not allowed", 400
             seen.add(p_id)
 
+            borrowing = request.form.get(f"borrow{i}") == "1"
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.player_id != p_id or deck.retired or deck.planned:
+            if not deck or deck.retired or deck.planned:
+                return "Invalid deck", 400
+            if not borrowing and deck.player_id != p_id:
                 return "Invalid deck for player", 400
+
+            player = db.session.get(Player, p_id)
+            if not player:
+                return "Invalid player", 400
 
             deck_tags = get_deck_parsed_tags(deck)
             deck_mechanics = derive_deck_mechanics(deck_tags)
@@ -5657,7 +5665,7 @@ def start_game():
                 "player_id": p_id,
                 "deck_id": d_id,
                 "seat_position": len(participants) + 1,
-                "player_name": deck.owner.name,
+                "player_name": player.name,
                 "deck_name": deck.name,
                 "commander_art": deck.commander_art_url,
                 "commander_art_scale": deck.commander_art_scale,
