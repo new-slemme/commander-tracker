@@ -558,6 +558,17 @@
   }
 
   document.getElementById("gameForm").addEventListener("submit", async (e) => {
+    // Sync deck hidden inputs from visible selects (for non-borrow slots)
+    // so the value is always current regardless of whether the change event fired.
+    for (let i = 1; i <= 6; i++) {
+      if (borrowModeSlots.has(i)) continue;
+      const deckSel = document.getElementById("deck" + i);
+      const deckHidden = document.getElementById("deckHidden" + i);
+      if (deckSel && deckHidden && !deckSel.disabled) {
+        deckHidden.value = deckSel.value;
+      }
+    }
+
     if (!e.target.checkValidity()) return;
 
     e.preventDefault();

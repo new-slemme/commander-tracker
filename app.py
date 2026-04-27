@@ -668,6 +668,7 @@ class GameParticipant(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False)
     player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=False, index=True)
     deck_id = db.Column(db.Integer, db.ForeignKey("deck.id"), nullable=False, index=True)
+    borrowed_from_player_id = db.Column(db.Integer, db.ForeignKey("player.id"), nullable=True)
     seat_position = db.Column(db.Integer, nullable=True)
     flags_json = db.Column(db.Text, nullable=True)
     salt_count = db.Column(db.Integer, nullable=False, default=0)
@@ -675,9 +676,10 @@ class GameParticipant(db.Model):
     misplayed = db.Column(db.Boolean, nullable=False, default=False)
     life_delta_total = db.Column(db.Integer, nullable=True, default=0)
 
-    player = db.relationship("Player", backref="participations", lazy=True)
+    player = db.relationship("Player", foreign_keys=[player_id], backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
     game = db.relationship("Game", backref="participants", lazy=True)
+    borrowed_from_player = db.relationship("Player", foreign_keys=[borrowed_from_player_id], lazy=True)
 
     __table_args__ = (
         db.UniqueConstraint("game_id", "player_id", name="unique_player_per_game"),
@@ -1320,6 +1322,18 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('019_user_light_theme_preference')")
+            )
+
+        if "020_gameparticipant_borrowed_from" not in applied:
+            gp_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
+            }
+            if "borrowed_from_player_id" not in gp_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN borrowed_from_player_id INTEGER REFERENCES player(id)")
+                )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('020_gameparticipant_borrowed_from')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -2984,6 +2998,7 @@ def require_login():
             "api_game_state",
             "api_join_get",
             "api_join_claim",
+            "api_homepage",
         }
         if request.endpoint not in public_endpoints:
             if request.path.startswith("/api/"):
@@ -5404,6 +5419,53 @@ def api_commander_bracket():
     return jsonify({"error": "Provide either 'cards' (array) or 'decklist_text' (string)."}), 400
 
 
+@app.route("/api/homepage")
+def api_homepage():
+    """Public read-only summary for the figurenhome dashboard."""
+    total_games = Game.query.count()
+    players = Player.query.all()
+
+    wins_by_player = dict(
+        db.session.query(Game.winner_id, func.count(Game.id))
+        .group_by(Game.winner_id)
+        .all()
+    )
+    played_by_player = dict(
+        db.session.query(GameParticipant.player_id, func.count(GameParticipant.id))
+        .group_by(GameParticipant.player_id)
+        .all()
+    )
+
+    player_stats = []
+    for p in players:
+        wins = wins_by_player.get(p.id, 0)
+        played = played_by_player.get(p.id, 0)
+        winrate = round(wins / played * 100, 1) if played > 0 else 0.0
+        player_stats.append({"name": p.name, "wins": wins, "played": played, "winrate": winrate})
+    player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
+
+    last_game_data = None
+    last_game = Game.query.order_by(Game.date.desc()).first()
+    if last_game:
+        winner_part = GameParticipant.query.filter_by(
+            game_id=last_game.id, player_id=last_game.winner_id
+        ).first()
+        player_count = GameParticipant.query.filter_by(game_id=last_game.id).count()
+        last_game_data = {
+            "date": last_game.date.isoformat() if last_game.date else None,
+            "winner": last_game.winner.name if last_game.winner else None,
+            "deck": winner_part.deck.name if winner_part and winner_part.deck else None,
+            "commander": winner_part.deck.commander if winner_part and winner_part.deck else None,
+            "art_url": winner_part.deck.commander_art_url if winner_part and winner_part.deck else None,
+            "win_type": last_game.win_type,
+            "player_count": player_count,
+        }
+
+    response = jsonify({"total_games": total_games, "players": player_stats, "last_game": last_game_data})
+    response.headers["Access-Control-Allow-Origin"] = "https://figurensohn.de"
+    return response
+
+
 @app.route("/api/deck-import-preview", methods=["POST"])
 @login_required
 def deck_import_preview():
@@ -5658,6 +5720,10 @@ def start_game():
             if not player:
                 return "Invalid player", 400
 
+            borrowed_from_player_id = None
+            if borrowing and deck.player_id != p_id:
+                borrowed_from_player_id = deck.player_id
+
             deck_tags = get_deck_parsed_tags(deck)
             deck_mechanics = derive_deck_mechanics(deck_tags)
 
@@ -5670,6 +5736,7 @@ def start_game():
                 "commander_art": deck.commander_art_url,
                 "commander_art_scale": deck.commander_art_scale,
                 "mechanics": deck_mechanics,
+                "borrowed_from_player_id": borrowed_from_player_id,
             })
 
     if len(participants) < 2:
@@ -6134,6 +6201,7 @@ def end_game():
                 game_id=game.id,
                 player_id=p["player_id"],
                 deck_id=p["deck_id"],
+                borrowed_from_player_id=p.get("borrowed_from_player_id"),
                 seat_position=p.get("seat_position"),
                 flags_json=participant_flags_json,
                 salt_count=int(participant_hot_fields["salt_count"]),
