@@ -2,7 +2,13 @@
 {% block content %}
 <link href="{{ url_for('static', filename='css/deck_editor.css') }}" rel="stylesheet">
 
-{# ── Initialise deck state from server-rendered decklist ── #}
+{# Split commander into primary + optional partner #}
+{% set _full_cmd = deck.commander_name or deck.commander or '' %}
+{% set _cmd_parts = _full_cmd.split(' + ') %}
+{% set _primary_cmd = _cmd_parts[0] | trim %}
+{% set _partner_cmd = _cmd_parts[1] | trim if _cmd_parts | length > 1 else '' %}
+
+{# ── Seed initial state from server-rendered deck ── #}
 <script>
 (function () {
   const raw = {{ decklist_data | tojson }};
@@ -19,36 +25,38 @@
   }
 
   window._EDITOR_INIT = {
-    deckId:    {{ deck.id }},
-    deckName:  {{ deck.name | tojson }},
-    commander: {{ (deck.commander_name or deck.commander or '') | tojson }},
-    sections:  sections,
-    hasCcauto: {{ 'true' if has_ccauto else 'false' }},
+    deckId:               {{ deck.id }},
+    deckName:             {{ deck.name | tojson }},
+    commander:            {{ _primary_cmd | tojson }},
+    partner:              {{ _partner_cmd | tojson }},
+    retired:              {{ deck.retired | tojson }},
+    planned:              {{ deck.planned | tojson }},
+    artUrl:               {{ (deck.commander_art_url or '') | tojson }},
+    printPrefs:           {{ card_print_prefs | tojson }},
+    customCommanderArt:   {{ (deck.commander_local_art_custom or deck.custom_commander_art_url or '') | tojson }},
+    customCardArt:        {{ (deck.custom_card_art_local or deck.custom_card_art_url or '') | tojson }},
+    ownerName:            {{ owner_name | tojson }},
+    sections:             sections,
+    hasCcauto:            {{ 'true' if has_ccauto else 'false' }},
   };
 })();
 </script>
 
 {# ── Top bar ── #}
 <div class="editor-topbar">
-  <a class="editor-topbar-back" href="{{ url_for('deck_detail', deck_id=deck.id) }}">
-    ‹ Back
-  </a>
-
+  <a class="editor-topbar-back" href="{{ url_for('deck_detail', deck_id=deck.id) }}">‹ Back</a>
   <div class="editor-topbar-title">
     <input id="editorNameInput" class="editor-name-input" type="text"
            value="{{ deck.name }}" autocomplete="off" spellcheck="false">
   </div>
-
   <div class="editor-topbar-actions">
     <span id="editorCountBadge" class="editor-count-badge count-low">0 cards</span>
     <span id="editorUnsavedDot" class="editor-unsaved-dot" title="Unsaved changes">● Unsaved</span>
-    <button id="editorSaveBtn" class="btn btn-success btn-sm" style="min-height:36px;font-weight:800;">
-      Save
-    </button>
+    <button id="editorSaveBtn" class="btn btn-success btn-sm" style="min-height:36px;font-weight:800;">Save</button>
   </div>
 </div>
 
-{# ── Shell ── #}
+{# ── Editor shell ── #}
 <div class="editor-shell">
 
   {# Tab bar (mobile only) #}
@@ -58,6 +66,9 @@
     </button>
     <button class="editor-tab-btn active" id="tabBtnSearch" data-panel="search">
       Search Cards
+    </button>
+    <button class="editor-tab-btn" id="tabBtnSettings" data-panel="settings">
+      Settings
     </button>
   </div>
 
@@ -74,7 +85,6 @@
                    autocapitalize="off" spellcheck="false">
             <div id="editorAutocompleteMenu" class="editor-autocomplete-menu" style="display:none;"></div>
           </div>
-
           {% if has_ccauto %}
           <div class="editor-source-pills">
             <button class="editor-source-pill active" data-source="all">All</button>
@@ -85,9 +95,7 @@
         </div>
 
         <div id="editorSearchResults" class="editor-search-results">
-          <div class="search-state-msg" id="searchPlaceholder">
-            Type a card name to search
-          </div>
+          <div class="search-state-msg" id="searchPlaceholder">Type a card name to search</div>
         </div>
 
         {% if has_ccauto %}
@@ -108,7 +116,7 @@
     {# ── Deck panel ── #}
     <div class="editor-deck-panel" id="panelDeck">
 
-      {# Commander field at top of deck panel #}
+      {# Primary commander #}
       <div class="editor-commander-wrap">
         <div class="editor-commander-label">Commander</div>
         <div style="position:relative;">
@@ -120,15 +128,107 @@
         </div>
       </div>
 
+      {# Commander art preview #}
+      <div class="editor-art-preview" id="editorArtPreview" style="{{ '' if deck.commander_art_url else 'display:none;' }}">
+        <img id="editorArtImg" src="{{ deck.commander_art_url or '' }}" alt="Commander art">
+      </div>
+
+      {# Partner commander #}
+      <div id="editorPartnerToggle" {% if _partner_cmd %}style="display:none;"{% endif %}>
+        <a href="#" id="editorShowPartner" class="editor-partner-toggle-link">+ Add partner / background commander</a>
+      </div>
+      <div class="editor-commander-wrap" id="editorPartnerWrap" {% if not _partner_cmd %}style="display:none;"{% endif %}>
+        <div class="editor-commander-label">Partner / Background</div>
+        <div style="position:relative;">
+          <input id="editorPartnerInput" class="editor-commander-input form-control"
+                 type="text" autocomplete="off" autocorrect="off"
+                 autocapitalize="off" spellcheck="false"
+                 value="{{ _partner_cmd }}"
+                 placeholder="Start typing a card name…">
+          <div id="editorPartnerMenu" class="editor-autocomplete-menu" style="display:none;"></div>
+        </div>
+        <a href="#" id="editorHidePartner" class="editor-partner-remove-link">− Remove partner</a>
+      </div>
+
+      {# Card list #}
       <div class="editor-deck-inner" id="editorDeckInner">
         {# Sections rendered by JS #}
+      </div>
+    </div>
+
+    {# ── Settings panel ── #}
+    <div class="editor-settings-panel" id="panelSettings">
+      <div class="editor-settings-inner">
+
+        <div class="editor-settings-section">
+          <div class="editor-settings-label">Custom Commander Art</div>
+          <input id="settingsCommanderArtUrl" type="text" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input"
+                 placeholder="https://… or leave blank to clear"
+                 value="{{ deck.custom_commander_art_url or '' }}">
+          <div class="editor-settings-file-row">
+            <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
+              Choose file
+              <input type="file" id="settingsCommanderArtFile" accept="image/*" style="display:none;">
+            </label>
+            <span id="settingsCommanderArtFilename" class="editor-settings-filename">No file chosen</span>
+          </div>
+        </div>
+
+        <div class="editor-settings-section">
+          <div class="editor-settings-label">Custom Card Art</div>
+          <input id="settingsCardArtUrl" type="text" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input"
+                 placeholder="https://… or leave blank to clear"
+                 value="{{ deck.custom_card_art_url or '' }}">
+          <div class="editor-settings-file-row">
+            <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
+              Choose file
+              <input type="file" id="settingsCardArtFile" accept="image/*" style="display:none;">
+            </label>
+            <span id="settingsCardArtFilename" class="editor-settings-filename">No file chosen</span>
+          </div>
+        </div>
+
+        {% if owner_name %}
+        <div class="editor-settings-section">
+          <div class="editor-settings-label">Owner</div>
+          <div class="editor-settings-value">{{ owner_name }}</div>
+        </div>
+        {% endif %}
+
+        <div class="editor-settings-section editor-settings-toggles">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="editorRetiredToggle" {% if deck.retired %}checked{% endif %}>
+            <label class="form-check-label" for="editorRetiredToggle">Retired</label>
+          </div>
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="editorPlannedToggle" {% if deck.planned %}checked{% endif %}>
+            <label class="form-check-label" for="editorPlannedToggle">Planned</label>
+          </div>
+        </div>
+
       </div>
     </div>
 
   </div>{# /editor-panels #}
 </div>{# /editor-shell #}
 
-{# ── Card detail bottom sheet (mobile) ── #}
+{# ── Print picker modal ── #}
+<div class="print-picker-overlay" id="printPickerOverlay"></div>
+<div class="print-picker-modal" id="printPickerModal">
+  <div class="print-picker-header">
+    <span class="print-picker-title" id="printPickerTitle"></span>
+    <button class="print-picker-reset btn btn-outline-secondary btn-sm" id="printPickerReset">Reset to default</button>
+    <button class="print-picker-close" id="printPickerClose">×</button>
+  </div>
+  <div class="print-picker-body">
+    <div class="print-picker-grid" id="printPickerGrid">
+      <div class="search-state-msg">Loading prints…</div>
+    </div>
+    <div class="print-picker-preview" id="printPickerPreview"></div>
+  </div>
+</div>
+
+{# ── Card detail bottom sheet ── #}
 <div class="card-sheet-overlay" id="cardSheetOverlay"></div>
 <div class="card-sheet" id="cardSheet">
   <div class="card-sheet-handle"></div>
@@ -146,13 +246,13 @@
 <div class="editor-toast" id="editorToast"></div>
 
 <script>
-/* =============================================================
+/* ============================================================
    Deck Editor — all logic in one IIFE
-   ============================================================= */
+   ============================================================ */
 (function () {
-  const INIT      = window._EDITOR_INIT;
-  const DECK_ID   = INIT.deckId;
-  const SECTIONS  = ['commander', 'mainboard', 'sideboard', 'maybeboard'];
+  const INIT     = window._EDITOR_INIT;
+  const DECK_ID  = INIT.deckId;
+  const SECTIONS = ['commander', 'mainboard', 'sideboard', 'maybeboard'];
   const SECTION_LABELS = {
     commander: 'Commander',
     mainboard: 'Mainboard',
@@ -162,10 +262,18 @@
 
   /* ── State ── */
   const state = {
-    name:      INIT.deckName,
-    commander: INIT.commander,
-    sections:  JSON.parse(JSON.stringify(INIT.sections)),
-    dirty:     false,
+    name:                INIT.deckName,
+    commander:           INIT.commander,
+    partner:             INIT.partner,
+    retired:             INIT.retired,
+    planned:             INIT.planned,
+    sections:            JSON.parse(JSON.stringify(INIT.sections)),
+    printPrefs:          Object.assign({}, INIT.printPrefs),  // {card_name_lower: scryfall_id}
+    customCommanderArt:  INIT.customCommanderArt,  // URL or /art/... path
+    customCommanderArtDirty: false,
+    customCardArt:       INIT.customCardArt,
+    customCardArtDirty:  false,
+    dirty:               false,
   };
 
   /* ── DOM refs ── */
@@ -181,11 +289,31 @@
   const deckInner      = document.getElementById('editorDeckInner');
   const cmdInput       = document.getElementById('editorCommanderInput');
   const cmdMenu        = document.getElementById('editorCommanderMenu');
+  const artPreview     = document.getElementById('editorArtPreview');
+  const artImg         = document.getElementById('editorArtImg');
+  const partnerWrap    = document.getElementById('editorPartnerWrap');
+  const partnerToggle  = document.getElementById('editorPartnerToggle');
+  const partnerInput   = document.getElementById('editorPartnerInput');
+  const partnerMenu    = document.getElementById('editorPartnerMenu');
+  const retiredToggle  = document.getElementById('editorRetiredToggle');
+  const plannedToggle  = document.getElementById('editorPlannedToggle');
+  const cmdArtUrlInput = document.getElementById('settingsCommanderArtUrl');
+  const cmdArtFile     = document.getElementById('settingsCommanderArtFile');
+  const cmdArtFilename = document.getElementById('settingsCommanderArtFilename');
+  const cardArtUrlInput= document.getElementById('settingsCardArtUrl');
+  const cardArtFile    = document.getElementById('settingsCardArtFile');
+  const cardArtFilename= document.getElementById('settingsCardArtFilename');
 
   /* ── Image cache ── */
   const imgCache = new Map();
 
+  function scryfallArtCropUrl(id) {
+    return `https://cards.scryfall.io/art_crop/front/${id[0]}/${id[1]}/${id}.jpg`;
+  }
+
   function fetchArt(name) {
+    const prefId = state.printPrefs[name.toLowerCase()];
+    if (prefId) return Promise.resolve(scryfallArtCropUrl(prefId));
     if (!imgCache.has(name)) {
       imgCache.set(name, fetch(`/api/card-art?name=${encodeURIComponent(name)}`)
         .then(r => r.ok ? r.json() : null)
@@ -199,6 +327,14 @@
     return fetch(`/api/cards/named?exact=${encodeURIComponent(name)}`)
       .then(r => r.ok ? r.json() : null)
       .catch(() => null);
+  }
+
+  function updateCommanderArt(name) {
+    if (!name) { artPreview.style.display = 'none'; return; }
+    fetchArt(name).then(src => {
+      if (src) { artImg.src = src; artPreview.style.display = ''; }
+      else { artPreview.style.display = 'none'; }
+    });
   }
 
   /* ── Dirty tracking ── */
@@ -251,27 +387,17 @@
 
   function addCard(name, section) {
     const existing = findCard(section, name);
-    if (existing) {
-      existing.qty++;
-    } else {
-      state.sections[section].push({ name, qty: 1 });
-    }
-    markDirty();
-    renderDeck();
-    updateCountBadge();
+    if (existing) { existing.qty++; }
+    else { state.sections[section].push({ name, qty: 1 }); }
+    markDirty(); renderDeck(); updateCountBadge();
   }
 
   function setQty(section, name, qty) {
     const card = findCard(section, name);
     if (!card) return;
-    if (qty <= 0) {
-      removeCard(section, name);
-      return;
-    }
+    if (qty <= 0) { removeCard(section, name); return; }
     card.qty = qty;
-    markDirty();
-    renderDeck();
-    updateCountBadge();
+    markDirty(); renderDeck(); updateCountBadge();
   }
 
   function removeCard(section, name) {
@@ -279,9 +405,7 @@
     state.sections[section] = state.sections[section].filter(
       c => c.name.toLowerCase() !== key
     );
-    markDirty();
-    renderDeck();
-    updateCountBadge();
+    markDirty(); renderDeck(); updateCountBadge();
   }
 
   /* ── Render deck panel ── */
@@ -327,7 +451,9 @@
         thumb.className = 'deck-card-thumb';
         thumb.alt = card.name;
         thumb.loading = 'lazy';
+        thumb.title = 'Click to choose print';
         fetchArt(card.name).then(src => { if (src) thumb.src = src; });
+        thumb.addEventListener('click', () => openPrintPicker(card.name));
 
         const nameEl = document.createElement('span');
         nameEl.className = 'deck-card-row-name';
@@ -368,20 +494,111 @@
     }
   }
 
-  /* ── Bottom sheet ── */
-  const overlay   = document.getElementById('cardSheetOverlay');
-  const cardSheet = document.getElementById('cardSheet');
-  const sheetName = document.getElementById('cardSheetName');
-  const sheetType = document.getElementById('cardSheetType');
-  const sheetOracle = document.getElementById('cardSheetOracle');
-  const sheetArt  = document.getElementById('cardSheetArt');
+  /* ── Print picker ── */
+  const printPickerOverlay = document.getElementById('printPickerOverlay');
+  const printPickerModal   = document.getElementById('printPickerModal');
+  const printPickerTitle   = document.getElementById('printPickerTitle');
+  const printPickerGrid    = document.getElementById('printPickerGrid');
+  const printPickerPreview = document.getElementById('printPickerPreview');
+  let printPickerCard = null;
+
+  function openPrintPicker(cardName) {
+    printPickerCard = cardName;
+    printPickerTitle.textContent = cardName;
+    printPickerGrid.innerHTML = '<div class="search-state-msg">Loading prints…</div>';
+    printPickerPreview.innerHTML = '';
+    printPickerOverlay.classList.add('open');
+    printPickerModal.classList.add('open');
+
+    const prefId = state.printPrefs[cardName.toLowerCase()];
+
+    fetch(`/api/cards/prints?name=${encodeURIComponent(cardName)}`)
+      .then(r => r.json())
+      .then(prints => {
+        if (!Array.isArray(prints) || !prints.length) {
+          printPickerGrid.innerHTML = '<div class="search-state-msg">No prints found</div>';
+          return;
+        }
+        printPickerGrid.innerHTML = '';
+        for (const p of prints) {
+          if (!p.normal && !p.art_crop) continue;
+          const item = document.createElement('div');
+          item.className = 'print-picker-item';
+          if (p.id === prefId) item.classList.add('selected');
+
+          const img = document.createElement('img');
+          img.src = p.normal || p.art_crop;
+          img.alt = `${p.set_name} #${p.collector_number}`;
+          img.loading = 'lazy';
+
+          const label = document.createElement('div');
+          label.className = 'print-picker-item-label';
+          label.textContent = `${(p.set || '').toUpperCase()} #${p.collector_number}`;
+
+          item.append(img, label);
+
+          item.addEventListener('mouseenter', () => {
+            printPickerPreview.innerHTML = '';
+            const big = document.createElement('img');
+            big.src = p.normal || p.art_crop;
+            big.alt = cardName;
+            printPickerPreview.appendChild(big);
+          });
+
+          item.addEventListener('click', () => {
+            state.printPrefs[cardName.toLowerCase()] = p.id;
+            markDirty();
+            // Re-render thumbnail with new art
+            imgCache.delete(cardName); // clear name-based cache
+            renderDeck();
+            // Update selection highlight
+            printPickerGrid.querySelectorAll('.print-picker-item').forEach(el =>
+              el.classList.remove('selected')
+            );
+            item.classList.add('selected');
+          });
+
+          printPickerGrid.appendChild(item);
+        }
+      })
+      .catch(() => {
+        printPickerGrid.innerHTML = '<div class="search-state-msg">Failed to load prints</div>';
+      });
+  }
+
+  function closePrintPicker() {
+    printPickerOverlay.classList.remove('open');
+    printPickerModal.classList.remove('open');
+    printPickerCard = null;
+  }
+
+  document.getElementById('printPickerClose').addEventListener('click', closePrintPicker);
+  printPickerOverlay.addEventListener('click', closePrintPicker);
+
+  document.getElementById('printPickerReset').addEventListener('click', () => {
+    if (!printPickerCard) return;
+    delete state.printPrefs[printPickerCard.toLowerCase()];
+    imgCache.delete(printPickerCard);
+    markDirty();
+    renderDeck();
+    printPickerGrid.querySelectorAll('.print-picker-item').forEach(el =>
+      el.classList.remove('selected')
+    );
+  });
+
+  /* ── Card detail bottom sheet ── */
+  const overlay    = document.getElementById('cardSheetOverlay');
+  const cardSheet  = document.getElementById('cardSheet');
+  const sheetName  = document.getElementById('cardSheetName');
+  const sheetType  = document.getElementById('cardSheetType');
+  const sheetOracle= document.getElementById('cardSheetOracle');
+  const sheetArt   = document.getElementById('cardSheetArt');
 
   function openCardSheet(name) {
     sheetName.textContent = name;
     sheetType.textContent = '';
     sheetOracle.textContent = '';
     sheetArt.innerHTML = '';
-
     overlay.classList.add('open');
     cardSheet.classList.add('open');
     requestAnimationFrame(() => overlay.classList.add('visible'));
@@ -393,8 +610,7 @@
       const imgUrl = card.image_uris?.normal || card.image_uris?.small;
       if (imgUrl) {
         const img = document.createElement('img');
-        img.src = imgUrl;
-        img.alt = name;
+        img.src = imgUrl; img.alt = name;
         sheetArt.appendChild(img);
       }
     });
@@ -413,7 +629,6 @@
   let currentSource = 'all';
   let searchTimer;
 
-  // Source pill toggle
   document.querySelectorAll('.editor-source-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       document.querySelectorAll('.editor-source-pill').forEach(p => p.classList.remove('active'));
@@ -435,7 +650,6 @@
       return;
     }
     searchTimer = setTimeout(() => {
-      // Autocomplete dropdown
       fetch(`/api/cards/autocomplete?q=${encodeURIComponent(q)}&source=${currentSource}`)
         .then(r => r.json())
         .then(data => {
@@ -457,15 +671,17 @@
           acMenu.style.display = '';
         })
         .catch(() => {});
-
       runSearch(q);
     }, 250);
   });
 
   document.addEventListener('click', e => {
-    if (!searchInput.contains(e.target) && !acMenu.contains(e.target)) {
+    if (!searchInput.contains(e.target) && !acMenu.contains(e.target))
       acMenu.style.display = 'none';
-    }
+    if (!cmdInput.contains(e.target) && !cmdMenu.contains(e.target))
+      cmdMenu.style.display = 'none';
+    if (!partnerInput.contains(e.target) && !partnerMenu.contains(e.target))
+      partnerMenu.style.display = 'none';
   });
 
   function runSearch(q, exact = false) {
@@ -506,8 +722,7 @@
 
       const thumb = document.createElement('img');
       thumb.className = 'search-result-thumb';
-      thumb.alt = name;
-      thumb.loading = 'lazy';
+      thumb.alt = name; thumb.loading = 'lazy';
       fetchArt(name).then(src => { if (src) thumb.src = src; });
 
       const nameEl = document.createElement('span');
@@ -536,10 +751,8 @@
       addBtn.title = 'Add to deck';
       addBtn.addEventListener('click', () => {
         addCard(name, secSel.value);
-        // Brief visual feedback
         addBtn.textContent = '✓';
         setTimeout(() => { addBtn.textContent = '+'; }, 700);
-        // Switch to deck tab on mobile
         if (window.innerWidth < 992) switchTab('deck');
       });
 
@@ -549,12 +762,11 @@
     }
   }
 
-  /* ── Sets browser ── */
+  /* ── Custom sets browser ── */
   {% if has_ccauto %}
   let setsLoaded = false;
   const setsBrowserToggle = document.getElementById('setsBrowserToggle');
   const setsBrowserBody   = document.getElementById('setsBrowserBody');
-  const setsPlaceholder   = document.getElementById('setsPlaceholder');
 
   setsBrowserToggle.addEventListener('click', () => {
     const open = setsBrowserBody.classList.toggle('open');
@@ -564,31 +776,28 @@
 
   function loadSets() {
     setsLoaded = true;
-    fetch('/api/ccauto/sets')
-      .then(r => r.json())
-      .then(sets => {
-        setsBrowserBody.innerHTML = '';
-        if (!sets.length) {
-          setsBrowserBody.innerHTML = '<div class="search-state-msg" style="padding:8px 0;">No custom sets found</div>';
-          return;
+    fetch('/api/ccauto/sets').then(r => r.json()).then(sets => {
+      setsBrowserBody.innerHTML = '';
+      if (!sets.length) {
+        setsBrowserBody.innerHTML = '<div class="search-state-msg" style="padding:8px 0;">No custom sets found</div>';
+        return;
+      }
+      for (const s of sets) {
+        const chip = document.createElement('button');
+        chip.className = 'set-chip';
+        chip.textContent = s.display_name || s.name;
+        if (s.card_count) {
+          const cnt = document.createElement('span');
+          cnt.style.cssText = 'opacity:.6;font-size:.75rem;';
+          cnt.textContent = `(${s.card_count})`;
+          chip.appendChild(cnt);
         }
-        for (const s of sets) {
-          const chip = document.createElement('button');
-          chip.className = 'set-chip';
-          chip.textContent = s.display_name || s.name;
-          if (s.card_count) {
-            const cnt = document.createElement('span');
-            cnt.style.cssText = 'opacity:.6;font-size:.75rem;';
-            cnt.textContent = `(${s.card_count})`;
-            chip.appendChild(cnt);
-          }
-          chip.addEventListener('click', () => loadSetCards(s.code || s.name));
-          setsBrowserBody.appendChild(chip);
-        }
-      })
-      .catch(() => {
-        setsBrowserBody.innerHTML = '<div class="search-state-msg" style="padding:8px 0;">Failed to load sets</div>';
-      });
+        chip.addEventListener('click', () => loadSetCards(s.code || s.name));
+        setsBrowserBody.appendChild(chip);
+      }
+    }).catch(() => {
+      setsBrowserBody.innerHTML = '<div class="search-state-msg" style="padding:8px 0;">Failed to load sets</div>';
+    });
   }
 
   function loadSetCards(setName) {
@@ -611,7 +820,6 @@
 
   /* ── Commander autocomplete ── */
   let cmdTimer;
-
   cmdInput.value = state.commander;
 
   cmdInput.addEventListener('input', () => {
@@ -636,6 +844,7 @@
               cmdInput.value = name;
               state.commander = name;
               cmdMenu.style.display = 'none';
+              updateCommanderArt(name);
               markDirty();
             });
             cmdMenu.appendChild(btn);
@@ -645,35 +854,147 @@
     }, 200);
   });
 
-  document.addEventListener('click', e => {
-    if (!cmdInput.contains(e.target) && !cmdMenu.contains(e.target)) {
-      cmdMenu.style.display = 'none';
-    }
+  /* ── Partner autocomplete ── */
+  let partnerTimer;
+  partnerInput.value = state.partner;
+
+  partnerInput.addEventListener('input', () => {
+    clearTimeout(partnerTimer);
+    state.partner = partnerInput.value.trim();
+    markDirty();
+    const q = partnerInput.value.trim();
+    if (q.length < 2) { partnerMenu.style.display = 'none'; return; }
+    partnerTimer = setTimeout(() => {
+      fetch(`/api/cards/autocomplete?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+          const names = (data.data || []).slice(0, 10);
+          if (!names.length) { partnerMenu.style.display = 'none'; return; }
+          partnerMenu.innerHTML = '';
+          for (const name of names) {
+            const btn = document.createElement('button');
+            btn.className = 'editor-autocomplete-item';
+            btn.textContent = name;
+            btn.addEventListener('mousedown', e => {
+              e.preventDefault();
+              partnerInput.value = name;
+              state.partner = name;
+              partnerMenu.style.display = 'none';
+              markDirty();
+            });
+            partnerMenu.appendChild(btn);
+          }
+          partnerMenu.style.display = '';
+        }).catch(() => {});
+    }, 200);
   });
 
-  /* ── Tab switching (mobile) ── */
-  function switchTab(which) {
-    const searchPanel = document.getElementById('panelSearch');
-    const deckPanel   = document.getElementById('panelDeck');
-    const tabSearch   = document.getElementById('tabBtnSearch');
-    const tabDeck     = document.getElementById('tabBtnDeck');
+  document.getElementById('editorShowPartner').addEventListener('click', e => {
+    e.preventDefault();
+    partnerToggle.style.display = 'none';
+    partnerWrap.style.display = '';
+    partnerInput.focus();
+  });
 
-    if (which === 'search') {
-      searchPanel.classList.add('panel-active');
-      deckPanel.classList.remove('panel-active');
-      tabSearch.classList.add('active');
-      tabDeck.classList.remove('active');
-      searchInput.focus();
-    } else {
-      deckPanel.classList.add('panel-active');
-      searchPanel.classList.remove('panel-active');
-      tabDeck.classList.add('active');
-      tabSearch.classList.remove('active');
+  document.getElementById('editorHidePartner').addEventListener('click', e => {
+    e.preventDefault();
+    state.partner = '';
+    partnerInput.value = '';
+    partnerWrap.style.display = 'none';
+    partnerToggle.style.display = '';
+    markDirty();
+  });
+
+  /* ── Retired / Planned ── */
+  retiredToggle.addEventListener('change', () => {
+    state.retired = retiredToggle.checked;
+    if (state.retired) { state.planned = false; plannedToggle.checked = false; }
+    markDirty();
+  });
+
+  plannedToggle.addEventListener('change', () => {
+    state.planned = plannedToggle.checked;
+    if (state.planned) { state.retired = false; retiredToggle.checked = false; }
+    markDirty();
+  });
+
+  /* ── Custom art (settings panel) ── */
+  cmdArtUrlInput.addEventListener('input', () => {
+    state.customCommanderArt = cmdArtUrlInput.value.trim();
+    state.customCommanderArtDirty = true;
+    markDirty();
+  });
+
+  cmdArtFile.addEventListener('change', () => {
+    const file = cmdArtFile.files[0];
+    if (!file) return;
+    cmdArtFilename.textContent = file.name;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('field', 'commander');
+    fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { showToast('⚠ ' + d.error, true); return; }
+        state.customCommanderArt = d.url;
+        state.customCommanderArtDirty = true;
+        cmdArtUrlInput.value = '';
+        markDirty();
+        showToast('Commander art uploaded', false);
+      })
+      .catch(() => showToast('⚠ Upload failed', true));
+  });
+
+  cardArtUrlInput.addEventListener('input', () => {
+    state.customCardArt = cardArtUrlInput.value.trim();
+    state.customCardArtDirty = true;
+    markDirty();
+  });
+
+  cardArtFile.addEventListener('change', () => {
+    const file = cardArtFile.files[0];
+    if (!file) return;
+    cardArtFilename.textContent = file.name;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('field', 'card');
+    fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { showToast('⚠ ' + d.error, true); return; }
+        state.customCardArt = d.url;
+        state.customCardArtDirty = true;
+        cardArtUrlInput.value = '';
+        markDirty();
+        showToast('Card art uploaded', false);
+      })
+      .catch(() => showToast('⚠ Upload failed', true));
+  });
+
+  /* ── Tab switching ── */
+  function switchTab(which) {
+    const panels = {
+      search:   document.getElementById('panelSearch'),
+      deck:     document.getElementById('panelDeck'),
+      settings: document.getElementById('panelSettings'),
+    };
+    const tabs = {
+      search:   document.getElementById('tabBtnSearch'),
+      deck:     document.getElementById('tabBtnDeck'),
+      settings: document.getElementById('tabBtnSettings'),
+    };
+    for (const [key, el] of Object.entries(panels)) {
+      el.classList.toggle('panel-active', key === which);
     }
+    for (const [key, el] of Object.entries(tabs)) {
+      el.classList.toggle('active', key === which);
+    }
+    if (which === 'search') searchInput.focus();
   }
 
   document.getElementById('tabBtnSearch').addEventListener('click', () => switchTab('search'));
   document.getElementById('tabBtnDeck').addEventListener('click', () => switchTab('deck'));
+  document.getElementById('tabBtnSettings').addEventListener('click', () => switchTab('settings'));
 
   /* ── Name input ── */
   nameInput.addEventListener('input', () => {
@@ -686,23 +1007,29 @@
     const toast = document.getElementById('editorToast');
     toast.textContent = msg;
     toast.className = 'editor-toast ' + (isError ? 'toast-error' : 'toast-success');
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => toast.classList.add('show'));
-    });
-    setTimeout(() => {
-      toast.classList.remove('show');
-    }, 2800);
+    requestAnimationFrame(() => requestAnimationFrame(() => toast.classList.add('show')));
+    setTimeout(() => toast.classList.remove('show'), 2800);
   }
 
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving…';
 
+    const fullCommander = state.partner.trim()
+      ? `${state.commander.trim()} + ${state.partner.trim()}`
+      : state.commander.trim();
+
     const payload = {
       name: state.name.trim() || INIT.deckName,
-      commander: state.commander.trim(),
+      commander: fullCommander,
+      retired: state.retired,
+      planned: state.planned,
       decklist_text: toPlaintext(),
+      card_print_prefs: state.printPrefs,
     };
+
+    if (state.customCommanderArtDirty) payload.custom_commander_art_url = state.customCommanderArt;
+    if (state.customCardArtDirty)      payload.custom_card_art_url = state.customCardArt;
 
     try {
       const res = await fetch(`/api/decks/${DECK_ID}`, {
@@ -714,6 +1041,8 @@
       if (!res.ok) {
         showToast('⚠ ' + (data.error || 'Save failed'), true);
       } else {
+        state.customCommanderArtDirty = false;
+        state.customCardArtDirty = false;
         markClean();
         showToast('✓ Saved', false);
       }
@@ -729,9 +1058,18 @@
   updateCountBadge();
   renderDeck();
 
-  // On desktop, show deck panel too
+  // Commander art
+  if (INIT.artUrl) {
+    artImg.src = INIT.artUrl;
+    artPreview.style.display = '';
+  } else if (INIT.commander) {
+    updateCommanderArt(INIT.commander);
+  }
+
+  // On desktop: show deck + settings panels too
   if (window.innerWidth >= 992) {
     document.getElementById('panelDeck').classList.add('panel-active');
+    document.getElementById('panelSettings').classList.add('panel-active');
   }
 
 })();

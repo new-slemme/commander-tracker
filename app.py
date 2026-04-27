@@ -583,6 +583,7 @@ class Deck(db.Model):
     custom_card_art_local = db.Column(db.String(300))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
     decklist_text = db.Column(db.Text)
+    card_print_prefs_json = db.Column(db.Text, nullable=True)
     tags_json = db.Column(db.Text, nullable=False, default="{}")
     tags_version = db.Column(db.Integer, nullable=True)
     tags_computed_at = db.Column(db.DateTime, nullable=True)
@@ -1343,6 +1344,18 @@ with app.app_context():
 
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('019_user_light_theme_preference')")
+            )
+
+        if "021_deck_card_print_prefs" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "card_print_prefs_json" not in deck_cols:
+                db.session.execute(
+                    text("ALTER TABLE deck ADD COLUMN card_print_prefs_json TEXT")
+                )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('021_deck_card_print_prefs')")
             )
 
         if "020_gameparticipant_borrowed_from" not in applied:
@@ -2740,6 +2753,15 @@ def admin_required(f):
         return f(*args, **kwargs)
 
     return wrapper
+
+
+def api_login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user_id"):
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(*args, **kwargs)
+    return decorated
 
 
 def get_active_pod():
@@ -5217,6 +5239,7 @@ def deck_editor(deck_id):
         return redirect(url_for("deck_detail", deck_id=deck_id))
 
     decklist_data = _load_decklist_data(deck)
+    card_print_prefs = json.loads(deck.card_print_prefs_json or "{}")
 
     return render_template(
         "deck_editor.html",
@@ -5225,7 +5248,43 @@ def deck_editor(deck_id):
         is_admin=bool(u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if u.is_admin else []),
         has_ccauto=bool(CCAUTO_BASE_URL),
+        card_print_prefs=card_print_prefs,
+        owner_name=(db.session.get(Player, deck.player_id).name if deck.player_id else ""),
     )
+
+
+@app.route("/api/decks/<int:deck_id>/upload-art", methods=["POST"])
+@api_login_required
+def api_deck_upload_art(deck_id):
+    current_user = get_current_user()
+    deck = db.session.get(Deck, deck_id)
+    if not deck:
+        return jsonify({"error": "Not found"}), 404
+    if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
+        return jsonify({"error": "Forbidden"}), 403
+
+    field = request.form.get("field", "commander")
+    upload = request.files.get("file")
+    if not upload:
+        return jsonify({"error": "No file provided"}), 400
+
+    try:
+        if field == "commander":
+            local_path = _store_custom_art_upload(upload, "commander art")
+            if local_path:
+                deck.commander_local_art_custom = local_path
+                deck.custom_commander_art_url = None
+        elif field == "card":
+            local_path = _store_custom_art_upload(upload, "card art")
+            if local_path:
+                deck.custom_card_art_local = local_path
+                deck.custom_card_art_url = None
+        else:
+            return jsonify({"error": "Invalid field (use 'commander' or 'card')"}), 400
+        db.session.commit()
+        return jsonify({"url": local_path}), 200
+    except DeckParserError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/add_deck", methods=["POST"])
@@ -5419,6 +5478,39 @@ def api_cards_autocomplete():
             pass
 
     return jsonify({"data": results})
+
+
+@app.route("/api/cards/prints")
+def api_cards_prints():
+    name = (request.args.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Missing 'name' parameter"}), 400
+    url = f"https://api.scryfall.com/cards/search?q=!{quote(chr(34) + name + chr(34))}&unique=prints&order=released&dir=desc"
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code == 404:
+            return jsonify([])
+        if r.status_code != 200:
+            return jsonify({"error": "Scryfall error"}), 502
+        cards = r.json().get("data", [])
+        result = []
+        for c in cards:
+            image_uris = c.get("image_uris") or {}
+            if not image_uris and c.get("card_faces"):
+                image_uris = (c["card_faces"][0].get("image_uris") or {})
+            if not image_uris.get("art_crop"):
+                continue
+            result.append({
+                "id": c.get("id"),
+                "set": c.get("set"),
+                "set_name": c.get("set_name"),
+                "collector_number": c.get("collector_number"),
+                "art_crop": image_uris.get("art_crop"),
+                "normal": image_uris.get("normal"),
+            })
+        return jsonify(result)
+    except requests.RequestException as exc:
+        return jsonify({"error": str(exc)}), 502
 
 
 @app.route("/api/cards/named")
@@ -6674,15 +6766,6 @@ def record_game():
 # -------------------------
 # JSON REST API (for native clients)
 # -------------------------
-
-
-def api_login_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get("user_id"):
-            return jsonify({"error": "Unauthorized"}), 401
-        return f(*args, **kwargs)
-    return decorated
 
 
 def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, bool]] | None = None) -> dict:
@@ -8495,6 +8578,53 @@ def api_deck_detail(deck_id):
             if message == "Commander is required, or include one in the imported list.":
                 return jsonify({"error": "commander is required, or include one in imported deck data"}), 400
             return jsonify({"error": message}), 400
+
+        # Allow deck owners (not only admins) to set retired/planned
+        if not current_user.is_admin:
+            if "retired" in payload or "planned" in payload:
+                new_retired = bool(payload.get("retired")) if "retired" in payload else deck.retired
+                new_planned = bool(payload.get("planned")) if "planned" in payload else deck.planned
+                if new_retired:
+                    new_planned = False
+                elif new_planned:
+                    new_retired = False
+                deck.retired = new_retired
+                deck.planned = new_planned
+
+        # Per-card print preferences
+        if "card_print_prefs" in payload:
+            prefs = payload.get("card_print_prefs")
+            if isinstance(prefs, dict):
+                deck.card_print_prefs_json = json.dumps(prefs)
+
+        # Custom art URLs (deck editor sends these when changed)
+        if "custom_commander_art_url" in payload:
+            url_val = (payload.get("custom_commander_art_url") or "").strip()
+            if url_val.startswith("/art/"):
+                deck.commander_local_art_custom = url_val
+                deck.custom_commander_art_url = None
+            elif url_val:
+                if not is_valid_custom_art_url(url_val):
+                    return jsonify({"error": "Invalid custom commander art URL"}), 400
+                deck.custom_commander_art_url = url_val
+                deck.commander_local_art_custom = None
+            else:
+                deck.custom_commander_art_url = None
+                deck.commander_local_art_custom = None
+
+        if "custom_card_art_url" in payload:
+            url_val = (payload.get("custom_card_art_url") or "").strip()
+            if url_val.startswith("/art/"):
+                deck.custom_card_art_local = url_val
+                deck.custom_card_art_url = None
+            elif url_val:
+                if not is_valid_custom_art_url(url_val):
+                    return jsonify({"error": "Invalid custom card art URL"}), 400
+                deck.custom_card_art_url = url_val
+                deck.custom_card_art_local = None
+            else:
+                deck.custom_card_art_url = None
+                deck.custom_card_art_local = None
 
         db.session.commit()
         response_payload = _serialize_deck_detail(deck)
