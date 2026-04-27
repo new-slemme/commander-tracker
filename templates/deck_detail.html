@@ -266,7 +266,9 @@
               <div class="deck-card-grid">
                 {% for entry in section.entries %}
                   {% set card_info_url = entry.url or entry.uri or entry.scryfall_uri or entry.card_url or ('https://scryfall.com/search?q=' ~ (entry.name | urlencode)) %}
-                  <article class="deck-card-entry" data-card-name="{{ entry.name }}">
+                  {% set _pref_img = card_print_prefs.get(entry.name | lower, '') %}
+                  <article class="deck-card-entry" data-card-name="{{ entry.name }}"
+                    {% if _pref_img %}data-preferred-image="{{ _pref_img }}"{% endif %}>
                     <a class="deck-card-link" href="{{ card_info_url }}" target="_blank" rel="noopener noreferrer">
                       <div class="deck-card-image-wrap">
                         <img class="deck-card-image" alt="{{ entry.name }}" loading="lazy">

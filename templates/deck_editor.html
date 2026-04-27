@@ -307,13 +307,9 @@
   /* ── Image cache ── */
   const imgCache = new Map();
 
-  function scryfallArtCropUrl(id) {
-    return `https://cards.scryfall.io/art_crop/front/${id[0]}/${id[1]}/${id}.jpg`;
-  }
-
   function fetchArt(name) {
-    const prefId = state.printPrefs[name.toLowerCase()];
-    if (prefId) return Promise.resolve(scryfallArtCropUrl(prefId));
+    const prefUrl = state.printPrefs[name.toLowerCase()];
+    if (prefUrl) return Promise.resolve(prefUrl);
     if (!imgCache.has(name)) {
       imgCache.set(name, fetch(`/api/card-art?name=${encodeURIComponent(name)}`)
         .then(r => r.ok ? r.json() : null)
@@ -510,7 +506,7 @@
     printPickerOverlay.classList.add('open');
     printPickerModal.classList.add('open');
 
-    const prefId = state.printPrefs[cardName.toLowerCase()];
+    const prefUrl = state.printPrefs[cardName.toLowerCase()];
 
     fetch(`/api/cards/prints?name=${encodeURIComponent(cardName)}`)
       .then(r => r.json())
@@ -524,7 +520,7 @@
           if (!p.normal && !p.art_crop) continue;
           const item = document.createElement('div');
           item.className = 'print-picker-item';
-          if (p.id === prefId) item.classList.add('selected');
+          if (p.normal && p.normal === prefUrl) item.classList.add('selected');
 
           const img = document.createElement('img');
           img.src = p.normal || p.art_crop;
@@ -546,7 +542,7 @@
           });
 
           item.addEventListener('click', () => {
-            state.printPrefs[cardName.toLowerCase()] = p.id;
+            state.printPrefs[cardName.toLowerCase()] = p.normal || p.art_crop;
             markDirty();
             // Re-render thumbnail with new art
             imgCache.delete(cardName); // clear name-based cache

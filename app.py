@@ -5189,6 +5189,8 @@ def deck_detail(deck_id):
     deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
     deck_mechanics = derive_deck_mechanics(deck_tags)
 
+    card_print_prefs = json.loads(deck.card_print_prefs_json or "{}")
+
     return render_template(
         "deck_detail.html",
         deck=deck,
@@ -5204,6 +5206,7 @@ def deck_detail(deck_id):
         deck_mechanics=deck_mechanics,
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
+        card_print_prefs=card_print_prefs,
     )
 
 
