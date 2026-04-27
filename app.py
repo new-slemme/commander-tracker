@@ -13,15 +13,20 @@ from flask import (
     abort,
 )
 from flask_sqlalchemy import SQLAlchemy
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from pathlib import Path
 from datetime import datetime
+import hmac
 import json
 import os
 import re
 import random
 import requests
+import secrets
 import threading
 import time
+import warnings
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -34,10 +39,26 @@ from uuid import uuid4
 from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist, ccauto_named_exact
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "super-secret-default-change-me-in-production")
+_flask_secret = os.getenv("FLASK_SECRET_KEY", "")
+if not _flask_secret:
+    _flask_secret = secrets.token_hex(32)
+    warnings.warn(
+        "FLASK_SECRET_KEY is not set. Using a per-process random key — "
+        "sessions will not persist across restarts. Set this env var for production.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+app.secret_key = _flask_secret
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload limit
 db = SQLAlchemy(app)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
 
 DEFAULT_POD_NAME = "Der Keller â€“ Die Salzmine"
 DEFAULT_POD_SLUG = "der-keller-die-salzmine"
@@ -1564,6 +1585,22 @@ def normalized_custom_art_url(value: str) -> str | None:
     return candidate or None
 
 
+def _is_valid_image_bytes(data: bytes) -> bool:
+    if len(data) < 12:
+        return False
+    if data[:3] == b"\xff\xd8\xff":  # JPEG
+        return True
+    if data[:8] == b"\x89PNG\r\n\x1a\n":  # PNG
+        return True
+    if data[:6] in (b"GIF87a", b"GIF89a"):  # GIF
+        return True
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":  # WEBP
+        return True
+    if data[4:8] == b"ftyp":  # AVIF / ISO Base Media File Format
+        return True
+    return False
+
+
 def _store_custom_art_upload(upload, field_label: str) -> str | None:
     if not upload or not upload.filename:
         return None
@@ -1580,6 +1617,10 @@ def _store_custom_art_upload(upload, field_label: str) -> str | None:
     raw_bytes = upload.read()
     if not raw_bytes:
         raise DeckParserError(f"Uploaded {field_label} image '{filename}' was empty.")
+    if not _is_valid_image_bytes(raw_bytes):
+        raise DeckParserError(
+            f"Uploaded {field_label} image '{filename}' does not appear to be a valid image file."
+        )
 
     safe_name = _safe_filename(Path(filename).stem) or "custom_art"
     out_filename = f"custom_{safe_name}_{uuid4().hex}{ext}"
@@ -2960,8 +3001,28 @@ def game_query_for_scope():
 # -------------------------
 # Login Required
 # -------------------------
+def get_csrf_token() -> str:
+    if "_csrf_token" not in session:
+        session["_csrf_token"] = secrets.token_hex(32)
+    return session["_csrf_token"]
+
+
+app.jinja_env.globals["csrf_token"] = get_csrf_token
+
+
 @app.before_request
 def require_login():
+    # CSRF check for authenticated state-mutating requests on non-API routes
+    if (
+        request.method in ("POST", "PUT", "PATCH", "DELETE")
+        and not request.path.startswith("/api/")
+        and session.get("user_id")
+    ):
+        submitted = request.form.get("_csrf_token") or request.headers.get("X-CSRFToken", "")
+        expected = session.get("_csrf_token", "")
+        if not expected or not submitted or not hmac.compare_digest(submitted, expected):
+            abort(403)
+
     if "user_id" not in session:
         # Dev-only: auto-login test user (env-gated)
         if AUTO_LOGIN_TEST_USER:
@@ -3081,6 +3142,7 @@ def register():
 
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def login():
     if request.method == "POST":
         username = request.form["username"].strip()
@@ -3105,7 +3167,9 @@ def login():
             session["use_light_theme"] = user.use_light_theme
             get_active_pod()
 
-            next_url = request.args.get("next")
+            next_url = request.args.get("next", "")
+            if next_url and (next_url.startswith("//") or "://" in next_url):
+                next_url = ""
             return redirect(next_url or url_for("index"))
 
         flash("Invalid username or password")
@@ -5255,6 +5319,8 @@ def api_gallery_image():
     """Proxy gallery images to the browser (internal Docker URL not reachable from browser)."""
     path_param = (request.args.get("path") or "").strip()
     if not path_param or not CCAUTO_BASE_URL:
+        return "Not found", 404
+    if not path_param.startswith("/") or "://" in path_param or "@" in path_param:
         return "Not found", 404
     try:
         r = requests.get(f"{CCAUTO_BASE_URL}{path_param}", timeout=10, stream=True)

@@ -275,6 +275,7 @@
       <div class="modal-content bg-dark text-light">
         <div class="modal-body text-center p-4 d-flex flex-column gap-3">
           <form method="post" action="/end_game" id="endGameForm">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="timed_mode" id="timed_mode_input" value="">
             <input type="hidden" name="time_control" id="time_control_input" value="">
             <input type="hidden" name="ended_on_time" id="ended_on_time_input" value="">
@@ -313,7 +314,9 @@
     </div>
   </div>
 
-  <form id="quickQuitForm" method="post" action="/cancel_game" class="d-none"></form>
+  <form id="quickQuitForm" method="post" action="/cancel_game" class="d-none">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  </form>
 
   {% if game_token %}
   <!-- QR join modal -->

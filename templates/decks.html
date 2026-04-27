@@ -131,6 +131,7 @@
         Consider bulk retagging to keep life-counter mechanics accurate.
       </div>
       <form method="post" action="{{ url_for('dismiss_deck_tags_banner') }}" class="m-0">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ request.full_path }}">
         <button type="submit" class="btn btn-sm btn-outline-dark">Dismiss</button>
       </form>
@@ -208,6 +209,7 @@
             <div class="deck-actions-row">
               {% if d.decklist_text %}
                 <form method="post" action="{{ url_for('retag_deck', deck_id=d.id) }}" style="display:inline;">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="next" value="{{ request.full_path }}">
                   <button type="submit" class="btn btn-sm btn-outline-info" title="Recompute deck tags from decklist">Retag</button>
                 </form>
@@ -216,6 +218,7 @@
                 <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
                       onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
                       style="display:inline;">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger">Delete</button>
                 </form>
               {% else %}
@@ -253,6 +256,7 @@
 
       <div class="modal-body p-4">
         <form method="post" action="{{ url_for('add_deck') }}" id="addDeckForm" enctype="multipart/form-data">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
           {% if is_admin %}
           <div class="mb-3">

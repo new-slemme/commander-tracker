@@ -52,10 +52,12 @@
               <td class="text-end">
                 <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
                   <form method="POST" action="{{ url_for('admin_approve_user', user_id=u.id) }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-success round-action-btn">Approve</button>
                   </form>
 
                   <form method="POST" action="{{ url_for('admin_deny_user', user_id=u.id) }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button
                       type="submit"
                       class="btn btn-sm btn-outline-danger round-action-btn"
@@ -109,6 +111,7 @@
               <td class="text-end">
                 <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
                   <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger round-action-btn"
                             onclick="return confirm('Deactivate {{ u.username }}? They will not be able to log in.')">
                       Deactivate
@@ -116,12 +119,14 @@
                   </form>
 
                   <form method="POST" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-warning round-action-btn">
                       {{ "Remove admin" if u.is_admin else "Make admin" }}
                     </button>
                   </form>
 
                   <form method="POST" action="{{ url_for('admin_delete_user', user_id=u.id) }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger round-action-btn"
                             onclick="return confirm('Permanently delete {{ u.username }}? Their login will be removed, but historic game data stays with the player record.')">
                       Delete user

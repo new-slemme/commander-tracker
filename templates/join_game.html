@@ -41,6 +41,7 @@
   </div>
   {% else %}
   <form method="post" action="/join/{{ token }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="player-list">
       {% for p in participants %}
       <button class="player-btn" type="submit" name="player_id" value="{{ p.player_id }}">

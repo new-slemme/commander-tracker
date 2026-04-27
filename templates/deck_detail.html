@@ -72,12 +72,14 @@
         <li>
           {% if deck.retired %}
             <form method="post" action="{{ url_for('unretire_deck', deck_id=deck.id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="dropdown-item">
                 Unretire deck
               </button>
             </form>
           {% elif deck.planned %}
             <form method="post" action="{{ url_for('unplan_deck', deck_id=deck.id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="dropdown-item">
                 Mark as active
               </button>
@@ -85,6 +87,7 @@
           {% else %}
             <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
                   onsubmit="return confirm('Retire {{ deck.name }}?');">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="dropdown-item">
                 Retire deck
               </button>
@@ -96,6 +99,7 @@
           {% if not deck.planned %}
             <form method="post" action="{{ url_for('plan_deck', deck_id=deck.id) }}"
                   onsubmit="return confirm('Mark {{ deck.name }} as planned?');">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="dropdown-item">
                 Plan deck
               </button>
@@ -107,6 +111,7 @@
         <li>
           <form method="post" action="{{ url_for('remove_deck_decklist', deck_id=deck.id) }}"
                 onsubmit="return confirm('Remove the saved decklist from {{ deck.name }}? This cannot be undone.');">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="dropdown-item text-warning">
               Remove decklist
             </button>
@@ -117,6 +122,7 @@
         <li>
           <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
                 onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="dropdown-item text-danger">
               Delete deck
             </button>
@@ -395,6 +401,7 @@
 
       <div class="modal-body p-4">
         <form method="post" action="{{ url_for('update_deck', deck_id=deck.id) }}" enctype="multipart/form-data">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="next" value="{{ url_for('deck_detail', deck_id=deck.id) }}">
 
           {% if is_admin %}

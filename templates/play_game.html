@@ -27,6 +27,7 @@
   </div>
 
   <form method="post" action="/start_game" id="gameForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="player-grid players-2" id="playerContainer">
       {% for i in range(1,7) %}
       <div class="player-panel {% if i > 2 %}hidden{% endif %}" data-slot="{{ i }}">

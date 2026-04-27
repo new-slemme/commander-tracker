@@ -40,9 +40,11 @@
               <td class="text-muted text-nowrap">{{ req.created_at }}</td>
               <td class="text-end text-nowrap">
                 <form method="POST" action="{{ url_for('approve_registration_request', request_id=req.id) }}" class="d-inline">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-success" type="submit">Approve</button>
                 </form>
                 <form method="POST" action="{{ url_for('deny_registration_request', request_id=req.id) }}" class="d-inline">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button class="btn btn-sm btn-outline-danger" type="submit"
                       onclick="return confirm('Deny this registration and permanently delete the user?')">
                     Deny

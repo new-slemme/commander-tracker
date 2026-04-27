@@ -23,6 +23,7 @@
                 action="{{ url_for('delete_game', game_id=game.id) }}"
                 onsubmit="return confirm('Delete Game #{{ game.id }}? This cannot be undone.');"
                 class="m-0">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-sm btn-danger">Delete Game</button>
           </form>
         {% endif %}

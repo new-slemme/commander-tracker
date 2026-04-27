@@ -35,6 +35,7 @@
               <div class="pods-muted small">/{{ pod.slug }}</div>
               {% if pod.id in manageable_pod_ids %}
               <form method="post" action="{{ url_for('update_pod_name', pod_id=pod.id) }}" class="d-flex gap-2 mt-2">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input class="form-control form-control-sm" type="text" name="name" value="{{ pod.name }}" maxlength="100" required>
                 <button class="btn btn-sm btn-outline-light" type="submit">Save name</button>
               </form>
@@ -47,6 +48,7 @@
                   <span class="badge bg-primary">Active</span>
                 {% else %}
                   <form method="post" action="{{ url_for('switch_pod', pod_id=pod.id) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-sm btn-outline-light" type="submit">Switch</button>
                   </form>
                 {% endif %}
@@ -58,14 +60,17 @@
                 {% if pod.slug != 'der-keller-die-salzmine' %}
                   {% if pod.is_active %}
                   <form method="post" action="{{ url_for('retire_pod', pod_id=pod.id) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-sm btn-outline-warning" type="submit">Retire</button>
                   </form>
                   {% else %}
                   <form method="post" action="{{ url_for('restore_pod', pod_id=pod.id) }}">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-sm btn-outline-light" type="submit">Restore</button>
                   </form>
                   {% endif %}
                   <form method="post" action="{{ url_for('delete_pod', pod_id=pod.id) }}" onsubmit="return confirm('Delete this pod? This is only possible when no games are assigned to it.');">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
                   </form>
                 {% endif %}
@@ -84,6 +89,7 @@
     <div class="card pods-card p-3 h-100">
       <h2 class="h5 mb-3">Create Pod (Admin)</h2>
       <form method="post" action="{{ url_for('create_pod') }}" class="row g-2">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="col-12">
           <label class="form-label">Pod name</label>
           <input class="form-control" name="name" required>
@@ -110,6 +116,7 @@
 
   {% if can_manage_selected and selected_pod.is_active %}
     <form method="post" action="{{ url_for('add_pod_member', pod_id=selected_pod.id) }}" class="row g-2 mb-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="col-md-6">
         <select class="form-select" name="player_id" required>
           <option value="">Select player…</option>
@@ -146,6 +153,7 @@
           <td>
             {% if can_manage_selected and selected_pod.is_active %}
             <form method="post" action="{{ url_for('update_pod_member_role', pod_id=selected_pod.id, player_id=m.player_id) }}" class="d-flex gap-2">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <select class="form-select form-select-sm" name="role" {% if not is_admin %}disabled{% endif %}>
                 <option value="member" {% if m.role == 'member' %}selected{% endif %}>member</option>
                 <option value="podmaster" {% if m.role == 'podmaster' %}selected{% endif %}>podmaster</option>
@@ -159,6 +167,7 @@
           {% if can_manage_selected and selected_pod.is_active %}
           <td class="text-end">
             <form method="post" action="{{ url_for('remove_pod_member', pod_id=selected_pod.id, player_id=m.player_id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
             </form>
           </td>

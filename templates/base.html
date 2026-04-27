@@ -9,6 +9,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
     <meta name="theme-color" content="{{ '#f2f3f7' if use_light_theme else '#10121a' }}">
     <title>Commandersohn</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/base.css') }}" rel="stylesheet">
     {% if use_light_theme %}
@@ -253,7 +254,10 @@
         const podId = btn.getAttribute('data-pod-id');
         const res = await fetch(`/pods/switch/${podId}`, {
           method: 'POST',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+          },
         });
         if (!res.ok) return;
         const data = await res.json();

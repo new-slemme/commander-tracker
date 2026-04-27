@@ -28,6 +28,7 @@
 
         <!-- Add Guest -->
         <form method="post" action="{{ url_for('add_player') }}" class="add-guest-wrap m-0">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input class="form-control"
                  name="name"
                  placeholder="New guest name"
@@ -110,6 +111,7 @@
                       onsubmit="return confirm('Delete {{ p.name }}? This cannot be undone.');"
                       class="m-0"
                       onclick="event.stopPropagation();">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-danger btn-danger-soft" onclick="event.stopPropagation();">
                     Delete
                   </button>
