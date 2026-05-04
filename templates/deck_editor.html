@@ -25,7 +25,8 @@
   }
 
   window._EDITOR_INIT = {
-    deckId:               {{ deck.id }},
+    deckId:               {{ deck.id | tojson }},
+    createMode:           {{ create_mode | tojson }},
     deckName:             {{ deck.name | tojson }},
     commander:            {{ _primary_cmd | tojson }},
     partner:              {{ _partner_cmd | tojson }},
@@ -36,6 +37,8 @@
     customCommanderArt:   {{ (deck.commander_local_art_custom or deck.custom_commander_art_url or '') | tojson }},
     customCardArt:        {{ (deck.custom_card_art_local or deck.custom_card_art_url or '') | tojson }},
     ownerName:            {{ owner_name | tojson }},
+    ownerPlayerId:        {{ editor_owner_player_id | tojson }},
+    players:              {{ players | map(attribute='id') | list | tojson if is_admin else '[]' }},
     sections:             sections,
     hasCcauto:            {{ 'true' if has_ccauto else 'false' }},
   };
@@ -44,15 +47,16 @@
 
 {# ── Top bar ── #}
 <div class="editor-topbar">
-  <a class="editor-topbar-back" href="{{ url_for('deck_detail', deck_id=deck.id) }}">‹ Back</a>
+  <a class="editor-topbar-back" href="{{ url_for('decks') if create_mode else url_for('deck_detail', deck_id=deck.id) }}">‹ Back</a>
   <div class="editor-topbar-title">
     <input id="editorNameInput" class="editor-name-input" type="text"
-           value="{{ deck.name }}" autocomplete="off" spellcheck="false">
+           value="{{ deck.name }}" autocomplete="off" spellcheck="false"
+           placeholder="{{ 'New deck name' if create_mode else '' }}">
   </div>
   <div class="editor-topbar-actions">
     <span id="editorCountBadge" class="editor-count-badge count-low">0 cards</span>
     <span id="editorUnsavedDot" class="editor-unsaved-dot" title="Unsaved changes">● Unsaved</span>
-    <button id="editorSaveBtn" class="btn btn-success btn-sm" style="min-height:36px;font-weight:800;">Save</button>
+    <button id="editorSaveBtn" class="btn btn-success btn-sm" style="min-height:36px;font-weight:800;">{{ 'Create Deck' if create_mode else 'Save' }}</button>
   </div>
 </div>
 
@@ -116,6 +120,37 @@
     {# ── Deck panel ── #}
     <div class="editor-deck-panel" id="panelDeck">
 
+      <div class="editor-import-card">
+        <div class="editor-import-head">
+          <div class="editor-import-title">Import decklist</div>
+          <div class="editor-import-subtitle">Paste a URL, raw list, or file to populate the editor.</div>
+        </div>
+        <div class="editor-import-tabs" role="tablist" aria-label="Deck import source">
+          <button type="button" class="editor-import-tab active" data-import-tab="url">URL</button>
+          <button type="button" class="editor-import-tab" data-import-tab="paste">Paste</button>
+          <button type="button" class="editor-import-tab" data-import-tab="file">File</button>
+        </div>
+        <div class="editor-import-panels">
+          <div class="editor-import-pane active" data-import-pane="url">
+            <input id="editorImportUrl" class="form-control bg-dark text-light border-secondary"
+                   type="url" placeholder="https://www.moxfield.com/decks/… or https://archidekt.com/decks/…">
+          </div>
+          <div class="editor-import-pane" data-import-pane="paste">
+            <textarea id="editorImportText" class="form-control font-monospace bg-dark text-light border-secondary"
+                      rows="6" placeholder="Commander&#10;1 Sol Ring&#10;1 Arcane Signet"></textarea>
+          </div>
+          <div class="editor-import-pane" data-import-pane="file">
+            <input id="editorImportFile" class="form-control bg-dark text-light border-secondary"
+                   type="file" accept=".txt,.dek,.csv,text/plain,.txt,.dek,.csv">
+            <div id="editorImportFileName" class="editor-import-file-name">No file chosen</div>
+          </div>
+        </div>
+        <div id="editorImportStatus" class="editor-import-status" style="display:none;"></div>
+        <div class="editor-import-actions">
+          <button id="editorImportBtn" type="button" class="btn btn-outline-info btn-sm">Import into editor</button>
+        </div>
+      </div>
+
       {# Primary commander #}
       <div class="editor-commander-wrap">
         <div class="editor-commander-label">Commander</div>
@@ -165,6 +200,9 @@
           <input id="settingsCommanderArtUrl" type="text" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input"
                  placeholder="https://… or leave blank to clear"
                  value="{{ deck.custom_commander_art_url or '' }}">
+          {% if create_mode %}
+          <div class="editor-settings-help">Save the deck once before uploading a local art file.</div>
+          {% else %}
           <div class="editor-settings-file-row">
             <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
               Choose file
@@ -172,6 +210,7 @@
             </label>
             <span id="settingsCommanderArtFilename" class="editor-settings-filename">No file chosen</span>
           </div>
+          {% endif %}
         </div>
 
         <div class="editor-settings-section">
@@ -179,6 +218,9 @@
           <input id="settingsCardArtUrl" type="text" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input"
                  placeholder="https://… or leave blank to clear"
                  value="{{ deck.custom_card_art_url or '' }}">
+          {% if create_mode %}
+          <div class="editor-settings-help">Save the deck once before uploading a local art file.</div>
+          {% else %}
           <div class="editor-settings-file-row">
             <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
               Choose file
@@ -186,12 +228,25 @@
             </label>
             <span id="settingsCardArtFilename" class="editor-settings-filename">No file chosen</span>
           </div>
+          {% endif %}
         </div>
 
-        {% if owner_name %}
+        {% if owner_name and not is_admin %}
         <div class="editor-settings-section">
           <div class="editor-settings-label">Owner</div>
           <div class="editor-settings-value">{{ owner_name }}</div>
+        </div>
+        {% endif %}
+
+        {% if is_admin %}
+        <div class="editor-settings-section">
+          <div class="editor-settings-label">Owner</div>
+          <select id="editorOwnerSelect" class="form-select form-select-sm bg-dark text-light border-secondary editor-settings-input">
+            <option value="">Select owner…</option>
+            {% for p in players %}
+            <option value="{{ p.id }}" {% if editor_owner_player_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
         </div>
         {% endif %}
 
@@ -252,6 +307,7 @@
 (function () {
   const INIT     = window._EDITOR_INIT;
   const DECK_ID  = INIT.deckId;
+  const CREATE_MODE = !!INIT.createMode;
   const SECTIONS = ['commander', 'mainboard', 'sideboard', 'maybeboard'];
   const SECTION_LABELS = {
     commander: 'Commander',
@@ -273,6 +329,7 @@
     customCommanderArtDirty: false,
     customCardArt:       INIT.customCardArt,
     customCardArtDirty:  false,
+    ownerId:             INIT.ownerPlayerId,
     dirty:               false,
   };
 
@@ -303,6 +360,15 @@
   const cardArtUrlInput= document.getElementById('settingsCardArtUrl');
   const cardArtFile    = document.getElementById('settingsCardArtFile');
   const cardArtFilename= document.getElementById('settingsCardArtFilename');
+  const ownerSelect    = document.getElementById('editorOwnerSelect');
+  const importTabs     = Array.from(document.querySelectorAll('.editor-import-tab'));
+  const importPanes    = Array.from(document.querySelectorAll('.editor-import-pane'));
+  const importUrlInput = document.getElementById('editorImportUrl');
+  const importTextInput= document.getElementById('editorImportText');
+  const importFileInput= document.getElementById('editorImportFile');
+  const importFileName = document.getElementById('editorImportFileName');
+  const importStatus   = document.getElementById('editorImportStatus');
+  const importBtn      = document.getElementById('editorImportBtn');
 
   /* ── Image cache ── */
   const imgCache = new Map();
@@ -915,57 +981,65 @@
   });
 
   /* ── Custom art (settings panel) ── */
-  cmdArtUrlInput.addEventListener('input', () => {
-    state.customCommanderArt = cmdArtUrlInput.value.trim();
-    state.customCommanderArtDirty = true;
-    markDirty();
-  });
+  if (cmdArtUrlInput) {
+    cmdArtUrlInput.addEventListener('input', () => {
+      state.customCommanderArt = cmdArtUrlInput.value.trim();
+      state.customCommanderArtDirty = true;
+      markDirty();
+    });
+  }
 
-  cmdArtFile.addEventListener('change', () => {
-    const file = cmdArtFile.files[0];
-    if (!file) return;
-    cmdArtFilename.textContent = file.name;
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('field', 'commander');
-    fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { showToast('⚠ ' + d.error, true); return; }
-        state.customCommanderArt = d.url;
-        state.customCommanderArtDirty = true;
-        cmdArtUrlInput.value = '';
-        markDirty();
-        showToast('Commander art uploaded', false);
-      })
-      .catch(() => showToast('⚠ Upload failed', true));
-  });
+  if (cmdArtFile) {
+    cmdArtFile.addEventListener('change', () => {
+      const file = cmdArtFile.files[0];
+      if (!file) return;
+      cmdArtFilename.textContent = file.name;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('field', 'commander');
+      fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+          if (d.error) { showToast('⚠ ' + d.error, true); return; }
+          state.customCommanderArt = d.url;
+          state.customCommanderArtDirty = true;
+          cmdArtUrlInput.value = '';
+          markDirty();
+          showToast('Commander art uploaded', false);
+        })
+        .catch(() => showToast('⚠ Upload failed', true));
+    });
+  }
 
-  cardArtUrlInput.addEventListener('input', () => {
-    state.customCardArt = cardArtUrlInput.value.trim();
-    state.customCardArtDirty = true;
-    markDirty();
-  });
+  if (cardArtUrlInput) {
+    cardArtUrlInput.addEventListener('input', () => {
+      state.customCardArt = cardArtUrlInput.value.trim();
+      state.customCardArtDirty = true;
+      markDirty();
+    });
+  }
 
-  cardArtFile.addEventListener('change', () => {
-    const file = cardArtFile.files[0];
-    if (!file) return;
-    cardArtFilename.textContent = file.name;
-    const fd = new FormData();
-    fd.append('file', file);
-    fd.append('field', 'card');
-    fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) { showToast('⚠ ' + d.error, true); return; }
-        state.customCardArt = d.url;
-        state.customCardArtDirty = true;
-        cardArtUrlInput.value = '';
-        markDirty();
-        showToast('Card art uploaded', false);
-      })
-      .catch(() => showToast('⚠ Upload failed', true));
-  });
+  if (cardArtFile) {
+    cardArtFile.addEventListener('change', () => {
+      const file = cardArtFile.files[0];
+      if (!file) return;
+      cardArtFilename.textContent = file.name;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('field', 'card');
+      fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+          if (d.error) { showToast('⚠ ' + d.error, true); return; }
+          state.customCardArt = d.url;
+          state.customCardArtDirty = true;
+          cardArtUrlInput.value = '';
+          markDirty();
+          showToast('Card art uploaded', false);
+        })
+        .catch(() => showToast('⚠ Upload failed', true));
+    });
+  }
 
   /* ── Tab switching ── */
   function switchTab(which) {
@@ -992,11 +1066,33 @@
   document.getElementById('tabBtnDeck').addEventListener('click', () => switchTab('deck'));
   document.getElementById('tabBtnSettings').addEventListener('click', () => switchTab('settings'));
 
+  importTabs.forEach(tab => {
+    tab.addEventListener('click', () => switchImportTab(tab.dataset.importTab));
+  });
+
+  if (importBtn) importBtn.addEventListener('click', runImport);
+  if (importUrlInput) importUrlInput.addEventListener('input', clearImportStatus);
+  if (importTextInput) importTextInput.addEventListener('input', clearImportStatus);
+  if (importFileInput) {
+    importFileInput.addEventListener('change', () => {
+      const file = importFileInput.files[0];
+      importFileName.textContent = file ? file.name : 'No file chosen';
+      clearImportStatus();
+    });
+  }
+
   /* ── Name input ── */
   nameInput.addEventListener('input', () => {
     state.name = nameInput.value;
     markDirty();
   });
+
+  if (ownerSelect) {
+    ownerSelect.addEventListener('change', () => {
+      state.ownerId = ownerSelect.value ? parseInt(ownerSelect.value, 10) : null;
+      markDirty();
+    });
+  }
 
   /* ── Save ── */
   function showToast(msg, isError) {
@@ -1007,9 +1103,110 @@
     setTimeout(() => toast.classList.remove('show'), 2800);
   }
 
+  function normalizeSections(rawSections) {
+    const normalized = {};
+    for (const sec of SECTIONS) normalized[sec] = [];
+
+    for (const [section, entries] of Object.entries(rawSections || {})) {
+      if (!normalized[section]) normalized[section] = [];
+      for (const entry of (entries || [])) {
+        const name = (entry && entry.name ? String(entry.name) : '').trim();
+        const qty = parseInt(entry && entry.quantity, 10) || 1;
+        if (!name) continue;
+        normalized[section].push({ name, qty });
+      }
+    }
+    return normalized;
+  }
+
+  function replaceDeckFromImport(parsed) {
+    state.sections = normalizeSections(parsed.sections);
+    if (parsed.primary_commander) {
+      state.commander = parsed.primary_commander;
+      cmdInput.value = parsed.primary_commander;
+      updateCommanderArt(parsed.primary_commander);
+    }
+
+    if (parsed.partner_commander) {
+      state.partner = parsed.partner_commander;
+      partnerInput.value = parsed.partner_commander;
+      partnerWrap.style.display = '';
+      partnerToggle.style.display = 'none';
+    } else {
+      state.partner = '';
+      partnerInput.value = '';
+      partnerWrap.style.display = 'none';
+      partnerToggle.style.display = '';
+    }
+
+    markDirty();
+    renderDeck();
+    updateCountBadge();
+  }
+
+  function showImportStatus(msg, isError) {
+    if (!importStatus) return;
+    importStatus.textContent = msg;
+    importStatus.className = 'editor-import-status ' + (isError ? 'error' : 'success');
+    importStatus.style.display = '';
+  }
+
+  function clearImportStatus() {
+    if (importStatus) importStatus.style.display = 'none';
+  }
+
+  function switchImportTab(which) {
+    importTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.importTab === which));
+    importPanes.forEach(pane => pane.classList.toggle('active', pane.dataset.importPane === which));
+    clearImportStatus();
+  }
+
+  async function currentImportText() {
+    const activeTab = importTabs.find(tab => tab.classList.contains('active'))?.dataset.importTab || 'url';
+    if (activeTab === 'url') return (importUrlInput?.value || '').trim();
+    if (activeTab === 'paste') return (importTextInput?.value || '').trim();
+    const file = importFileInput?.files?.[0];
+    if (!file) return '';
+    return await file.text();
+  }
+
+  async function runImport() {
+    const rawImport = await currentImportText();
+    if (!rawImport) {
+      showImportStatus('Enter a deck URL, paste a list, or choose a file first.', true);
+      return;
+    }
+
+    importBtn.disabled = true;
+    importBtn.textContent = 'Importing…';
+    clearImportStatus();
+
+    try {
+      const res = await fetch('/api/deck-import-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raw_import: rawImport }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Import failed.');
+
+      replaceDeckFromImport(data);
+      const importedCards = Object.values(data.sections || {}).reduce(
+        (sum, entries) => sum + (entries || []).reduce((sectionSum, entry) => sectionSum + (parseInt(entry.quantity, 10) || 0), 0),
+        0
+      );
+      showImportStatus(`Imported ${importedCards} cards into the editor.`, false);
+    } catch (err) {
+      showImportStatus(err.message || 'Import failed.', true);
+    } finally {
+      importBtn.disabled = false;
+      importBtn.textContent = 'Import into editor';
+    }
+  }
+
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving…';
+    saveBtn.textContent = CREATE_MODE ? 'Creating…' : 'Saving…';
 
     const fullCommander = state.partner.trim()
       ? `${state.commander.trim()} + ${state.partner.trim()}`
@@ -1023,13 +1220,16 @@
       decklist_text: toPlaintext(),
       card_print_prefs: state.printPrefs,
     };
+    if (ownerSelect && Number.isInteger(state.ownerId)) payload.player_id = state.ownerId;
 
     if (state.customCommanderArtDirty) payload.custom_commander_art_url = state.customCommanderArt;
     if (state.customCardArtDirty)      payload.custom_card_art_url = state.customCardArt;
 
     try {
-      const res = await fetch(`/api/decks/${DECK_ID}`, {
-        method: 'PATCH',
+      const url = CREATE_MODE ? '/api/decks' : `/api/decks/${DECK_ID}`;
+      const method = CREATE_MODE ? 'POST' : 'PATCH';
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -1040,13 +1240,17 @@
         state.customCommanderArtDirty = false;
         state.customCardArtDirty = false;
         markClean();
+        if (CREATE_MODE && data.id) {
+          window.location = `/deck/${data.id}/edit`;
+          return;
+        }
         showToast('✓ Saved', false);
       }
     } catch (err) {
       showToast('⚠ Network error', true);
     } finally {
       saveBtn.disabled = false;
-      saveBtn.textContent = 'Save';
+      saveBtn.textContent = CREATE_MODE ? 'Create Deck' : 'Save';
     }
   });
 
@@ -1066,6 +1270,8 @@
   if (window.innerWidth >= 992) {
     document.getElementById('panelDeck').classList.add('panel-active');
     document.getElementById('panelSettings').classList.add('panel-active');
+  } else if (CREATE_MODE) {
+    switchTab('deck');
   }
 
 })();

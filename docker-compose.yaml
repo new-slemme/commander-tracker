@@ -9,6 +9,7 @@ services:
       - "5000:5000"  # No direct host exposure; Traefik handles it
     environment:
       - CCAUTO_BASE_URL=http://cc-auto:4242
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env or environment}
     volumes:
       - ./data:/data
       - ./apk:/app/apk

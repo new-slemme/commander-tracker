@@ -68,10 +68,11 @@
 
     <div class="starting-card">
       <label class="form-label mb-1">Starting Position</label>
-      <select name="starting_player" id="startingPlayer" class="form-select d-none" required>
+      <select name="starting_player" id="startingPlayer" class="form-select d-none">
         <option value="" disabled selected>Select starting player</option>
       </select>
       <div id="startingPlayerPills" class="starting-player-pills"></div>
+      <div id="startingPlayerError" class="text-danger small mt-1" style="display:none;">Please select who goes first.</div>
       <div class="hint mt-2">Choose who takes turn 1.</div>
     </div>
 
@@ -233,6 +234,8 @@
         startSel.value = pid;
         pills.querySelectorAll('.start-pill').forEach(x => x.classList.remove('active'));
         btn.classList.add("active");
+        const err = document.getElementById("startingPlayerError");
+        if (err) err.style.display = "none";
       });
       pills.appendChild(btn);
     }
@@ -558,7 +561,9 @@
     } catch (e) {}
   }
 
-  document.getElementById("gameForm").addEventListener("submit", async (e) => {
+  document.getElementById("gameForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+
     // Sync deck hidden inputs from visible selects (for non-borrow slots)
     // so the value is always current regardless of whether the change event fired.
     for (let i = 1; i <= 6; i++) {
@@ -570,14 +575,17 @@
       }
     }
 
-    if (!e.target.checkValidity()) return;
-
-    e.preventDefault();
+    const startingPlayerError = document.getElementById("startingPlayerError");
+    const startSel = document.getElementById("startingPlayer");
+    if (!startSel.value) {
+      if (startingPlayerError) startingPlayerError.style.display = "";
+      startSel.closest(".starting-card")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (startingPlayerError) startingPlayerError.style.display = "none";
 
     const btn = document.getElementById("startGameBtn");
     if (btn) btn.disabled = true;
-
-    await requestLifeCounterImmersive();
 
     e.target.submit();
   });

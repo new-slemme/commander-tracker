@@ -433,6 +433,92 @@
   padding: 0 0 max(20px, env(safe-area-inset-bottom, 20px));
 }
 
+.editor-import-card {
+  margin: 14px;
+  padding: 14px;
+  border: 1px solid rgba(143,153,197,0.2);
+  border-radius: 14px;
+  background: rgba(20,23,39,0.78);
+}
+
+.editor-import-head {
+  margin-bottom: 10px;
+}
+
+.editor-import-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.editor-import-subtitle {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--font-base-trans);
+}
+
+.editor-import-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.editor-import-tab {
+  flex: 1;
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(143,153,197,0.28);
+  background: transparent;
+  color: var(--font-base-trans);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.editor-import-tab.active {
+  border-color: rgba(13,202,240,0.55);
+  background: rgba(13,202,240,0.12);
+  color: #0dcaf0;
+}
+
+.editor-import-pane {
+  display: none;
+}
+
+.editor-import-pane.active {
+  display: block;
+}
+
+.editor-import-file-name {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: var(--font-base-trans);
+}
+
+.editor-import-status {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+}
+
+.editor-import-status.success {
+  background: rgba(53,194,107,0.12);
+  border: 1px solid rgba(53,194,107,0.3);
+  color: #7ee2a3;
+}
+
+.editor-import-status.error {
+  background: rgba(224,90,106,0.12);
+  border: 1px solid rgba(224,90,106,0.3);
+  color: #ff9aa6;
+}
+
+.editor-import-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
 /* Section headers */
 .deck-section-header {
   display: flex;
@@ -769,6 +855,11 @@
   flex-wrap: wrap;
 }
 
+.editor-settings-help {
+  font-size: 0.78rem;
+  color: var(--font-base-trans);
+}
+
 .editor-settings-file-btn {
   font-size: 0.78rem;
   cursor: pointer;
@@ -933,5 +1024,15 @@
 
   .print-picker-item {
     width: 80px;
+  }
+}
+
+/* Mobile topbar: name input gets its own full-width row below back + actions */
+@media (max-width: 991px) {
+  .editor-topbar-back    { order: 1; }
+  .editor-topbar-actions { order: 2; margin-left: auto; }
+  .editor-topbar-title {
+    order: 3;
+    flex: 0 0 100%;
   }
 }

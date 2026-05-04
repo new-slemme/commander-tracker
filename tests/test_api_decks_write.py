@@ -220,6 +220,34 @@ class ApiDecksWriteTests(unittest.TestCase):
             tags = json.loads(deck.tags_json)
             self.assertTrue(tags.get("monarch"))
 
+    def test_deck_import_parse_returns_sections_and_commanders(self):
+        with app.app.app_context():
+            owner_user, _, _, _ = self._seed_users_players()
+            client = self._auth_client_for(owner_user.id)
+
+            response = client.post(
+                "/api/deck-import-parse",
+                json={"raw_import": "Commander:\n1 Talrand, Sky Summoner\n\nMainboard:\n1 Sol Ring\n1 Arcane Signet"},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            payload = response.get_json()
+            self.assertEqual(payload["primary_commander"], "Talrand, Sky Summoner")
+            self.assertIn("commander", payload["sections"])
+            self.assertIn("mainboard", payload["sections"])
+
+    def test_new_deck_editor_renders_for_owner(self):
+        with app.app.app_context():
+            owner_user, _, _, _ = self._seed_users_players()
+            client = self._auth_client_for(owner_user.id)
+
+            response = client.get("/deck/new")
+
+            self.assertEqual(response.status_code, 200)
+            body = response.get_data(as_text=True)
+            self.assertIn("Create Deck", body)
+            self.assertIn("Import decklist", body)
+
 
 if __name__ == "__main__":
     unittest.main()

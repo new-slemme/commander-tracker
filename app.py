@@ -34,6 +34,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func, text, case
 from sqlalchemy.orm import aliased
 from functools import wraps
+from types import SimpleNamespace
 from uuid import uuid4
 
 from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist, ccauto_named_exact
@@ -3042,7 +3043,12 @@ def require_login():
     ):
         submitted = request.form.get("_csrf_token") or request.headers.get("X-CSRFToken", "")
         expected = session.get("_csrf_token", "")
-        if not expected or not submitted or not hmac.compare_digest(submitted, expected):
+        if not expected:
+            # Stale session (no CSRF token) — clear it and redirect to login
+            session.clear()
+            flash("Your session expired. Please log in again.", "warning")
+            return redirect(url_for("login"))
+        if not submitted or not hmac.compare_digest(submitted, expected):
             abort(403)
 
     if "user_id" not in session:
@@ -5247,12 +5253,74 @@ def deck_editor(deck_id):
     return render_template(
         "deck_editor.html",
         deck=deck,
+        create_mode=False,
         decklist_data=decklist_data,
         is_admin=bool(u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if u.is_admin else []),
         has_ccauto=bool(CCAUTO_BASE_URL),
         card_print_prefs=card_print_prefs,
         owner_name=(db.session.get(Player, deck.player_id).name if deck.player_id else ""),
+        editor_owner_player_id=deck.player_id,
+    )
+
+
+@app.route("/deck/new")
+@login_required
+def new_deck_editor():
+    u = get_current_user()
+    players = Player.query.order_by(Player.name.asc()).all() if u.is_admin else []
+
+    owner_player_id = None
+    owner_name = ""
+    if u.is_admin:
+        requested_player_id = request.args.get("player_id", type=int)
+        if requested_player_id:
+            owner = db.session.get(Player, requested_player_id)
+            if owner:
+                owner_player_id = owner.id
+                owner_name = owner.name
+    else:
+        if not u.player:
+            flash("No player profile found for your account.")
+            return redirect(url_for("decks"))
+        owner_player_id = u.player.id
+        owner_name = u.player.name
+
+    empty_deck = SimpleNamespace(
+        id=None,
+        name="",
+        commander_name="",
+        commander="",
+        retired=False,
+        planned=False,
+        commander_art_url="",
+        commander_local_art_custom="",
+        custom_commander_art_url="",
+        custom_card_art_url="",
+        custom_card_art_local="",
+    )
+    empty_decklist_data = {
+        "has_list": False,
+        "mode": "empty",
+        "sections": [],
+        "total_cards": 0,
+        "commander_count": 0,
+        "validation_hints": [],
+        "export_text": "",
+        "raw_text": "",
+    }
+
+    return render_template(
+        "deck_editor.html",
+        deck=empty_deck,
+        create_mode=True,
+        decklist_data=empty_decklist_data,
+        is_admin=bool(u.is_admin),
+        players=players,
+        has_ccauto=bool(CCAUTO_BASE_URL),
+        card_print_prefs={},
+        owner_name=owner_name,
+        editor_owner_player_id=owner_player_id,
     )
 
 
@@ -5650,6 +5718,32 @@ def deck_import_preview():
             "commanders": commanders,
             "primary_commander": primary,
             "partner_commander": partner,
+        }
+    )
+
+
+@app.route("/api/deck-import-parse", methods=["POST"])
+@login_required
+def deck_import_parse():
+    payload = request.get_json(silent=True) or {}
+    raw_import = (payload.get("raw_import") or "").strip()
+    if not raw_import:
+        return jsonify({"error": "raw_import is required"}), 400
+
+    try:
+        parsed = parse_deck_input(raw_import)
+    except DeckParserError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    commanders = [name for name in (parsed.get("commanders") or []) if isinstance(name, str) and name.strip()]
+    return jsonify(
+        {
+            "commander": parsed.get("commander") if isinstance(parsed.get("commander"), str) else None,
+            "commanders": commanders,
+            "primary_commander": commanders[0] if commanders else None,
+            "partner_commander": commanders[1] if len(commanders) > 1 else None,
+            "sections": parsed.get("sections") or {},
+            "decklist_text": _render_decklist_text(parsed),
         }
     )
 
