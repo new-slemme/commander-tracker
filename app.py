@@ -6120,7 +6120,7 @@ def start_game():
 
 
 @app.route("/api/start_game", methods=["POST"])
-@login_required
+@api_login_required
 def api_start_game():
     data = request.get_json(silent=True) or {}
     raw_participants = data.get("participants", [])
