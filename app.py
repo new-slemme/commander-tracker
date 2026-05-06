@@ -6119,6 +6119,144 @@ def start_game():
     return redirect(url_for("life_counter"))
 
 
+@app.route("/api/start_game", methods=["POST"])
+@login_required
+def api_start_game():
+    data = request.get_json(silent=True) or {}
+    raw_participants = data.get("participants", [])
+    if not isinstance(raw_participants, list):
+        return jsonify({"error": "participants must be a list"}), 400
+
+    participants = []
+    seen = set()
+
+    for entry in raw_participants:
+        try:
+            p_id = int(entry["player_id"])
+            d_id = int(entry["deck_id"])
+        except (KeyError, TypeError, ValueError):
+            return jsonify({"error": "Invalid player_id or deck_id"}), 400
+
+        if p_id in seen:
+            return jsonify({"error": "Duplicate players not allowed"}), 400
+        seen.add(p_id)
+
+        borrowing = bool(entry.get("borrow", False))
+        deck = db.session.get(Deck, d_id)
+        if not deck or deck.retired or deck.planned:
+            return jsonify({"error": "Invalid deck"}), 400
+        if not borrowing and deck.player_id != p_id:
+            return jsonify({"error": "Invalid deck for player"}), 400
+
+        player = db.session.get(Player, p_id)
+        if not player:
+            return jsonify({"error": "Invalid player"}), 400
+
+        borrowed_from_player_id = None
+        if borrowing and deck.player_id != p_id:
+            borrowed_from_player_id = deck.player_id
+
+        deck_tags = get_deck_parsed_tags(deck)
+        deck_mechanics = derive_deck_mechanics(deck_tags)
+
+        participants.append({
+            "player_id": p_id,
+            "deck_id": d_id,
+            "seat_position": len(participants) + 1,
+            "player_name": player.name,
+            "deck_name": deck.name,
+            "commander_art": deck.commander_art_url,
+            "commander_art_scale": deck.commander_art_scale,
+            "mechanics": deck_mechanics,
+            "borrowed_from_player_id": borrowed_from_player_id,
+        })
+
+    if len(participants) < 2:
+        return jsonify({"error": "Need at least 2 players"}), 400
+
+    try:
+        starting_player = int(data.get("starting_player", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "starting_player must be an integer"}), 400
+    if not starting_player:
+        return jsonify({"error": "starting_player required"}), 400
+    if starting_player not in seen:
+        return jsonify({"error": "Starting player must be a participant"}), 400
+
+    timer_mode = str(data.get("timer_mode") or "off").strip().lower()
+    allowed_timer_modes = {"off", "chess_clock", "turn_timer"}
+    if timer_mode not in allowed_timer_modes:
+        return jsonify({"error": "Invalid timer mode"}), 400
+
+    timer_config = {"mode": timer_mode}
+
+    if timer_mode == "chess_clock":
+        try:
+            minutes_per_player = int(data.get("timer_minutes_per_player") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "timer_minutes_per_player must be an integer"}), 400
+        if minutes_per_player < 1 or minutes_per_player > 180:
+            return jsonify({"error": "timer_minutes_per_player must be 1–180"}), 400
+        try:
+            increment_seconds = int(data.get("timer_increment_seconds") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "timer_increment_seconds must be an integer"}), 400
+        if increment_seconds < 0 or increment_seconds > 300:
+            return jsonify({"error": "timer_increment_seconds must be 0–300"}), 400
+        timer_config = {"mode": "chess_clock", "minutes_per_player": minutes_per_player, "increment_seconds": increment_seconds}
+
+    elif timer_mode == "turn_timer":
+        try:
+            seconds_per_turn = int(data.get("timer_seconds_per_turn") or 0)
+        except (TypeError, ValueError):
+            return jsonify({"error": "timer_seconds_per_turn must be an integer"}), 400
+        if seconds_per_turn < 5 or seconds_per_turn > 3600:
+            return jsonify({"error": "timer_seconds_per_turn must be 5–3600"}), 400
+        timer_config = {"mode": "turn_timer", "seconds_per_turn": seconds_per_turn}
+
+    session["game_participants"] = participants
+    session["active_player_id"] = starting_player
+    session["turn_number"] = 1
+    session["timer_config"] = timer_config
+    session["game_started_at"] = int(datetime.utcnow().timestamp())
+    session.modified = True
+
+    game_token = uuid4().hex
+    try:
+        initial_state = {
+            "version": 0,
+            "life": {str(p["player_id"]): 40 for p in participants},
+            "flags": {
+                str(p["player_id"]): {"mana_fucked": False, "misplayed": False, "salt_count": 0}
+                for p in participants
+            },
+            "card_state": {
+                str(p["player_id"]): {"statuses": {}, "counters": {}, "commander_damage": {}}
+                for p in participants
+            },
+            "turn": 1,
+            "active_player_id": starting_player,
+        }
+        active_pod = get_active_pod()
+        active_game_rec = ActiveGame(
+            token=game_token,
+            host_user_id=session["user_id"],
+            pod_id=active_pod.id if active_pod else None,
+            participants_json=json.dumps(participants),
+            state_json=json.dumps(initial_state),
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.session.add(active_game_rec)
+        db.session.commit()
+        session["game_token"] = game_token
+        session.modified = True
+    except Exception:
+        pass  # graceful degradation
+
+    return jsonify({"token": game_token})
+
+
 
 @app.route("/cancel_game", methods=["POST"])
 @login_required
