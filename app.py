@@ -7051,6 +7051,8 @@ def _serialize_deck_detail(deck: Deck) -> dict:
         })
     payload["recent_games"] = recent_games
     payload["decklist_text"] = deck.decklist_text or ""
+    payload["card_print_prefs"] = json.loads(deck.card_print_prefs_json) if deck.card_print_prefs_json else {}
+    payload["custom_commander_art_url"] = deck.custom_commander_art_url or ""
     return payload
 
 
@@ -7213,7 +7215,8 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
         deck = db.session.get(Deck, deck_id)
         if not deck:
             return None, (jsonify({"error": "participants.deck_id must reference an existing deck"}), 400)
-        if deck.player_id != player_id:
+        borrow = bool(participant_raw.get("borrow", False))
+        if deck.player_id != player_id and not borrow:
             return None, (jsonify({"error": "participant deck must belong to participant player"}), 400)
         if player_id in seen_player_ids:
             return None, (jsonify({"error": "Duplicate players are not allowed"}), 400)

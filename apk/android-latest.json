@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 52,
-  "versionName": "1.5.2",
+  "versionCode": 55,
+  "versionName": "1.5.5",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-1.5.2+52.apk",
-  "artifactPath": "apk/edh-son-1.5.2+52.apk",
-  "sha256": "3f67711352057e4c28fd6172394b5b43adb4d740b5ded5af80782aa38988ea4b",
-  "publishedAt": "2026-05-12T00:00:00.000000000Z",
+  "artifactFileName": "edh-son-1.5.5+55.apk",
+  "artifactPath": "apk/edh-son-1.5.5+55.apk",
+  "sha256": "2944301d2680730023d840933cc363bfc38e3c536bac62c46ecc818c3ac53d61",
+  "publishedAt": "2026-05-20T00:00:00.000000000Z",
   "notes": ""
 }
