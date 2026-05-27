@@ -115,6 +115,7 @@
             <th>Player</th>
             <th class="text-end">Wins</th>
             <th class="text-end">Games</th>
+            <th class="text-end d-none d-sm-table-cell">Avg. MMR</th>
             <th class="text-end">Win %</th>
             <th style="width:220px;">&nbsp;</th>
           </tr>
@@ -142,6 +143,14 @@
               <td class="text-end d-none d-sm-table-cell">{{ s.wins }}</td>
               <td class="text-end">{{ s.played }}</td>
 
+              <td class="text-end d-none d-sm-table-cell">
+                {% if s.avg_mmr is not none %}
+                  <span class="text-white fw-bold">{{ s.avg_mmr }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+
               <td class="text-end">
                 <span class="win-badge {{ badge_class }}">{{ wr }}%</span>
               </td>
@@ -159,7 +168,7 @@
 
           {% if player_stats|length == 0 %}
             <tr>
-              <td colspan="6" class="text-center py-4 muted">No players yet.</td>
+              <td colspan="7" class="text-center py-4 muted">No players yet.</td>
             </tr>
           {% endif %}
         </tbody>

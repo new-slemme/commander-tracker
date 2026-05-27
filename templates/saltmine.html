@@ -168,6 +168,93 @@
       </div>
     </div>
 
+    <!-- MMR Leaderboard -->
+    <div class="salt-card span-12" id="mmr-leaderboard-card">
+      <div class="salt-card-head">
+        <h2 class="salt-card-title m-0">MMR Leaderboard</h2>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div class="muted">Multiplayer Elo rating · K={{ 48 }} · Floor={{ 100 }}</div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-primary" id="sort-mmr-btn" onclick="sortLeaderboard('mmr')">Sort: MMR</button>
+            <button class="btn btn-sm btn-outline-light" id="sort-wr-btn" onclick="sortLeaderboard('winrate')">Sort: Win Rate</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-responsive p-3">
+        <table class="table table-hover align-middle mb-0 salt-table" id="mmr-table">
+          <thead>
+            <tr>
+              <th style="width:50px;">#</th>
+              <th>Deck</th>
+              <th class="text-end" data-col="mmr">MMR</th>
+              <th class="text-end">Tier</th>
+              <th class="text-end" data-col="winrate">Win Rate</th>
+              <th class="text-end">Record</th>
+            </tr>
+          </thead>
+          <tbody id="mmr-tbody">
+            {% for row in mmr_leaderboard %}
+              {% set deck = row.deck %}
+              {% set player = row.player %}
+              {% set mmr = deck.mmr %}
+              {% if mmr >= 1300 %}{% set tier = "S" %}{% set tier_cls = "success" %}
+              {% elif mmr >= 1200 %}{% set tier = "A" %}{% set tier_cls = "info" %}
+              {% elif mmr >= 1100 %}{% set tier = "B" %}{% set tier_cls = "primary" %}
+              {% elif mmr >= 950 %}{% set tier = "C" %}{% set tier_cls = "" %}
+              {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
+              <tr data-mmr="{{ mmr }}" data-winrate="{{ row.winrate }}">
+                <td><span class="app-badge">#{{ loop.index }}</span></td>
+                <td style="min-width:0;">
+                  <div class="fw-bold text-white text-truncate" style="max-width:360px;">
+                    <a class="text-white" href="{{ url_for('deck_detail', deck_id=deck.id) }}">{{ deck.name }}</a>
+                  </div>
+                  <div class="muted text-truncate" style="max-width:360px;">
+                    {{ deck.commander_name or deck.commander }}
+                    <span class="muted"> · </span>
+                    {{ player.name }}
+                  </div>
+                </td>
+                <td class="text-end fw-bold text-white">{{ mmr }}</td>
+                <td class="text-end">
+                  <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}">{{ tier }}</span>
+                </td>
+                <td class="text-end fw-bold {% if row.winrate >= 50 %}text-success{% else %}text-white{% endif %}">
+                  {{ "%.1f"|format(row.winrate) }}%
+                </td>
+                <td class="text-end">{{ row.wins }}/{{ row.games_played }}</td>
+              </tr>
+            {% endfor %}
+            {% if mmr_leaderboard|length == 0 %}
+              <tr>
+                <td colspan="6" class="text-center muted py-4">No games recorded yet.</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <script>
+    (function() {
+      var currentSort = 'mmr';
+      window.sortLeaderboard = function(col) {
+        currentSort = col;
+        document.getElementById('sort-mmr-btn').className = col === 'mmr'
+          ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-light';
+        document.getElementById('sort-wr-btn').className = col === 'winrate'
+          ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-light';
+        var tbody = document.getElementById('mmr-tbody');
+        var rows = Array.from(tbody.querySelectorAll('tr[data-mmr]'));
+        rows.sort(function(a, b) {
+          return parseFloat(b.dataset[col]) - parseFloat(a.dataset[col]);
+        });
+        rows.forEach(function(row, i) {
+          row.querySelector('.app-badge').textContent = '#' + (i + 1);
+          tbody.appendChild(row);
+        });
+      };
+    })();
+    </script>
+
     <!-- Saltiest Games -->
     <div class="salt-card span-12">
       <div class="salt-card-head">

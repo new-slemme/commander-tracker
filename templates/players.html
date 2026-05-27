@@ -4,7 +4,7 @@
 
 <div class="container pb-4">
 
-  <!-- Header / controls -->
+  <!-- Header -->
   <div class="app-hero mb-4">
     <div class="app-hero__head">
       <div>
@@ -18,155 +18,206 @@
         </div>
       </div>
 
-      <div class="players-actions">
-        <!-- Compare button (shown when 2 players selected) -->
-        <a id="compare-btn"
-           href="#"
-           class="btn btn-primary app-btn compare-btn-hidden">
-          Compare 2 Players
-        </a>
-
-        <!-- Add Guest -->
-        <form method="post" action="{{ url_for('add_player') }}" class="add-guest-wrap m-0">
-          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-          <input class="form-control"
-                 name="name"
-                 placeholder="New guest name"
-                 required
-                 autocomplete="off">
-          <button class="btn btn-primary app-btn" type="submit">
-            + Add Guest
-          </button>
-        </form>
-      </div>
+      <!-- Add Guest -->
+      <form method="post" action="{{ url_for('add_player') }}" class="add-guest-wrap m-0">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input class="form-control"
+               name="name"
+               placeholder="New guest name"
+               required
+               autocomplete="off">
+        <button class="btn btn-primary app-btn" type="submit">+ Add Guest</button>
+      </form>
     </div>
   </div>
 
-  <!-- Player list -->
-  <div class="player-card">
-    {% if players and players|length > 0 %}
+  <!-- Compare hint (always visible) -->
+  <div class="compare-hint mb-4">
+    <span class="compare-hint__icon">⚔️</span>
+    <span>Tap <strong>Compare</strong> on any two player cards to see a head-to-head breakdown.</span>
+  </div>
+
+  <!-- Player grid -->
+  {% if players and players|length > 0 %}
+    <div class="players-grid">
       {% for p in players %}
+        {% set stats = player_stats.get(p.id, {}) %}
+        {% set art = stats.get('card_art') %}
+        {% set avg_mmr = stats.get('avg_mmr') %}
 
-        {# Determine "guest vs user" as robustly as possible with whatever you pass #}
-        {% set is_guest = false %}
-        {% if p.is_guest is defined %}
-          {% set is_guest = p.is_guest %}
-        {% elif p.user_id is defined and p.user_id %}
-          {% set is_guest = false %}
-        {% elif p.username is defined and p.username %}
-          {% set is_guest = false %}
-        {% else %}
-          {% set is_guest = true %}
-        {% endif %}
+        {% set is_guest = true %}
+        {% if p.user_id is defined and p.user_id %}{% set is_guest = false %}{% endif %}
 
-        {# Non-admins: only guests can be deleted #}
         {% set can_show_delete = is_admin or is_guest %}
-
-        {# Optional: if you pass player_can_delete dict, respect it. Otherwise default true. #}
         {% set can_delete = true %}
-        {% if player_can_delete is defined %}
-          {% set can_delete = player_can_delete.get(p.id) %}
-        {% endif %}
+        {% if player_can_delete is defined %}{% set can_delete = player_can_delete.get(p.id) %}{% endif %}
 
-        <div class="player-row"
-             role="link"
-             tabindex="0"
+        <div class="pcard {% if art %}pcard--art{% endif %}"
+             {% if art %}style="--pcard-art: url('{{ art }}');"{% endif %}
              data-player-id="{{ p.id }}"
-             onclick="if(!event.target.closest('.compare-check-wrap'))window.location.href='{{ url_for('player_detail', player_id=p.id) }}'"
-             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); window.location.href='{{ url_for('player_detail', player_id=p.id) }}';}">
-          <div class="compare-check-wrap" onclick="event.stopPropagation()">
-            <input type="checkbox"
-                   class="compare-check"
-                   data-id="{{ p.id }}"
-                   data-name="{{ p.name }}"
-                   aria-label="Select {{ p.name }} for comparison">
-          </div>
-          <div class="player-left">
-            <div class="player-name">{{ p.name }}</div>
+             data-player-name="{{ p.name }}">
 
-            <div class="player-meta">
+          <!-- Art background layers -->
+          {% if art %}
+            <div class="pcard__art-bg"></div>
+            <div class="pcard__art-overlay"></div>
+          {% endif %}
+
+          <!-- Card content -->
+          <div class="pcard__body">
+
+            <!-- Top row: type badge + delete -->
+            <div class="pcard__toprow">
               {% if is_guest %}
                 <span class="pill guest">Guest</span>
               {% else %}
                 <span class="pill user">User</span>
               {% endif %}
 
-              {# If you expose username/display info, show it subtly (won't break if absent) #}
-              {% if p.username is defined and p.username %}
-                <span class="muted">@{{ p.username }}</span>
+              {% if can_show_delete %}
+                {% if can_delete %}
+                  <form method="post"
+                        action="{{ url_for('delete_player', player_id=p.id) }}"
+                        onsubmit="return confirm('Delete {{ p.name }}? This cannot be undone.');"
+                        class="m-0">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="pcard__delete-btn">✕</button>
+                  </form>
+                {% else %}
+                  <button type="button" class="pcard__delete-btn" disabled title="Can't delete: player has game data">✕</button>
+                {% endif %}
               {% endif %}
-              {% set stats = player_stats.get(p.id, {}) %}
-              <span class="muted">· {{ stats.get('won', 0) }}W / {{ stats.get('played', 0) }}G</span>
-              <span class="muted">· {{ stats.get('winrate', 0.0) }}% WR</span>
-              <span class="muted">· {{ stats.get('deck_count', 0) }} decks</span>
-              <span class="muted">· Joined {{ stats.get('joined_on').strftime('%Y-%m-%d') if stats.get('joined_on') else 'n/a' }}</span>
             </div>
-          </div>
 
-          <div class="player-actions">
-            {% if can_show_delete %}
-              {% if can_delete %}
-                <form method="post"
-                      action="{{ url_for('delete_player', player_id=p.id) }}"
-                      onsubmit="return confirm('Delete {{ p.name }}? This cannot be undone.');"
-                      class="m-0"
-                      onclick="event.stopPropagation();">
-                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-danger btn-danger-soft" onclick="event.stopPropagation();">
-                    Delete
-                  </button>
-                </form>
-              {% else %}
-                <button type="button"
-                        class="btn btn-danger btn-danger-soft"
-                        onclick="event.stopPropagation();"
-                        disabled
-                        title="Can't delete: player has related data">
-                  Delete
-                </button>
-              {% endif %}
-            {% else %}
-              {# Non-admin + user-backed player: no delete button shown #}
+            <!-- Name -->
+            <a class="pcard__name" href="{{ url_for('player_detail', player_id=p.id) }}">{{ p.name }}</a>
+            {% if p.user and p.user.display_name and p.user.display_name != p.name %}
+              <div class="pcard__username">{{ p.user.display_name }}</div>
             {% endif %}
-          </div>
-        </div>
 
+            <!-- Stats chips -->
+            <div class="pcard__stats">
+              <div class="pcard__stat">
+                <span class="pcard__stat-val">{{ stats.get('won', 0) }}</span>
+                <span class="pcard__stat-lbl">Wins</span>
+              </div>
+              <div class="pcard__stat-sep"></div>
+              <div class="pcard__stat">
+                <span class="pcard__stat-val">{{ stats.get('played', 0) }}</span>
+                <span class="pcard__stat-lbl">Games</span>
+              </div>
+              <div class="pcard__stat-sep"></div>
+              <div class="pcard__stat">
+                <span class="pcard__stat-val">{{ stats.get('winrate', 0.0) }}%</span>
+                <span class="pcard__stat-lbl">Win rate</span>
+              </div>
+              {% if avg_mmr is not none %}
+                <div class="pcard__stat-sep"></div>
+                <div class="pcard__stat">
+                  <span class="pcard__stat-val">{{ avg_mmr }}</span>
+                  <span class="pcard__stat-lbl">Avg. MMR</span>
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Compare toggle -->
+            <button class="pcard__compare-btn"
+                    data-player-id="{{ p.id }}"
+                    data-player-name="{{ p.name }}"
+                    onclick="toggleCompare(this)"
+                    type="button">
+              <span class="pcard__compare-icon">⚔</span>
+              <span class="pcard__compare-label">Compare</span>
+            </button>
+
+          </div><!-- /.pcard__body -->
+        </div><!-- /.pcard -->
       {% endfor %}
-    {% else %}
-      <div class="p-4 muted">No players found.</div>
-    {% endif %}
-  </div>
+    </div>
+  {% else %}
+    <div class="card p-4 muted">No players yet.</div>
+  {% endif %}
 
+</div>
+
+<!-- Sticky compare bar -->
+<div class="compare-bar" id="compare-bar">
+  <div class="compare-bar__inner">
+    <div class="compare-bar__names" id="compare-bar-names">
+      <span class="compare-bar__prompt">Select one more player to compare</span>
+    </div>
+    <div class="compare-bar__actions">
+      <button class="btn btn-outline-light btn-sm" onclick="clearCompare()">Clear</button>
+      <a id="compare-bar-btn" href="#" class="btn btn-primary app-btn compare-bar-btn--disabled">Compare</a>
+    </div>
+  </div>
 </div>
 
 <script>
 (function () {
-  const btn = document.getElementById('compare-btn');
   const compareUrl = '{{ url_for("compare_players") }}';
+  const selected = new Map(); // id → name
 
-  function updateCompareBtn() {
-    const checked = Array.from(document.querySelectorAll('.compare-check:checked'));
-    if (checked.length === 2) {
-      const [a, b] = checked;
-      btn.href = compareUrl + '?a=' + a.dataset.id + '&b=' + b.dataset.id;
-      btn.textContent = 'Compare ' + a.dataset.name + ' vs ' + b.dataset.name;
-      btn.classList.remove('compare-btn-hidden');
-    } else {
-      btn.href = '#';
-      btn.textContent = 'Compare 2 Players';
-      btn.classList.add('compare-btn-hidden');
+  function getCard(playerId) {
+    return document.querySelector(`.pcard[data-player-id="${playerId}"]`);
+  }
+
+  function render() {
+    const bar = document.getElementById('compare-bar');
+    const namesEl = document.getElementById('compare-bar-names');
+    const btn = document.getElementById('compare-bar-btn');
+    const count = selected.size;
+
+    // Update card states
+    document.querySelectorAll('.pcard').forEach(card => {
+      const id = card.dataset.playerId;
+      const isSelected = selected.has(id);
+      const isDisabled = count >= 2 && !isSelected;
+      card.classList.toggle('pcard--selected', isSelected);
+      card.classList.toggle('pcard--dimmed', isDisabled);
+      const cBtn = card.querySelector('.pcard__compare-btn');
+      if (cBtn) {
+        cBtn.classList.toggle('pcard__compare-btn--active', isSelected);
+        cBtn.disabled = isDisabled;
+        cBtn.querySelector('.pcard__compare-label').textContent = isSelected ? 'Selected ✓' : 'Compare';
+      }
+    });
+
+    // Update bar
+    if (count === 0) {
+      bar.classList.remove('compare-bar--visible');
+      return;
     }
-    // Prevent selecting more than 2
-    if (checked.length >= 2) {
-      document.querySelectorAll('.compare-check:not(:checked)').forEach(cb => cb.disabled = true);
+    bar.classList.add('compare-bar--visible');
+
+    const names = Array.from(selected.values());
+    if (count === 1) {
+      namesEl.innerHTML = `<span class="compare-bar__sel">${names[0]}</span><span class="compare-bar__prompt"> — select one more</span>`;
+      btn.classList.add('compare-bar-btn--disabled');
+      btn.href = '#';
     } else {
-      document.querySelectorAll('.compare-check').forEach(cb => cb.disabled = false);
+      const [a, b] = Array.from(selected.entries());
+      namesEl.innerHTML = `<span class="compare-bar__sel">${names[0]}</span><span class="compare-bar__vs"> vs </span><span class="compare-bar__sel">${names[1]}</span>`;
+      btn.classList.remove('compare-bar-btn--disabled');
+      btn.href = compareUrl + '?a=' + a[0] + '&b=' + b[0];
     }
   }
 
-  document.querySelectorAll('.compare-check').forEach(cb => {
-    cb.addEventListener('change', updateCompareBtn);
-  });
+  window.toggleCompare = function(btn) {
+    const id = btn.dataset.playerId;
+    const name = btn.dataset.playerName;
+    if (selected.has(id)) {
+      selected.delete(id);
+    } else if (selected.size < 2) {
+      selected.set(id, name);
+    }
+    render();
+  };
+
+  window.clearCompare = function() {
+    selected.clear();
+    render();
+  };
 })();
 </script>
 

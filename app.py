@@ -126,6 +126,10 @@ KNOWN_DECK_TAG_KEYS = (
 )
 TRUST_LEGACY_DECK_TAGS = False
 
+STARTING_MMR = 1000
+K_FACTOR = 48
+MMR_FLOOR = 100
+
 CCAUTO_BASE_URL = os.getenv("CCAUTO_BASE_URL", "").rstrip("/")
 
 CARD_ART_CACHE_LOCK = threading.Lock()
@@ -524,6 +528,31 @@ def validate_password_rules(password: str) -> str | None:
     return None
 
 
+def mmr_tier(mmr: int) -> str:
+    if mmr >= 1300:
+        return "S"
+    if mmr >= 1200:
+        return "A"
+    if mmr >= 1100:
+        return "B"
+    if mmr >= 950:
+        return "C"
+    return "D"
+
+
+def calculate_expected_wins(deck_mmrs: list[int]) -> list[float]:
+    total = sum(deck_mmrs)
+    return [mmr / total for mmr in deck_mmrs]
+
+
+def calculate_mmr_deltas(deck_mmrs: list[int], winner_index: int) -> list[int]:
+    expected = calculate_expected_wins(deck_mmrs)
+    return [
+        round(K_FACTOR * ((1 if i == winner_index else 0) - expected[i]))
+        for i in range(len(deck_mmrs))
+    ]
+
+
 # -------------------------
 # Models
 # -------------------------
@@ -588,6 +617,8 @@ class Deck(db.Model):
     tags_json = db.Column(db.Text, nullable=False, default="{}")
     tags_version = db.Column(db.Integer, nullable=True)
     tags_computed_at = db.Column(db.DateTime, nullable=True)
+    mmr = db.Column(db.Integer, nullable=False, default=STARTING_MMR)
+    mmr_history_json = db.Column(db.Text, nullable=False, default="[]")
 
     @property
     def commander_art_url(self):
@@ -643,6 +674,7 @@ class Game(db.Model):
     ending_turn = db.Column(db.Integer, nullable=True)
 
     note = db.Column(db.Text, nullable=True)
+    mmr_deltas_json = db.Column(db.Text, nullable=True)
 
     pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=True, index=True)
     pod = db.relationship("Pod", backref="games", lazy=True)
@@ -698,6 +730,7 @@ class GameParticipant(db.Model):
     mana_fucked = db.Column(db.Boolean, nullable=False, default=False)
     misplayed = db.Column(db.Boolean, nullable=False, default=False)
     life_delta_total = db.Column(db.Integer, nullable=True, default=0)
+    mmr_delta = db.Column(db.Integer, nullable=True)
 
     player = db.relationship("Player", foreign_keys=[player_id], backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
@@ -1369,6 +1402,46 @@ with app.app_context():
                 )
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('020_gameparticipant_borrowed_from')")
+            )
+
+        if "022_deck_mmr" not in applied:
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "mmr" not in deck_cols:
+                db.session.execute(
+                    text("ALTER TABLE deck ADD COLUMN mmr INTEGER NOT NULL DEFAULT 1000")
+                )
+            if "mmr_history_json" not in deck_cols:
+                db.session.execute(
+                    text("ALTER TABLE deck ADD COLUMN mmr_history_json TEXT NOT NULL DEFAULT '[]'")
+                )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('022_deck_mmr')")
+            )
+
+        if "023_game_mmr_deltas" not in applied:
+            game_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game)")).fetchall()
+            }
+            if "mmr_deltas_json" not in game_cols:
+                db.session.execute(
+                    text("ALTER TABLE game ADD COLUMN mmr_deltas_json TEXT")
+                )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('023_game_mmr_deltas')")
+            )
+
+        if "024_gameparticipant_mmr_delta" not in applied:
+            gp_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(game_participant)")).fetchall()
+            }
+            if "mmr_delta" not in gp_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN mmr_delta INTEGER")
+                )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('024_gameparticipant_mmr_delta')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -3706,6 +3779,37 @@ def saltmine():
             }
         )
 
+    # MMR leaderboard: all active decks with at least 1 game, sorted by MMR desc
+    mmr_leaderboard_rows = (
+        db.session.query(
+            Deck,
+            Player,
+            func.count(GameParticipant.id).label("games_played"),
+            func.sum(
+                case((Game.winner_id == GameParticipant.player_id, 1), else_=0)
+            ).label("wins"),
+        )
+        .join(Player, Deck.player_id == Player.id)
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Deck.retired == False, Deck.planned == False)
+        .group_by(Deck.id)
+        .order_by(Deck.mmr.desc())
+        .all()
+    )
+    mmr_leaderboard = []
+    for deck, player, games_played, wins in mmr_leaderboard_rows:
+        games_played = int(games_played or 0)
+        wins = int(wins or 0)
+        winrate = round((wins / games_played) * 100, 1) if games_played else 0.0
+        mmr_leaderboard.append({
+            "deck": deck,
+            "player": player,
+            "games_played": games_played,
+            "wins": wins,
+            "winrate": winrate,
+        })
+
     return render_template(
         "saltmine.html",
         salty_games=salty_games,
@@ -3718,6 +3822,7 @@ def saltmine():
         seat_winrates=seat_winrates,
         scope=scope,
         active_pod=active_pod,
+        mmr_leaderboard=mmr_leaderboard,
     )
 
 
@@ -3875,12 +3980,20 @@ def index():
         .group_by(GameParticipant.player_id)
         .all()
     )
+    avg_mmr_by_player = dict(
+        db.session.query(Deck.player_id, func.avg(Deck.mmr))
+        .filter(Deck.retired == False, Deck.planned == False)
+        .group_by(Deck.player_id)
+        .all()
+    )
     player_stats = []
     for p in players:
         wins = wins_by_player.get(p.id, 0)
         played = played_by_player.get(p.id, 0)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
-        player_stats.append({"player": p, "wins": wins, "played": played, "winrate": winrate})
+        raw_avg = avg_mmr_by_player.get(p.id)
+        avg_mmr = round(raw_avg) if raw_avg is not None else None
+        player_stats.append({"player": p, "wins": wins, "played": played, "winrate": winrate, "avg_mmr": avg_mmr})
 
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
 
@@ -4690,6 +4803,14 @@ def delete_game(game_id):
 def players():
     players_list = Player.query.order_by(Player.name.asc()).all()
 
+    # Bulk aggregate: avg MMR of active decks per player
+    avg_mmr_by_player = dict(
+        db.session.query(Deck.player_id, func.avg(Deck.mmr))
+        .filter(Deck.retired == False, Deck.planned == False)
+        .group_by(Deck.player_id)
+        .all()
+    )
+
     player_can_delete = {}
     player_stats = {}
     for p in players_list:
@@ -4700,12 +4821,27 @@ def players():
         winrate = round((won / played) * 100, 1) if played else 0.0
         joined_on = p.user.created_at if p.user else None
 
+        raw_avg = avg_mmr_by_player.get(p.id)
+        avg_mmr = round(raw_avg) if raw_avg is not None else None
+
+        most_played = (
+            db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
+            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+            .filter(GameParticipant.player_id == p.id)
+            .group_by(Deck.id)
+            .order_by(text("plays DESC"))
+            .first()
+        )
+        card_art = most_played[0].commander_art_url if most_played else None
+
         player_stats[p.id] = {
             "winrate": winrate,
             "deck_count": deck_count,
             "joined_on": joined_on,
             "won": won,
             "played": played,
+            "avg_mmr": avg_mmr,
+            "card_art": card_art,
         }
 
         deck_used = (
@@ -5166,7 +5302,13 @@ def deck_detail(deck_id):
                 deck_matchups[matchup_key]["losses"] += 1
 
         history.append(
-            {"game_id": game.id, "date": game.date, "won": won_game, "opponents": opponent_names}
+            {
+                "game_id": game.id,
+                "date": game.date,
+                "won": won_game,
+                "opponents": opponent_names,
+                "mmr_delta": part.mmr_delta,
+            }
         )
 
     for name, data in matchups.items():
@@ -5213,6 +5355,7 @@ def deck_detail(deck_id):
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
         card_print_prefs=card_print_prefs,
+        deck_mmr_tier=mmr_tier(deck.mmr),
     )
 
 
@@ -5936,6 +6079,7 @@ def play_game():
                 "art": d.commander_art_url,
                 "art_scale": d.commander_art_scale,
                 "owner_name": p.name,
+                "mmr": d.mmr,
             }
             for d in active_decks
         ]
@@ -6586,7 +6730,19 @@ def end_game():
     db.session.add(game)
     db.session.flush()
 
-    for p in participants:
+    # Pre-compute MMR deltas before creating participants
+    pod_deck_ids = [p["deck_id"] for p in participants]
+    winner_deck_id = next((p["deck_id"] for p in participants if p["player_id"] == winner_id), None)
+    if winner_deck_id is not None and len(pod_deck_ids) >= 2:
+        _winner_index = pod_deck_ids.index(winner_deck_id)
+        _pod_decks = [db.session.get(Deck, did) for did in pod_deck_ids]
+        _pod_mmrs = [d.mmr for d in _pod_decks]
+        _mmr_deltas = calculate_mmr_deltas(_pod_mmrs, _winner_index)
+    else:
+        _pod_decks = []
+        _mmr_deltas = [None] * len(participants)
+
+    for i, p in enumerate(participants):
         participant_flags_json = participant_flags_by_player.get(p["player_id"])
         participant_hot_fields = participant_hot_fields_from_flags(participant_flags_json)
         db.session.add(
@@ -6601,7 +6757,24 @@ def end_game():
                 mana_fucked=bool(participant_hot_fields["mana_fucked"]),
                 misplayed=bool(participant_hot_fields["misplayed"]),
                 life_delta_total=int(participant_hot_fields["life_delta_total"]),
+                mmr_delta=_mmr_deltas[i],
             )
+        )
+
+    if _pod_decks:
+        for deck, delta in zip(_pod_decks, _mmr_deltas):
+            new_mmr = max(MMR_FLOOR, deck.mmr + delta)
+            history = json.loads(deck.mmr_history_json or "[]")
+            history.append({
+                "game_id": game.id,
+                "delta": delta,
+                "mmr_after": new_mmr,
+                "date": datetime.utcnow().isoformat(),
+            })
+            deck.mmr = new_mmr
+            deck.mmr_history_json = json.dumps(history)
+        game.mmr_deltas_json = json.dumps(
+            [{"deck_id": did, "delta": d} for did, d in zip(pod_deck_ids, _mmr_deltas)]
         )
 
     db.session.commit()
@@ -6927,14 +7100,43 @@ def manual_record_game():
     if seat_validation_error:
         return seat_validation_error, 400
 
-    for participant in participants:
+    # Pre-compute MMR deltas
+    _winner_player_id = int(winner_id)
+    _pod_deck_ids = [p["deck_id"] for p in participants]
+    _winner_deck_id = next((p["deck_id"] for p in participants if p["player_id"] == _winner_player_id), None)
+    if _winner_deck_id is not None and len(_pod_deck_ids) >= 2:
+        _winner_index = _pod_deck_ids.index(_winner_deck_id)
+        _pod_decks = [db.session.get(Deck, did) for did in _pod_deck_ids]
+        _mmr_deltas = calculate_mmr_deltas([d.mmr for d in _pod_decks], _winner_index)
+    else:
+        _pod_decks = []
+        _mmr_deltas = [None] * len(participants)
+
+    for i, participant in enumerate(participants):
         db.session.add(
             GameParticipant(
                 game_id=game.id,
                 player_id=participant["player_id"],
                 deck_id=participant["deck_id"],
                 seat_position=participant["seat_position"],
+                mmr_delta=_mmr_deltas[i],
             )
+        )
+
+    if _pod_decks:
+        for deck, delta in zip(_pod_decks, _mmr_deltas):
+            new_mmr = max(MMR_FLOOR, deck.mmr + delta)
+            history = json.loads(deck.mmr_history_json or "[]")
+            history.append({
+                "game_id": game.id,
+                "delta": delta,
+                "mmr_after": new_mmr,
+                "date": datetime.utcnow().isoformat(),
+            })
+            deck.mmr = new_mmr
+            deck.mmr_history_json = json.dumps(history)
+        game.mmr_deltas_json = json.dumps(
+            [{"deck_id": did, "delta": d} for did, d in zip(_pod_deck_ids, _mmr_deltas)]
         )
 
     db.session.commit()
@@ -7026,6 +7228,8 @@ def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, 
         "winrate": winrate,
         "art_url": deck.commander_art_url,
         "mechanics": deck_mechanics,
+        "mmr": deck.mmr,
+        "mmr_tier": mmr_tier(deck.mmr),
     }
 
 

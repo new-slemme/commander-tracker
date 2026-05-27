@@ -132,12 +132,21 @@
       <div class="hint mt-2">Choose a clock style, or leave timer off.</div>
     </div>
 
-    <div class="sticky-actions">
-      <div class="hint">
+    <!-- MMR preview — shown when all active slots have a deck selected -->
+    <div id=”mmr-preview” class=”card p-3 mb-3” style=”display:none!important;”>
+      <div class=”d-flex align-items-center justify-content-between mb-2”>
+        <strong class=”text-white”>MMR Preview</strong>
+        <small class=”muted”>Expected win probabilities</small>
+      </div>
+      <div id=”mmr-preview-rows” class=”d-flex flex-column gap-2”></div>
+    </div>
+
+    <div class=”sticky-actions”>
+      <div class=”hint”>
         Tip: You can leave unused slots as “- None -”.
       </div>
 
-      <button type="submit" class="btn btn-success btn-lg app-btn" id="startGameBtn">
+      <button type=”submit” class=”btn btn-success btn-lg app-btn” id=”startGameBtn”>
         Start Game
       </button>
     </div>
@@ -361,7 +370,8 @@
 
     if (pid && decksData[String(pid)]) {
       decksData[String(pid)].forEach(d => {
-        deckSel.add(new Option(d.name, d.id));
+        const label = d.mmr != null ? `${d.name} (${d.mmr} MMR)` : d.name;
+        deckSel.add(new Option(label, d.id));
       });
       deckSel.disabled = false;
     } else if (!pid) {
@@ -589,6 +599,68 @@
 
     e.target.submit();
   });
+
+  // ---- MMR Preview ----
+  function updateMmrPreview() {
+    const preview = document.getElementById('mmr-preview');
+    const rows = document.getElementById('mmr-preview-rows');
+    if (!preview || !rows) return;
+
+    // Collect active slots that have a player + deck selected
+    const slots = [];
+    for (let i = 1; i <= 6; i++) {
+      if (!isActiveSlot(i)) continue;
+      const playerSel = document.getElementById('player' + i);
+      const pid = playerSel && playerSel.value ? String(playerSel.value) : null;
+      if (!pid) continue;
+
+      // Get the deck id (may be in hidden input if borrow mode)
+      const deckHidden = document.getElementById('deckHidden' + i);
+      const deckSel = document.getElementById('deck' + i);
+      const deckId = deckHidden && deckHidden.value ? deckHidden.value
+                   : (deckSel && deckSel.value && !deckSel.disabled ? deckSel.value : null);
+      if (!deckId) continue;
+
+      // Look up deck from decksData for all players
+      let deckData = null;
+      for (const [p, decks] of Object.entries(decksData)) {
+        const found = decks.find(d => String(d.id) === String(deckId));
+        if (found) { deckData = found; break; }
+      }
+      if (!deckData) continue;
+
+      const playerName = playerSel.options[playerSel.selectedIndex]?.text || ('Player ' + pid);
+      slots.push({ name: `${playerName} — ${deckData.name}`, mmr: deckData.mmr || 1000 });
+    }
+
+    if (slots.length < 2) {
+      preview.style.setProperty('display', 'none', 'important');
+      return;
+    }
+
+    const total = slots.reduce((s, x) => s + x.mmr, 0);
+    rows.innerHTML = slots.map(s => {
+      const pct = ((s.mmr / total) * 100).toFixed(1);
+      return `<div class="d-flex justify-content-between align-items-center">
+        <small class="text-white text-truncate" style="max-width:60%">${s.name}</small>
+        <span class="d-flex gap-2 align-items-center">
+          <small class="muted">${s.mmr} MMR</small>
+          <span class="badge bg-primary">${pct}%</span>
+        </span>
+      </div>`;
+    }).join('');
+    preview.style.removeProperty('display');
+    preview.style.display = '';
+  }
+
+  // Hook into deck/player selection changes to update preview
+  document.addEventListener('change', function(e) {
+    const el = e.target;
+    if (el && (el.id && (el.id.startsWith('player') || el.id.startsWith('deck') || el.id.startsWith('borrowDeck')))) {
+      updateMmrPreview();
+    }
+  });
+  updateMmrPreview();
 </script>
 
 {% endblock %}

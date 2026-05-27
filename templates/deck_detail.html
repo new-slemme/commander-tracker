@@ -155,31 +155,47 @@
 
   {# Keep your stats section, but fix the nested row+row and add a class for mobile layout #}
   <div class="row g-4 mb-4 stats-row">
-    <div class="col-md-3">
+    <div class="col-md">
       <div class="card p-4 text-center stat-card">
         <h2>{{ wins }}</h2>
         <small>Wins</small>
       </div>
     </div>
 
-    <div class="col-md-3">
+    <div class="col-md">
       <div class="card p-4 text-center stat-card">
         <h2>{{ losses }}</h2>
         <small>Losses</small>
       </div>
     </div>
 
-    <div class="col-md-3">
+    <div class="col-md">
       <div class="card p-4 text-center stat-card">
         <h2>{{ games }}</h2>
         <small>Games Played</small>
       </div>
     </div>
 
-    <div class="col-md-3">
+    <div class="col-md">
       <div class="card p-4 text-center stat-card">
         <h2>{{ winrate }}%</h2>
         <small>Win Rate</small>
+      </div>
+    </div>
+
+    <div class="col-md">
+      <div class="card p-4 text-center stat-card">
+        <h2 class="d-flex align-items-center justify-content-center gap-2">
+          {{ deck.mmr }}
+          <span class="badge
+            {% if deck_mmr_tier == 'S' %}bg-success
+            {% elif deck_mmr_tier == 'A' %}bg-info text-dark
+            {% elif deck_mmr_tier == 'B' %}bg-primary
+            {% elif deck_mmr_tier == 'C' %}bg-secondary
+            {% else %}bg-danger{% endif %}"
+            style="font-size:0.6em; vertical-align:middle;">{{ deck_mmr_tier }}</span>
+        </h2>
+        <small>MMR</small>
       </div>
     </div>
   </div>
@@ -302,18 +318,25 @@
     {% for h in history %}
       <div class="list-group-item d-flex justify-content-between align-items-center history-item">
         <div>
-          <strong>Game #{{ h.game_id }}</strong><br>
+          <strong><a href="{{ url_for('game_detail', game_id=h.game_id) }}" class="text-white text-decoration-none">Game #{{ h.game_id }}</a></strong><br>
           <small class="text-muted">
             {{ h.date.strftime("%Y-%m-%d") }}
             • vs {{ h.opponents | join(", ") }}
           </small>
         </div>
 
-        {% if h.won %}
-          <span class="badge bg-success">Win</span>
-        {% else %}
-          <span class="badge bg-danger">Loss</span>
-        {% endif %}
+        <div class="d-flex align-items-center gap-2">
+          {% if h.mmr_delta is not none %}
+            <span class="badge {% if h.mmr_delta > 0 %}bg-success{% elif h.mmr_delta < 0 %}bg-danger{% else %}bg-secondary{% endif %}">
+              {% if h.mmr_delta > 0 %}+{% endif %}{{ h.mmr_delta }} MMR
+            </span>
+          {% endif %}
+          {% if h.won %}
+            <span class="badge bg-success">Win</span>
+          {% else %}
+            <span class="badge bg-danger">Loss</span>
+          {% endif %}
+        </div>
       </div>
     {% endfor %}
   </div>

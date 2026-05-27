@@ -151,6 +151,14 @@
                 <p class="mini-label">Salt clicks</p>
                 <p class="mini-value">{{ gp_salt_count }}</p>
               </div>
+              {% if gp.mmr_delta is not none %}
+                <div class="mini-stat">
+                  <p class="mini-label">MMR</p>
+                  <p class="mini-value {% if gp.mmr_delta > 0 %}success{% elif gp.mmr_delta < 0 %}danger{% endif %}">
+                    {% if gp.mmr_delta > 0 %}+{% endif %}{{ gp.mmr_delta }}
+                  </p>
+                </div>
+              {% endif %}
             </div>
 
             {% if gp.parsed_flags and (gp.parsed_flags.get('mana_fucked') or gp.parsed_flags.get('misplayed') or gp_salt_count > 0) %}
