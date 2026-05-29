@@ -131,6 +131,8 @@ K_FACTOR = 48
 MMR_FLOOR = 100
 
 CCAUTO_BASE_URL = os.getenv("CCAUTO_BASE_URL", "").rstrip("/")
+APP_CHANNEL = os.getenv("APP_CHANNEL", "stable").lower().strip()
+PEER_CHANNEL_URL = os.getenv("PEER_CHANNEL_URL", "").rstrip("/")
 
 CARD_ART_CACHE_LOCK = threading.Lock()
 CARD_ART_NAME_INDEX: dict[str, str] = {}
@@ -3067,12 +3069,14 @@ def deny_user_from_registration_request(registration_request, reviewer_user_id):
 @app.context_processor
 def inject_pod_context():
     user = get_current_user()
+    _channel = {"app_channel": APP_CHANNEL, "peer_channel_url": PEER_CHANNEL_URL}
     if not user:
         return {
             "nav_active_pod": None,
             "nav_available_pods": [],
             "use_sigtaara": False,
             "use_light_theme": False,
+            **_channel,
         }
 
     return {
@@ -3081,6 +3085,7 @@ def inject_pod_context():
         "use_sigtaara": bool(user.use_sigtaara),
         "use_light_theme": bool(user.use_light_theme),
         "can_access_registration_requests": can_access_registration_request_queue(user),
+        **_channel,
     }
 
 

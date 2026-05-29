@@ -1,32 +1,42 @@
-version: '3.8'  # Added for clarity/modern syntax
+version: '3.8'
 
 services:
   commander-tracker:
     build: .
     container_name: commander-tracker
     restart: unless-stopped
-    ports: 
-      - "5000:5000"  # No direct host exposure; Traefik handles it
+    ports:
+      - "5000:5000"
     environment:
       - CCAUTO_BASE_URL=http://cc-auto:4242
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env or environment}
+      - APP_CHANNEL=stable
+      - PEER_CHANNEL_URL=${STABLE_PEER_URL:-http://localhost:5001}
     volumes:
       - ./data:/data
       - ./apk:/app/apk
     networks:
       - npm_default
-    #labels:
-      #- "traefik.enable=true"
-      #- "traefik.http.routers.edh.rule=Host(`edh.figurensohn.de`)"  # Routes the subdomain
-      #- "traefik.http.routers.edh.entrypoints=websecure"  # HTTPS entrypoint (assumes Traefik config)
-      #- "traefik.http.routers.edh.tls=true"  # Enable TLS
-      #- "traefik.http.routers.edh.tls.certresolver=letsencrypt"  # Your Let's Encrypt resolver name
-      #- "traefik.http.services.edh.loadbalancer.server.port=5000"  # Internal app port
-      #- "traefik.docker.network=traefik_ proxy"
-      # Optional: If you want HSTS or other headers, add middleware:
-      # - "traefik.http.routers.edh.middlewares=hsts"  # Commented out to avoid missing middleware error
-      # Define middlewares in Traefik's config file.
+
+  commander-tracker-test:
+    build:
+      context: ${TEST_BUILD_CONTEXT:-.}
+      dockerfile: Dockerfile
+    container_name: commander-tracker-test
+    restart: unless-stopped
+    ports:
+      - "5001:5000"
+    environment:
+      - CCAUTO_BASE_URL=http://cc-auto:4242
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env or environment}
+      - APP_CHANNEL=test
+      - PEER_CHANNEL_URL=${TEST_PEER_URL:-http://localhost:5000}
+    volumes:
+      - ./data:/data
+      - ./apk:/app/apk
+    networks:
+      - npm_default
 
 networks:
   npm_default:
-    external: true  # References the external Traefik network
+    external: true

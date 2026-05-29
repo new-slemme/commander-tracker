@@ -171,6 +171,42 @@
     </div>
   </div>
 
+  <!-- Version Channel -->
+  <div class="profile-card mt-3">
+    <div class="profile-card-head">
+      <h2 class="profile-card-title">Version Channel</h2>
+      <div class="help-text">Switch between the stable release and the test build.</div>
+    </div>
+    <div class="profile-card-body">
+      <div class="kv mb-3">
+        <div class="k">Current channel</div>
+        <div class="v">
+          {% if app_channel == "test" %}
+            <span class="profile-pill channel-pill channel-pill--test">
+              <span class="channel-dot" aria-hidden="true"></span>
+              Test
+            </span>
+          {% else %}
+            <span class="profile-pill channel-pill channel-pill--stable">
+              <span class="channel-dot" aria-hidden="true"></span>
+              Stable
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      {% if peer_channel_url %}
+        <a class="btn btn-outline-secondary app-btn"
+           href="{{ peer_channel_url }}/profile"
+           rel="noopener">
+          Switch to {{ "Stable" if app_channel == "test" else "Test" }}
+        </a>
+        <div class="help-text mt-2">Opens the {{ "stable" if app_channel == "test" else "test" }} instance. You may need to log in again.</div>
+      {% else %}
+        <div class="help-text">No peer channel configured for this instance.</div>
+      {% endif %}
+    </div>
+  </div>
+
 </div>
 
 {% endblock %}

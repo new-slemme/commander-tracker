@@ -127,3 +127,37 @@
     .profile-form-grid { grid-template-columns: 1fr; }
     .pill-row { justify-content: flex-start; }
   }
+
+/* ---- Channel pills ---- */
+.channel-pill { gap: 8px; }
+
+.channel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.channel-pill--stable .channel-dot {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+.channel-pill--stable {
+  border-color: var(--green);
+  background: var(--green-trans);
+  color: #fff;
+}
+
+.channel-pill--test .channel-dot {
+  background: var(--yellow);
+  box-shadow: 0 0 6px var(--yellow);
+  animation: channel-pulse 2s ease-in-out infinite;
+}
+
+.channel-pill--test {
+  border-color: var(--yellow);
+  background: var(--yellow-trans);
+  color: var(--yellow);
+}

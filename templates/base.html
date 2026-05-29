@@ -93,6 +93,15 @@
   </div>
 </nav>
 
+{% if app_channel == "test" %}
+<div class="channel-test-banner" aria-label="Test channel indicator" role="status">
+  <span class="channel-test-badge">
+    <span class="channel-test-dot" aria-hidden="true"></span>
+    TEST
+  </span>
+</div>
+{% endif %}
+
 <div id="menuOverlay" class="menu-overlay" aria-hidden="true"></div>
 
 <aside id="menuDrawer" class="menu-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu">
