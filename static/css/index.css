@@ -1,7 +1,7 @@
   /* ===== Player Stats (index) ===== */
   .stats-card {
-    border-radius: 22px;
-    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
     background: rgba(23,26,38,0.55);
     box-shadow: 0 0 28px rgba(0,0,0,0.45);
     overflow: hidden;
@@ -113,13 +113,13 @@
     .stats-table tbody td:nth-child(6) { display:none; } /* Progress column */
 
     .stats-card-head { padding: 12px 12px; }
-    .stats-card { border-radius: 18px; }
+    .stats-card { border-radius: var(--radius-lg); }
   }
 
   /* ===== Recent Games (index) ===== */
   .recent-card {
-    border-radius: 22px;
-    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
     background: rgba(23,26,38,0.55);
     box-shadow: 0 0 28px rgba(0,0,0,0.45);
     overflow: hidden;
@@ -137,7 +137,7 @@
   }
 
   .recent-game-tile {
-    border-radius: 18px;
+    border-radius: var(--radius-lg);
     border: 1px solid rgba(143,153,197,0.22);
     background: transparent;
     overflow: hidden;
@@ -146,7 +146,7 @@
   .recent-game-inner {
     position: relative;
     overflow: hidden;
-    border-radius: 18px;
+    border-radius: var(--radius-lg);
     min-height: 104px;
   }
 
@@ -257,7 +257,7 @@
   }
 
   @media (max-width: 576px) {
-    .recent-card { border-radius: 18px; }
+    .recent-card { border-radius: var(--radius-lg); }
     .recent-card-head { padding: 12px 12px; }
     .recent-game-content { padding: 12px 12px; }
     .recent-date { font-size: 0.94rem; }
@@ -297,7 +297,7 @@
   .pod-option {
     width: 100%;
     border: 1px solid rgba(143,153,197,0.20);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     background: rgba(0,0,0,0.25);
     color: var(--font-base);
     font-weight: 700;

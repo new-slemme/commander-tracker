@@ -1,7 +1,7 @@
 
 .deck-card {
   display: block;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(143,153,197,0.2);
   background: var(--darker);
   padding: 14px;
@@ -24,7 +24,7 @@
 }
 
 .recent-list {
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(143,153,197,0.22);
   overflow: hidden;
 }

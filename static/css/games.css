@@ -21,8 +21,8 @@
 
 .filter-card,
 .recent-card {
-  border-radius: 22px;
-  border: 1px solid rgba(143,153,197,0.25);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-color);
   background: rgba(23,26,38,0.55);
   box-shadow: 0 0 28px rgba(0,0,0,0.45);
   overflow:hidden;
@@ -72,7 +72,7 @@
 
 /* ---------- Scope indicator polish ---------- */
 .scope-indicator {
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(143,153,197,0.20);
   background: rgba(23,26,38,0.40);
   box-shadow: 0 0 18px rgba(0,0,0,0.35);
@@ -95,7 +95,7 @@
 }
 
 .game-tile-link {
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(143,153,197,0.22);
   background: transparent;
   overflow: hidden;
@@ -114,15 +114,15 @@
 
 .game-tile {
   position:relative;
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   overflow:hidden;
   border: 0;
   background: rgba(0,0,0,0.18);
-  box-shadow: 0 0 22px rgba(0,0,0,0.45);
+  box-shadow: var(--shadow-md);
 }
 
 .game-tile.is-open {
-  box-shadow: 0 0 28px rgba(0,0,0,0.55);
+  box-shadow: var(--shadow-lg);
 }
 
 .game-bg {
@@ -242,7 +242,7 @@
 /* Focus ring for accessibility */
 .game-content--summary:focus-visible {
   box-shadow: 0 0 0 3px rgba(120,160,255,0.25);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
 }
 
 /* ---------- Top actions row (existing but refined) ---------- */
@@ -459,7 +459,7 @@
   align-items: flex-start;
   gap: 4px;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(143,153,197,0.22);
   background: rgba(255,255,255,0.05);
   color: #fff;
@@ -631,7 +631,7 @@
 
   .app-hero {
     padding: 18px;
-    border-radius: 18px;
+    border-radius: var(--radius-lg);
   }
 
   .card-head-title {
@@ -652,7 +652,7 @@
   }
 
   .filter-card,
-  .recent-card { border-radius: 18px; }
+  .recent-card { border-radius: var(--radius-lg); }
 
   .game-tags { gap: 6px; }
 
@@ -701,7 +701,7 @@
   padding: 9px 11px;
   border: 1px solid rgba(143,153,197,0.22);
   background: rgba(255,255,255,0.05);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   margin-bottom: 8px;
 }
 
@@ -764,8 +764,8 @@
 
 /* ========== Stats panel ========== */
 .games-stats-panel {
-  border-radius: 22px;
-  border: 1px solid rgba(143,153,197,0.25);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-color);
   background: rgba(23,26,38,0.55);
   box-shadow: 0 0 28px rgba(0,0,0,0.45);
   overflow: hidden;
@@ -788,7 +788,7 @@
   align-items: center;
   gap: 2px;
   padding: 10px 20px;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   border: 1px solid rgba(143,153,197,0.22);
   background: rgba(255,255,255,0.04);
   min-width: 80px;
@@ -878,6 +878,7 @@
   font-size: 0.78rem;
   font-weight: 800;
   color: rgba(255,255,255,0.8);
+  border-radius: 3px;
 }
 
 .gsp-legend-dot {

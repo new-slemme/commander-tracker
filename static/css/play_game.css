@@ -26,16 +26,16 @@
   .count-picker .form-select {
     min-height: auto;
     width: 90px;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     text-align: center;
     font-weight: 800;
   }
 
   .pg-btn {
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     padding: 10px 16px;
     font-weight: 800;
-    box-shadow: 0 0 14px rgba(143,153,197,0.18);
+    box-shadow: 0 0 14px var(--border-color-subtle);
   }
 
   .pg-btn-secondary {
@@ -53,7 +53,7 @@
     display:grid;
     min-height: 360px;
     margin-top: 12px;
-    border-radius: 22px;
+    border-radius: var(--radius-xl);
     border: 1px solid rgba(143,153,197,0.28);
     background: linear-gradient(135deg, rgba(18,22,35,0.92), rgba(11,14,24,0.82));
     box-shadow: 0 0 24px rgba(0,0,0,0.35);
@@ -154,7 +154,7 @@
     .player-tile .form-select {
       min-height: 40px;
       font-size: 0.9rem;
-      border-radius: 12px;
+      border-radius: var(--radius-sm);
     }
   }
 
@@ -304,7 +304,7 @@
   }
 
   .form-select, .form-control {
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     min-height: 46px;
     background-color: var(--darker-trans);
     border-color: rgba(143,153,197,0.65);
@@ -380,9 +380,9 @@
       position: sticky;
       bottom: 10px;
       padding: 10px;
-      border-radius: 18px;
+      border-radius: var(--radius-lg);
       background: rgba(23,26,38,0.75);
-      border: 1px solid rgba(143,153,197,0.18);
+      border: 1px solid var(--border-color-subtle);
       backdrop-filter: blur(10px);
       box-shadow: 0 10px 30px rgba(0,0,0,0.45);
       z-index: 5;

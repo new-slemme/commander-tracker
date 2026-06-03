@@ -48,6 +48,12 @@
 {# ── Top bar ── #}
 <div class="editor-topbar">
   <a class="editor-topbar-back" href="{{ url_for('decks') if create_mode else url_for('deck_detail', deck_id=deck.id) }}">‹ Back</a>
+  <button id="toggleSearchBtn" class="editor-sidebar-toggle" title="Toggle Search panel">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <rect x="1" y="1" width="5" height="14" rx="1"/>
+      <rect x="7" y="1" width="8" height="14" rx="1" opacity="0.35"/>
+    </svg>
+  </button>
   <div class="editor-topbar-title">
     <input id="editorNameInput" class="editor-name-input" type="text"
            value="{{ deck.name }}" autocomplete="off" spellcheck="false"
@@ -56,6 +62,12 @@
   <div class="editor-topbar-actions">
     <span id="editorCountBadge" class="editor-count-badge count-low">0 cards</span>
     <span id="editorUnsavedDot" class="editor-unsaved-dot" title="Unsaved changes">● Unsaved</span>
+    <button id="toggleSettingsBtn" class="editor-sidebar-toggle" title="Toggle Settings panel">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <rect x="1" y="1" width="8" height="14" rx="1" opacity="0.35"/>
+        <rect x="10" y="1" width="5" height="14" rx="1"/>
+      </svg>
+    </button>
     <button id="editorSaveBtn" class="btn btn-success btn-sm" style="min-height:36px;font-weight:800;">{{ 'Create Deck' if create_mode else 'Save' }}</button>
   </div>
 </div>
@@ -472,23 +484,103 @@
 
   /* ── Render deck panel ── */
   const sectionCollapsed = { sideboard: true, maybeboard: true };
+  const sectionView = { commander: 'list', mainboard: 'grid', sideboard: 'list', maybeboard: 'list' };
+
+  function renderGridCard(sec, card) {
+    const item = document.createElement('div');
+    item.className = 'deck-grid-item';
+
+    const artWrap = document.createElement('div');
+    artWrap.className = 'deck-grid-art-wrap';
+
+    const art = document.createElement('img');
+    art.className = 'deck-grid-art';
+    art.alt = card.name;
+    art.loading = 'lazy';
+    fetchArt(card.name).then(src => { if (src) art.src = src; });
+    art.addEventListener('click', () => openPrintPicker(card.name));
+
+    const qty = document.createElement('span');
+    qty.className = 'deck-grid-qty';
+    qty.textContent = `×${card.qty}`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'deck-grid-overlay';
+
+    const minusBtn = document.createElement('button');
+    minusBtn.className = 'deck-grid-btn';
+    minusBtn.textContent = '−';
+    minusBtn.addEventListener('click', e => { e.stopPropagation(); setQty(sec, card.name, card.qty - 1); });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'deck-grid-btn remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove';
+    removeBtn.addEventListener('click', e => { e.stopPropagation(); removeCard(sec, card.name); });
+
+    const plusBtn = document.createElement('button');
+    plusBtn.className = 'deck-grid-btn';
+    plusBtn.textContent = '+';
+    plusBtn.addEventListener('click', e => { e.stopPropagation(); setQty(sec, card.name, card.qty + 1); });
+
+    overlay.append(minusBtn, removeBtn, plusBtn);
+    artWrap.append(art, qty, overlay);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'deck-grid-name';
+    nameEl.textContent = card.name;
+    nameEl.title = card.name;
+
+    item.append(artWrap, nameEl);
+    return item;
+  }
+
+  const GRID_ICON = `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="0" y="0" width="5" height="5" rx="1"/><rect x="7" y="0" width="5" height="5" rx="1"/><rect x="0" y="7" width="5" height="5" rx="1"/><rect x="7" y="7" width="5" height="5" rx="1"/></svg>`;
+  const LIST_ICON = `<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><rect x="0" y="1" width="12" height="2" rx="1"/><rect x="0" y="5" width="12" height="2" rx="1"/><rect x="0" y="9" width="12" height="2" rx="1"/></svg>`;
 
   function renderDeck() {
     deckInner.innerHTML = '';
+    const isDesktop = window.innerWidth >= 992;
 
     for (const sec of SECTIONS) {
       const cards = state.sections[sec] || [];
       const total = cards.reduce((a, c) => a + c.qty, 0);
+      const view = (isDesktop && sec !== 'commander') ? (sectionView[sec] || 'list') : 'list';
 
       const section = document.createElement('div');
       section.className = 'deck-section';
 
       const header = document.createElement('div');
       header.className = 'deck-section-header';
-      header.innerHTML = `
-        <span class="deck-section-title">${SECTION_LABELS[sec]}</span>
-        <span class="deck-section-count">${total} cards</span>
-        <span class="deck-section-arrow">${sectionCollapsed[sec] ? '▸' : '▾'}</span>`;
+
+      const titleEl = document.createElement('span');
+      titleEl.className = 'deck-section-title';
+      titleEl.textContent = SECTION_LABELS[sec];
+
+      const countEl = document.createElement('span');
+      countEl.className = 'deck-section-count';
+      countEl.textContent = `${total} cards`;
+
+      const arrowEl = document.createElement('span');
+      arrowEl.className = 'deck-section-arrow';
+      arrowEl.textContent = sectionCollapsed[sec] ? '▸' : '▾';
+
+      header.append(titleEl, countEl);
+
+      if (sec !== 'commander') {
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'deck-section-view-toggle';
+        viewBtn.title = view === 'grid' ? 'Switch to list view' : 'Switch to grid view';
+        viewBtn.innerHTML = view === 'grid' ? LIST_ICON : GRID_ICON;
+        viewBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          sectionView[sec] = sectionView[sec] === 'grid' ? 'list' : 'grid';
+          renderDeck();
+        });
+        header.appendChild(viewBtn);
+      }
+
+      header.appendChild(arrowEl);
       header.addEventListener('click', () => {
         sectionCollapsed[sec] = !sectionCollapsed[sec];
         renderDeck();
@@ -496,7 +588,7 @@
       section.appendChild(header);
 
       const body = document.createElement('div');
-      body.className = 'deck-section-body' + (sectionCollapsed[sec] ? ' collapsed' : '');
+      body.className = 'deck-section-body' + (sectionCollapsed[sec] ? ' collapsed' : '') + (view === 'grid' ? ' view-grid' : '');
 
       if (!cards.length) {
         const empty = document.createElement('div');
@@ -506,49 +598,53 @@
       }
 
       for (const card of cards) {
-        const row = document.createElement('div');
-        row.className = 'deck-card-row';
+        if (view === 'grid') {
+          body.appendChild(renderGridCard(sec, card));
+        } else {
+          const row = document.createElement('div');
+          row.className = 'deck-card-row';
 
-        const thumb = document.createElement('img');
-        thumb.className = 'deck-card-thumb';
-        thumb.alt = card.name;
-        thumb.loading = 'lazy';
-        thumb.title = 'Click to choose print';
-        fetchArt(card.name).then(src => { if (src) thumb.src = src; });
-        thumb.addEventListener('click', () => openPrintPicker(card.name));
+          const thumb = document.createElement('img');
+          thumb.className = 'deck-card-thumb';
+          thumb.alt = card.name;
+          thumb.loading = 'lazy';
+          thumb.title = 'Click to choose print';
+          fetchArt(card.name).then(src => { if (src) thumb.src = src; });
+          thumb.addEventListener('click', () => openPrintPicker(card.name));
 
-        const nameEl = document.createElement('span');
-        nameEl.className = 'deck-card-row-name';
-        nameEl.textContent = card.name;
-        nameEl.addEventListener('click', () => openCardSheet(card.name));
+          const nameEl = document.createElement('span');
+          nameEl.className = 'deck-card-row-name';
+          nameEl.textContent = card.name;
+          nameEl.addEventListener('click', () => openCardSheet(card.name));
 
-        const qtyControls = document.createElement('div');
-        qtyControls.className = 'deck-qty-controls';
+          const qtyControls = document.createElement('div');
+          qtyControls.className = 'deck-qty-controls';
 
-        const minus = document.createElement('button');
-        minus.className = 'deck-qty-btn';
-        minus.textContent = '−';
-        minus.addEventListener('click', () => setQty(sec, card.name, card.qty - 1));
+          const minus = document.createElement('button');
+          minus.className = 'deck-qty-btn';
+          minus.textContent = '−';
+          minus.addEventListener('click', () => setQty(sec, card.name, card.qty - 1));
 
-        const qtyEl = document.createElement('span');
-        qtyEl.className = 'deck-qty-display';
-        qtyEl.textContent = card.qty;
+          const qtyEl = document.createElement('span');
+          qtyEl.className = 'deck-qty-display';
+          qtyEl.textContent = card.qty;
 
-        const plus = document.createElement('button');
-        plus.className = 'deck-qty-btn';
-        plus.textContent = '+';
-        plus.addEventListener('click', () => setQty(sec, card.name, card.qty + 1));
+          const plus = document.createElement('button');
+          plus.className = 'deck-qty-btn';
+          plus.textContent = '+';
+          plus.addEventListener('click', () => setQty(sec, card.name, card.qty + 1));
 
-        qtyControls.append(minus, qtyEl, plus);
+          qtyControls.append(minus, qtyEl, plus);
 
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'deck-remove-btn';
-        removeBtn.textContent = '×';
-        removeBtn.title = 'Remove';
-        removeBtn.addEventListener('click', () => removeCard(sec, card.name));
+          const removeBtn = document.createElement('button');
+          removeBtn.className = 'deck-remove-btn';
+          removeBtn.textContent = '×';
+          removeBtn.title = 'Remove';
+          removeBtn.addEventListener('click', () => removeCard(sec, card.name));
 
-        row.append(thumb, nameEl, qtyControls, removeBtn);
-        body.appendChild(row);
+          row.append(thumb, nameEl, qtyControls, removeBtn);
+          body.appendChild(row);
+        }
       }
 
       section.appendChild(body);
@@ -1266,10 +1362,34 @@
     updateCommanderArt(INIT.commander);
   }
 
+  // Sidebar collapse (desktop only)
+  function updateSidebarToggleUI() {
+    const sBtn = document.getElementById('toggleSearchBtn');
+    const gBtn = document.getElementById('toggleSettingsBtn');
+    const searchPanel   = document.getElementById('panelSearch');
+    const settingsPanel = document.getElementById('panelSettings');
+    if (sBtn) sBtn.classList.toggle('sidebar-open', !searchPanel.classList.contains('sidebar-collapsed'));
+    if (gBtn) gBtn.classList.toggle('sidebar-open', !settingsPanel.classList.contains('sidebar-collapsed'));
+  }
+
+  function toggleSidebar(which) {
+    const panel = document.getElementById(which === 'search' ? 'panelSearch' : 'panelSettings');
+    const key   = which === 'search' ? 'editorSearchOpen' : 'editorSettingsOpen';
+    const nowCollapsed = panel.classList.toggle('sidebar-collapsed');
+    localStorage.setItem(key, nowCollapsed ? 'false' : 'true');
+    updateSidebarToggleUI();
+  }
+
+  document.getElementById('toggleSearchBtn')  ?.addEventListener('click', () => toggleSidebar('search'));
+  document.getElementById('toggleSettingsBtn')?.addEventListener('click', () => toggleSidebar('settings'));
+
   // On desktop: show deck + settings panels too
   if (window.innerWidth >= 992) {
     document.getElementById('panelDeck').classList.add('panel-active');
     document.getElementById('panelSettings').classList.add('panel-active');
+    if (localStorage.getItem('editorSearchOpen')   === 'false') document.getElementById('panelSearch').classList.add('sidebar-collapsed');
+    if (localStorage.getItem('editorSettingsOpen') === 'false') document.getElementById('panelSettings').classList.add('sidebar-collapsed');
+    updateSidebarToggleUI();
   } else if (CREATE_MODE) {
     switchTab('deck');
   }

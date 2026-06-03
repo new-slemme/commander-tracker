@@ -133,18 +133,14 @@
 <div class="container pb-4">
 
   <div class="app-hero mb-4">
-    <div class="app-hero__head">
-      <div>
-        <p class="eyebrow mb-1">Head-to-Head</p>
-        <div class="cmp-hero">
-          <span class="cmp-hero__name">{{ player_a.name }}</span>
-          <span class="cmp-hero__vs">vs</span>
-          <span class="cmp-hero__name">{{ player_b.name }}</span>
-        </div>
-      </div>
-      <div>
-        <a href="{{ url_for('players') }}" class="btn btn-outline-secondary btn-sm">← All Players</a>
-      </div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      <a href="{{ url_for('players') }}" class="btn btn-outline-light btn-sm">← All Players</a>
+    </div>
+    <p class="eyebrow mb-1">Head-to-Head</p>
+    <div class="cmp-hero">
+      <span class="cmp-hero__name">{{ player_a.name }}</span>
+      <span class="cmp-hero__vs">vs</span>
+      <span class="cmp-hero__name">{{ player_b.name }}</span>
     </div>
   </div>
 
