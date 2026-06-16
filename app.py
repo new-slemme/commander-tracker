@@ -39,6 +39,12 @@ from uuid import uuid4
 
 from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist, ccauto_named_exact
 
+# Scryfall requires a custom User-Agent (they reject the default python-requests one)
+SCRYFALL_HEADERS = {
+    "User-Agent": "CommanderTracker/1.0 (https://github.com/new-slemme/commander-tracker)",
+    "Accept": "application/json",
+}
+
 app = Flask(__name__)
 _flask_secret = os.getenv("FLASK_SECRET_KEY", "")
 if not _flask_secret:
@@ -1805,7 +1811,7 @@ def scryfall_named_exact(name: str):
         return None
     url = f"https://api.scryfall.com/cards/named?exact={quote(name)}"
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=SCRYFALL_HEADERS, timeout=10)
         if r.status_code != 200:
             return None
         return r.json()
@@ -2320,7 +2326,7 @@ def _get_with_backoff(
 def _lookup_card_for_art(normalized_name: str) -> tuple[dict | None, str | None, int]:
     scryfall_url = f"https://api.scryfall.com/cards/named?exact={quote(normalized_name)}"
     try:
-        r = _get_with_backoff(scryfall_url, timeout=10, attempts=4, base_backoff_seconds=0.9)
+        r = _get_with_backoff(scryfall_url, timeout=10, attempts=4, base_backoff_seconds=0.9, headers=SCRYFALL_HEADERS)
         if r.status_code == 200:
             return r.json(), None, 200
         reason, http_status = _classify_upstream_http_status(r.status_code)
@@ -5770,7 +5776,7 @@ def api_cards_autocomplete():
     if source in ("all", "scryfall"):
         try:
             r = requests.get(
-                f"https://api.scryfall.com/cards/autocomplete?q={quote(q)}", timeout=5
+                f"https://api.scryfall.com/cards/autocomplete?q={quote(q)}", timeout=5, headers=SCRYFALL_HEADERS
             )
             if r.status_code == 200:
                 for name in r.json().get("data") or []:
@@ -5806,7 +5812,7 @@ def api_cards_prints():
         return jsonify({"error": "Missing 'name' parameter"}), 400
     url = f"https://api.scryfall.com/cards/search?q=!{quote(chr(34) + name + chr(34))}&unique=prints&order=released&dir=desc"
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=SCRYFALL_HEADERS, timeout=10)
         if r.status_code == 404:
             return jsonify([])
         if r.status_code != 200:
