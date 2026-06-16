@@ -8,7 +8,7 @@
    ========================= #}
 {% set ns = namespace(total_decks=0, total_wins=0, total_games=0, best_games=-1, best_name="", best_commander="") %}
 {% for d in decks %}
-  {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
+  {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0,"mmr":0}) %}
   {% set ns.total_decks = ns.total_decks + 1 %}
   {% set ns.total_wins = ns.total_wins + (s.wins or 0) %}
   {% set ns.total_games = ns.total_games + (s.uses or 0) %}
@@ -132,7 +132,7 @@
       <form method="post" action="{{ url_for('dismiss_deck_tags_banner') }}" class="m-0">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ request.full_path }}">
-        <button type="submit" class="btn btn-sm btn-outline-dark">Dismiss</button>
+        <button type="submit" class="btn btn-sm btn-outline-light">Dismiss</button>
       </form>
     </div>
   {% endif %}
@@ -144,13 +144,19 @@
   {% else %}
     <div class="deck-grid">
       {% for d in decks %}
-        {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0}) %}
+        {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0,"mmr":0}) %}
         {% set art = d.commander_art_url %}
         {% set wr = s.winrate %}
         {% set badge_class = 'bad' %}
         {% if wr >= 60 %}{% set badge_class = 'good' %}
         {% elif wr >= 45 %}{% set badge_class = 'mid' %}
         {% endif %}
+        {% set mmr = s.mmr %}
+        {% if mmr >= 1300 %}{% set tier = "S" %}{% set tier_cls = "success" %}
+        {% elif mmr >= 1200 %}{% set tier = "A" %}{% set tier_cls = "info" %}
+        {% elif mmr >= 1100 %}{% set tier = "B" %}{% set tier_cls = "primary" %}
+        {% elif mmr >= 950 %}{% set tier = "C" %}{% set tier_cls = "" %}
+        {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
 
         <a class="deck-tile {% if art %}has-bg{% endif %}"
            href="{{ url_for('deck_detail', deck_id=d.id) }}"
@@ -188,6 +194,8 @@
                 {% if deck_tags_stale.get(d.id) %}
                   <span class="deck-retired-pill" title="Deck tags are missing or stale for the current rules version">Retag recommended</span>
                 {% endif %}
+                <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
+                <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
               </div>
             </div>

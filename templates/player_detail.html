@@ -4,27 +4,23 @@
 
 <div class="container pb-4 player-detail-page">
   <div class="app-hero mb-4">
-    <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
-      <div>
-        <p class="eyebrow mb-2">Player Details</p>
-        <h1 class="m-0 fw-bold">{{ player.name }}</h1>
-        <div class="muted2 mt-1">
-          {% if player.user_id %}
-            Linked account player
-          {% else %}
-            Guest player
-          {% endif %}
-        </div>
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <a href="{{ url_for('player_export', player_id=player.id) }}"
-           class="btn btn-outline-secondary btn-sm"
-           title="Export player profile as JSON">
-          Export JSON
-        </a>
-        {% set back_fallback_url = url_for('players') %}
-        {% include '_detail_back_button.html' %}
-      </div>
+    <div class="d-flex align-items-center justify-content-between mb-3">
+      {% set back_fallback_url = url_for('players') %}
+      {% include '_detail_back_button.html' %}
+      <a href="{{ url_for('player_export', player_id=player.id) }}"
+         class="btn btn-outline-light btn-sm"
+         title="Export player profile as JSON">
+        Export JSON
+      </a>
+    </div>
+    <p class="eyebrow mb-2">Player Details</p>
+    <h1 class="m-0 fw-bold">{{ player.name }}</h1>
+    <div class="muted2 mt-1">
+      {% if player.user_id %}
+        Linked account player
+      {% else %}
+        Guest player
+      {% endif %}
     </div>
 
     <div class="overview-grid mt-4">

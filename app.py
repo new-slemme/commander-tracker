@@ -52,7 +52,8 @@ if not _flask_secret:
 app.secret_key = _flask_secret
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB upload limit
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB — enough for animated GIF commander art
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 db = SQLAlchemy(app)
 limiter = Limiter(
     get_remote_address,
@@ -60,6 +61,19 @@ limiter = Limiter(
     default_limits=[],
     storage_uri="memory://",
 )
+
+@app.errorhandler(413)
+def handle_upload_too_large(_exc):
+    limit_mb = MAX_UPLOAD_BYTES // (1024 * 1024)
+    message = (
+        f"That file is too large. The maximum upload size is {limit_mb} MB — "
+        "try a smaller or more compressed image/GIF."
+    )
+    if request.path.startswith("/api/"):
+        return jsonify({"error": message}), 413
+    flash(message, "danger")
+    return redirect(request.referrer or url_for("decks"))
+
 
 DEFAULT_POD_NAME = "Der Keller â€“ Die Salzmine"
 DEFAULT_POD_SLUG = "der-keller-die-salzmine"
@@ -641,10 +655,9 @@ class Deck(db.Model):
 
     @property
     def commander_art_scale(self):
-        # Uploaded/linked custom art is usually full-card framing. Slightly zoom it so
-        # life-counter and deck tiles keep a useful crop without letterboxing.
-        if self.commander_local_art_custom or self.custom_commander_art_url or self.custom_card_art_local or self.custom_card_art_url:
-            return "118%"
+        # Always zoom-to-fill ("cover") so art never tiles/repeats — a percentage
+        # background-size leaves gaps that the browser fills by repeating the image.
+        # "cover" guarantees the art covers the element regardless of its aspect ratio.
         return "cover"
 
 
@@ -1690,9 +1703,23 @@ def _is_valid_image_bytes(data: bytes) -> bool:
     return False
 
 
-def _store_custom_art_upload(upload, field_label: str) -> str | None:
+def _store_custom_art_upload(upload, field: str, deck_name: str) -> str | None:
+    """Store an uploaded custom art file and return its `/art/...` web path.
+
+    `field` ("commander" | "card") selects the subfolder; the file is named after
+    the deck so uploads are human-identifiable on disk. A short random token keeps
+    replacements cache-bustable and prevents collisions between same-named decks.
+    """
     if not upload or not upload.filename:
         return None
+
+    if field == "commander":
+        target_dir, web_subdir = COMMANDER_ART_DIR, "commander_art"
+    elif field == "card":
+        target_dir, web_subdir = CARD_ART_DIR, "card_art"
+    else:
+        target_dir, web_subdir = ART_DIR, ""
+    field_label = f"custom {field} art"
 
     filename = upload.filename.strip()
     ext = Path(filename).suffix.lower()
@@ -1711,15 +1738,57 @@ def _store_custom_art_upload(upload, field_label: str) -> str | None:
             f"Uploaded {field_label} image '{filename}' does not appear to be a valid image file."
         )
 
-    safe_name = _safe_filename(Path(filename).stem) or "custom_art"
-    out_filename = f"custom_{safe_name}_{uuid4().hex}{ext}"
-    out_path = ART_DIR / out_filename
+    safe_deck = _safe_filename(deck_name) or "deck"
+    out_filename = f"custom_{safe_deck}_{field}_{uuid4().hex[:8]}{ext}"
+    out_path = target_dir / out_filename
     out_path.write_bytes(raw_bytes)
-    return f"/art/{out_filename}"
+    web_prefix = f"/art/{web_subdir}/" if web_subdir else "/art/"
+    return f"{web_prefix}{out_filename}"
 
 
-def resolve_custom_art_value(url_value: str, upload, field_label: str) -> tuple[str | None, str | None]:
-    uploaded_path = _store_custom_art_upload(upload, field_label)
+def prune_custom_art_file(old_path: str | None) -> None:
+    """Delete a locally-stored custom art file once it's no longer referenced.
+
+    Only removes files produced by `_store_custom_art_upload` (a `custom_*` file
+    living directly in ART_DIR) and only when no Deck row still points at the same
+    `/art/...` path. Scryfall crops, external URLs, and shared files are left alone.
+    Call this AFTER committing the new value so the reference check sees current state.
+    """
+    if not old_path:
+        return
+    old_path = old_path.strip()
+    if not old_path.startswith("/art/"):
+        return
+
+    rel = old_path[len("/art/"):]
+    fs_path = (ART_DIR / rel).resolve()
+    # Must be a custom upload (custom_ prefix) living in ART_DIR or one of its art
+    # subfolders — never a downloaded crop and never a traversal outside these dirs.
+    allowed_dirs = {ART_DIR.resolve(), COMMANDER_ART_DIR.resolve(), CARD_ART_DIR.resolve()}
+    if fs_path.parent not in allowed_dirs or not fs_path.name.startswith("custom_"):
+        return
+
+    still_referenced = (
+        db.session.query(Deck.id)
+        .filter(
+            db.or_(
+                Deck.commander_local_art_custom == old_path,
+                Deck.custom_card_art_local == old_path,
+            )
+        )
+        .first()
+    )
+    if still_referenced:
+        return
+
+    try:
+        fs_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def resolve_custom_art_value(url_value: str, upload, field: str, deck_name: str) -> tuple[str | None, str | None]:
+    uploaded_path = _store_custom_art_upload(upload, field, deck_name)
     if uploaded_path:
         return None, uploaded_path
     return normalized_custom_art_url(url_value), None
@@ -2671,15 +2740,18 @@ def _prepare_deck_payload(
         else:
             parsed_import = parse_deck_input(raw_import)
 
+    deck_name_for_art = name or (current_deck.name if current_deck else "") or "deck"
     custom_commander_art_url_value, custom_commander_art_local = resolve_custom_art_value(
         custom_commander_art_url,
         custom_commander_art_upload,
-        "custom commander art",
+        "commander",
+        deck_name_for_art,
     )
     custom_card_art_url_value, custom_card_art_local = resolve_custom_art_value(
         custom_card_art_url,
         custom_card_art_upload,
-        "custom card art",
+        "card",
+        deck_name_for_art,
     )
 
     resolved_commander = parsed_import.get("commander") if parsed_import else None
@@ -3411,7 +3483,16 @@ def apk_file(filename):
     return send_from_directory(APK_DIR, filename, as_attachment=True)
 
 
+@app.route("/sw.js")
+def service_worker():
+    response = send_from_directory(app.static_folder, "sw.js")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.route("/apk")
+@login_required
 def apk_download():
     payload, error = _load_android_release_manifest()
     available = error is None
@@ -4046,7 +4127,7 @@ def index():
         wins = wins_by_deck.get(d.id, 0)
         uses = uses_by_deck.get(d.id, 0)
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
-        deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate})
+        deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate, "mmr": d.mmr})
 
     deck_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
     top_decks = deck_stats[:6]
@@ -4058,6 +4139,17 @@ def index():
     game_parts: dict[int, list] = {}
     for _p in _all_parts:
         game_parts.setdefault(_p.game_id, []).append(_p)
+
+    # MMR deltas per (game, deck) for recent games
+    mmr_delta_by_game_deck = {}
+    for g in recent_games:
+        if g.mmr_deltas_json:
+            try:
+                deltas = json.loads(g.mmr_deltas_json)
+                for entry in deltas:
+                    mmr_delta_by_game_deck[(g.id, entry["deck_id"])] = entry["delta"]
+            except Exception:
+                pass
 
     # Deck Spotlight: deck that won last (winner's deck in most recent game)
     last_winning_deck = None
@@ -4155,6 +4247,7 @@ def index():
         deck_stats=top_decks,
         recent_games=recent_games,
         game_parts=game_parts,
+        mmr_delta_by_game_deck=mmr_delta_by_game_deck,
         top_players=top_players,
         best_deck=best_deck,
         last_winning_deck=last_winning_deck,
@@ -4462,8 +4555,11 @@ def delete_deck(deck_id):
         flash("Can't delete this deck: it has been used in recorded games.")
         return redirect(url_for("deck_detail", deck_id=deck_id))
 
+    orphaned_art = [deck.commander_local_art_custom, deck.custom_card_art_local]
     db.session.delete(deck)
     db.session.commit()
+    for stale in orphaned_art:
+        prune_custom_art_file(stale)
     flash("Deck deleted.")
     return redirect(url_for("decks"))
 
@@ -5187,7 +5283,7 @@ def decks():
         uses = GameParticipant.query.filter_by(deck_id=d.id).count()
         losses = max(0, uses - wins)
         winrate = round((wins / uses) * 100, 1) if uses else 0.0
-        stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate}
+        stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate, "mmr": d.mmr}
 
     deck_can_delete = {}
     deck_tags_stale = {}
@@ -5487,20 +5583,24 @@ def api_deck_upload_art(deck_id):
     if not upload:
         return jsonify({"error": "No file provided"}), 400
 
+    old_art = None
     try:
         if field == "commander":
-            local_path = _store_custom_art_upload(upload, "commander art")
+            local_path = _store_custom_art_upload(upload, "commander", deck.name)
             if local_path:
+                old_art = deck.commander_local_art_custom
                 deck.commander_local_art_custom = local_path
                 deck.custom_commander_art_url = None
         elif field == "card":
-            local_path = _store_custom_art_upload(upload, "card art")
+            local_path = _store_custom_art_upload(upload, "card", deck.name)
             if local_path:
+                old_art = deck.custom_card_art_local
                 deck.custom_card_art_local = local_path
                 deck.custom_card_art_url = None
         else:
             return jsonify({"error": "Invalid field (use 'commander' or 'card')"}), 400
         db.session.commit()
+        prune_custom_art_file(old_art)
         return jsonify({"url": local_path}), 200
     except DeckParserError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -5991,6 +6091,12 @@ def update_deck(deck_id):
 
         flash(f"Failed to update deck: {exc}")
         return redirect(request.form.get("next") or url_for("decks"))
+
+    # Clean up local custom art that was replaced or cleared by this update.
+    if deck.commander_local_art_custom != old_commander_local_art_custom:
+        prune_custom_art_file(old_commander_local_art_custom)
+    if deck.custom_card_art_local != old_custom_card_art_local:
+        prune_custom_art_file(old_custom_card_art_local)
 
     parsed_import = diagnostics["parsed_import"]
     commander_meta = diagnostics["commander_meta"]
@@ -8965,8 +9071,11 @@ def api_deck_detail(deck_id):
         used = GameParticipant.query.filter_by(deck_id=deck.id).count()
         if used > 0:
             return jsonify({"error": "Cannot delete a deck that has been used in recorded games."}), 409
+        orphaned_art = [deck.commander_local_art_custom, deck.custom_card_art_local]
         db.session.delete(deck)
         db.session.commit()
+        for stale in orphaned_art:
+            prune_custom_art_file(stale)
         return jsonify({"ok": True}), 200
 
     if request.method in {"PATCH", "PUT"}:
@@ -9045,7 +9154,9 @@ def api_deck_detail(deck_id):
                 deck.card_print_prefs_json = json.dumps(prefs)
 
         # Custom art URLs (deck editor sends these when changed)
+        orphaned_art: list[str | None] = []
         if "custom_commander_art_url" in payload:
+            old_local = deck.commander_local_art_custom
             url_val = (payload.get("custom_commander_art_url") or "").strip()
             if url_val.startswith("/art/"):
                 deck.commander_local_art_custom = url_val
@@ -9058,8 +9169,11 @@ def api_deck_detail(deck_id):
             else:
                 deck.custom_commander_art_url = None
                 deck.commander_local_art_custom = None
+            if deck.commander_local_art_custom != old_local:
+                orphaned_art.append(old_local)
 
         if "custom_card_art_url" in payload:
+            old_local = deck.custom_card_art_local
             url_val = (payload.get("custom_card_art_url") or "").strip()
             if url_val.startswith("/art/"):
                 deck.custom_card_art_local = url_val
@@ -9072,8 +9186,12 @@ def api_deck_detail(deck_id):
             else:
                 deck.custom_card_art_url = None
                 deck.custom_card_art_local = None
+            if deck.custom_card_art_local != old_local:
+                orphaned_art.append(old_local)
 
         db.session.commit()
+        for stale in orphaned_art:
+            prune_custom_art_file(stale)
         response_payload = _serialize_deck_detail(deck)
         if diagnostics["tag_diagnostics"].get("unresolved_count", 0) > 0:
             response_payload["tag_diagnostics"] = diagnostics["tag_diagnostics"]

@@ -6,7 +6,7 @@
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     padding: 10px 14px;
     border: 1px solid var(--base);
     background: var(--base-trans);
@@ -22,8 +22,8 @@
   .menu-trigger {
     width: 44px;
     height: 44px;
-    border-radius: 14px;
-    border: 1px solid rgba(143,153,197,0.35);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color-strong);
     background: rgba(20,23,39,0.75);
     box-shadow: 0 0 18px rgba(0,0,0,0.35);
     display: inline-flex;
@@ -65,7 +65,7 @@
     padding: 0 12px;
     display: inline-flex;
     align-items: center;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     font-weight: 800;
     font-size: 0.85rem;
     letter-spacing: 0.02em;
@@ -93,7 +93,7 @@
   }
 
   .banner-menu {
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     border: 1px solid rgba(143,153,197,0.3);
     background: rgba(20,23,39,0.96);
     box-shadow: 0 20px 45px rgba(0,0,0,0.45);
@@ -117,7 +117,7 @@
   }
 
   .banner-menu .dropdown-divider {
-    border-color: rgba(143,153,197,0.25);
+    border-color: var(--border-color);
   }
 
   .banner-menu form {
@@ -140,7 +140,7 @@
     justify-content: center;
     border-radius: 999px;
     background: rgba(0,0,0,0.35);
-    border: 1px solid rgba(143,153,197,0.25);
+    border: 1px solid var(--border-color);
     box-shadow: 0 0 10px rgba(0,0,0,0.45);
   }
   .mana-icon img {
@@ -166,7 +166,7 @@
   @media (max-width: 576px) {
     .deck-banner {
       min-height: 260px !important;
-      border-radius: 18px !important;
+      border-radius: var(--radius-lg) !important;
     }
 
     .banner-inner {
@@ -244,14 +244,14 @@
 
   .decklist-raw {
     white-space: pre-wrap;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     padding: 12px;
     border: 1px solid rgba(143,153,197,0.2);
     background: rgba(255,255,255,0.02);
   }
 
   .empty-decklist-state {
-    border: 1px dashed rgba(143,153,197,0.35);
+    border: 1px dashed var(--border-color-strong);
     background: rgba(255,255,255,0.02);
   }
 
@@ -279,8 +279,8 @@
 
 
   .commander-showcase {
-    border-color: rgba(186, 151, 255, 0.35);
-    background: linear-gradient(180deg, rgba(102,77,145,0.18), rgba(255,255,255,0.02));
+    border-color: var(--surface-gradient-border);
+    background: var(--surface-gradient-bg);
   }
 
   .deck-card-grid {
@@ -315,7 +315,7 @@
 
   .deck-card-entry {
     border: 1px solid rgba(143,153,197,0.2);
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
     background: rgba(10,12,24,0.55);
     overflow: hidden;
   }
@@ -335,7 +335,7 @@
   .deck-card-link:focus-visible {
     outline: 2px solid rgba(143, 153, 197, 0.8);
     outline-offset: -2px;
-    border-radius: 12px;
+    border-radius: var(--radius-sm);
   }
 
   .deck-card-entry:hover .deck-card-link,

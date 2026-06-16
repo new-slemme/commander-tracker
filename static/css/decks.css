@@ -18,21 +18,29 @@
   .deck-tile {
     grid-column: span 6;
     position:relative;
-    border-radius: 18px;
+    border-radius: var(--radius-lg);
     overflow:hidden;
     border: 1px solid rgba(143,153,197,0.28);
     background: rgba(0,0,0,0.15);
-    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+    box-shadow: var(--shadow-md);
     min-height: 140px;
     text-decoration:none;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
   }
-  .deck-tile.has-bg { background-size: var(--deck-art-scale, cover); background-position: top; }
+  .deck-tile:hover {
+    border-color: rgba(143,153,197,0.5);
+    box-shadow: 0 6px 28px rgba(0,0,0,0.45);
+    transform: translateY(-2px);
+  }
+  .deck-tile.has-bg { background-size: var(--deck-art-scale, cover); background-position: top; background-repeat: no-repeat; }
   .deck-tile::before{
     content:"";
     position:absolute; inset:0;
     background: linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.30));
     z-index:0;
+    transition: opacity 0.2s;
   }
+  .deck-tile:hover::before { opacity: 0.85; }
   .deck-tile > * { position:relative; z-index:1; }
 
   .deck-tile-inner { padding: 16px; }

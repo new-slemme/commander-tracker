@@ -65,10 +65,10 @@
 
   .profile-card {
     margin-top: 14px;
-    border-radius: 22px;
-    border: 1px solid rgba(143,153,197,0.25);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--border-color);
     background: rgba(23,26,38,0.55);
-    box-shadow: 0 0 22px rgba(0,0,0,0.45);
+    box-shadow: var(--shadow-md);
     overflow: hidden;
   }
 

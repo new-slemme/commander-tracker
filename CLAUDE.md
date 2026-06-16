@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance for AI assistants working on the commander-tracker codebase.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -43,20 +43,27 @@ python app.py
 ```
 
 **Docker:**
+
+The `.env` file (holding `FLASK_SECRET_KEY` and peer URLs) lives in the **stable repo** at `~/mine/commander-tracker`, not in this repo. The `docker-compose.yaml` here references it via `${TEST_BUILD_CONTEXT:-.}`. Always run compose from the stable repo:
+
 ```bash
-docker-compose up --build
+# Rebuild and restart the test container (port 5001)
+cd ~/mine/commander-tracker
+docker compose up --build -d commander-tracker-test
 ```
+
+Stable container runs on port **5000**; test container on port **5001**.
 
 The app binds to `0.0.0.0` and uses port 5000 by default. The SQLite database is at `/data/commander.db` (Docker volume: `./data:/data`).
 
 ## Running Tests
 
 ```bash
-python -m pytest tests/
+python3.11 -m pytest tests/
 # or individual files:
-python -m unittest tests/test_api_game_state.py
-python -m unittest tests/test_compute_deck_tags.py
-python -m unittest tests/test_deny_registration_request.py
+python3.11 -m unittest tests/test_api_game_state.py
+python3.11 -m unittest tests/test_compute_deck_tags.py
+python3.11 -m unittest tests/test_deny_registration_request.py
 ```
 
 Tests use temporary SQLite databases for isolation — no external setup needed. Each test class sets up and tears down its own database schema.
@@ -194,17 +201,38 @@ Supports:
 
 - **No build system** — vanilla JavaScript and CSS only, no npm/webpack
 - Bootstrap 5 loaded from local static files (not CDN)
-- Custom CSS split into per-feature modules in `static/css/`
+- Custom CSS: `static/css/base.css` is the global foundation; 14 per-page modules (one per view) sit alongside it
 - MTG mana symbols served as SVGs from `static/mtg-svg/`
 - Custom MTG fonts in `static/fonts/`
 - PWA manifest at `static/manifest.webmanifest`
 - `life_counter.html` is the most complex template — it contains all real-time game UI logic including responsive layouts for different player counts and viewport sizes
 
+### CSS Design System
+
+The app's CSS conforms to `~/mine/css-design`. Consult that repo when adding new components — it defines all canonical patterns, token names, and component classes.
+
+`static/css/base.css` is a single-file port of the entire design system (fonts → tokens → reset → base typography → all components → all layouts). It is the **only** file that should define tokens and global primitives.
+
+**Always use CSS custom properties — never hardcode values that have a token.** Key token groups:
+- Spacing/shape: `--radius-sm` (12px) / `--radius-md` (14px) / `--radius-lg` (18px) / `--radius-xl` (22px) / `--radius-2xl` (24px)
+- Shadows: `--shadow-sm` / `--shadow-md` / `--shadow-lg`
+- Borders: `--border-color` / `--border-color-subtle` / `--border-color-strong`
+- Typography: `--font-base` / `--font-highlight` / `--font-danger` / `--font-warning` / `--font-accent` (and `-trans` variants)
+- Backgrounds: `--darkest` / `--darker` / `--base` / `--light` (and `-trans` variants)
+- Accents: `--green` / `--blue` / `--red` / `--purple` / `--orange` / `--yellow` (and `-trans` variants)
+- Layout shell: `--topbar-h` (64px) / `--sidebar-w` (252px)
+
+**Per-page CSS modules** (`static/css/*.css` other than `base.css`) must: import nothing (base.css is always loaded first via `base.html`), use CSS token variables not hardcoded values, and never re-declare anything already in `base.css`.
+
+**Assets added by the design system overhaul:**
+- `static/fonts/mtg-symbols.ttf` — 230+ MTG symbol glyphs. Use `font-family: 'MTGSymbols'` or the `.ms` inline utility class. Full code-point reference: `~/mine/css-design/fonts/mtg-symbols-reference.txt`.
+- `static/img/mana/w|u|b|r|g.svg` — SVG mana pip images. Referenced by `.mana .mana-W/U/B/R/G` CSS classes.
+
 ### Theming
 
 The app has a light/dark theme toggle. `User.use_light_theme` is stored in session and checked in every template via `use_light_theme`. `base.html` sets `data-bs-theme="light|dark"` on `<html>` and conditionally loads `static/css/light_theme.css`.
 
-All colors are CSS custom properties — use variables like `--blue`, `--red`, `--green`, `--purple`, `--orange`, `--yellow`, `--font-base`, `--lightest`, `--lighter`, `--light-base` (and their `-trans` alpha variants) rather than hardcoded colors. `LIGHT_THEME.md` contains the light-mode overrides for these variables.
+`static/css/light_theme.css` mirrors `~/mine/css-design/themes/light.css` exactly — keep them in sync when modifying either.
 
 ## Testing Conventions
 
