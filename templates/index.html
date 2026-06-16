@@ -45,6 +45,9 @@
           <div><span class="text-white fw-bold">{{ top_players[0].wins }}</span> wins</div>
           <div><span class="text-white fw-bold">{{ top_players[0].played }}</span> games</div>
           <div><span class="text-white fw-bold">{{ top_players[0].winrate }}%</span> winrate</div>
+          {% if top_players[0].avg_mmr is not none %}
+            <div>Avg. MMR: <span class="text-white fw-bold">{{ top_players[0].avg_mmr }}</span></div>
+          {% endif %}
         </div>
       </div>
     {% endif %}
@@ -65,6 +68,9 @@
         <div class="d-flex gap-3 flex-wrap muted">
           <div><span class="text-white fw-bold">{{ top_players[1].wins }}</span> wins</div>
           <div><span class="text-white fw-bold">{{ top_players[1].winrate }}%</span> winrate</div>
+          {% if top_players[1].avg_mmr is not none %}
+            <div>Avg. MMR: <span class="text-white fw-bold">{{ top_players[1].avg_mmr }}</span></div>
+          {% endif %}
         </div>
       </div>
     {% endif %}
@@ -85,6 +91,9 @@
         <div class="d-flex gap-3 flex-wrap muted">
           <div><span class="text-white fw-bold">{{ top_players[2].wins }}</span> wins</div>
           <div><span class="text-white fw-bold">{{ top_players[2].winrate }}%</span> winrate</div>
+          {% if top_players[2].avg_mmr is not none %}
+            <div>Avg. MMR: <span class="text-white fw-bold">{{ top_players[2].avg_mmr }}</span></div>
+          {% endif %}
         </div>
       </div>
     {% endif %}
@@ -274,7 +283,17 @@
                           {% endif %}
                           <span class="name">{{ gp.player.name }}</span>
                         </span>
-                        <span class="deck">{{ gp.deck.name }}</span>
+                        <span class="deck">
+                          {{ gp.deck.name }}
+                          {% set delta = mmr_delta_by_game_deck.get((g.id, gp.deck_id)) %}
+                          {% if delta is not none and delta != 0 %}
+                            {% if delta > 0 %}
+                              <span style="color: var(--green); font-weight:700;">+{{ delta }}</span>
+                            {% else %}
+                              <span style="color: var(--red); font-weight:700;">{{ delta }}</span>
+                            {% endif %}
+                          {% endif %}
+                        </span>
                       </span>
                     {% endfor %}
                   </div>
@@ -294,6 +313,10 @@
       ========================== -->
   <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
     <h2 class="m-0">Top Decks</h2>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-primary" id="deck-sort-wr-btn" onclick="sortTopDecks('winrate')">Sort: Win Rate</button>
+      <button class="btn btn-sm btn-outline-light" id="deck-sort-mmr-btn" onclick="sortTopDecks('mmr')">Sort: MMR</button>
+    </div>
   </div>
 
   {% if deck_stats|length == 0 %}
@@ -301,7 +324,7 @@
       <div class="muted">No decks yet.</div>
     </div>
   {% else %}
-    <div class="deck-grid mb-5">
+    <div class="deck-grid mb-5" id="top-deck-grid">
       {% for s in deck_stats %}
         {% set d = s.deck %}
         {% set art = d.commander_art_url %}
@@ -310,9 +333,16 @@
         {% if wr >= 60 %}{% set badge_class = 'good' %}
         {% elif wr >= 45 %}{% set badge_class = 'mid' %}
         {% endif %}
+        {% set mmr = s.mmr %}
+        {% if mmr >= 1300 %}{% set tier = "S" %}{% set tier_cls = "success" %}
+        {% elif mmr >= 1200 %}{% set tier = "A" %}{% set tier_cls = "info" %}
+        {% elif mmr >= 1100 %}{% set tier = "B" %}{% set tier_cls = "primary" %}
+        {% elif mmr >= 950 %}{% set tier = "C" %}{% set tier_cls = "" %}
+        {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
 
         <a class="deck-tile {% if art %}has-bg{% endif %}"
            href="{{ url_for('deck_detail', deck_id=d.id) }}"
+           data-mmr="{{ mmr }}" data-winrate="{{ wr }}"
            {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
 
           <div class="deck-tile-inner">
@@ -330,6 +360,8 @@
                 {% if d.retired %}
                   <span class="deck-retired-pill">Retired</span>
                 {% endif %}
+                <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
+                <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
               </div>
             </div>
@@ -350,6 +382,28 @@
         </a>
       {% endfor %}
     </div>
+    <script>
+    (function() {
+      window.sortTopDecks = function(col) {
+        document.getElementById('deck-sort-wr-btn').className = col === 'winrate'
+          ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-light';
+        document.getElementById('deck-sort-mmr-btn').className = col === 'mmr'
+          ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-light';
+        var grid = document.getElementById('top-deck-grid');
+        if (!grid) return;
+        var tiles = Array.from(grid.querySelectorAll('.deck-tile'));
+        tiles.sort(function(a, b) {
+          if (col === 'mmr') {
+            return parseFloat(b.dataset.mmr) - parseFloat(a.dataset.mmr);
+          }
+          var d = parseFloat(b.dataset.winrate) - parseFloat(a.dataset.winrate);
+          if (d !== 0) return d;
+          return parseFloat(b.dataset.mmr) - parseFloat(a.dataset.mmr);
+        });
+        tiles.forEach(function(t) { grid.appendChild(t); });
+      };
+    })();
+    </script>
   {% endif %}
 
   <!-- =========================

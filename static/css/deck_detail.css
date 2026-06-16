@@ -279,8 +279,8 @@
 
 
   .commander-showcase {
-    border-color: rgba(186, 151, 255, 0.35);
-    background: linear-gradient(180deg, rgba(102,77,145,0.18), rgba(255,255,255,0.02));
+    border-color: var(--surface-gradient-border);
+    background: var(--surface-gradient-bg);
   }
 
   .deck-card-grid {

@@ -92,6 +92,20 @@
   --border-color-subtle: rgba(143,153,197,0.18);
   --border-color-strong: rgba(143,153,197,0.35);
 
+  /* Semantic gradient/stat surfaces. Components consume these; themes own the wash. */
+  --surface-gradient-border: rgba(186,151,255,0.35);
+  --surface-gradient-bg:
+    radial-gradient(circle at 12% 8%, rgba(186,151,255,0.10), transparent 16rem),
+    linear-gradient(180deg, rgba(102,77,145,0.18), rgba(255,255,255,0.02));
+
+  --stats-panel-chip-bg: rgba(255,255,255,0.04);
+  --stats-panel-label-color: rgba(255,255,255,0.55);
+  --stats-panel-value-color: #fff;
+  --stats-panel-muted-color: rgba(255,255,255,0.8);
+  --stats-panel-track-bg: rgba(255,255,255,0.08);
+  --stats-panel-bar-bg: rgba(120,160,255,0.65);
+  --stats-panel-bar-hover-bg: rgba(120,160,255,0.85);
+
   /* Border-radius scale */
   --radius-sm:  12px;
   --radius-md:  14px;
@@ -668,6 +682,7 @@ h1, .display-3 { text-transform: uppercase; }
   inset: 0;
   background-size: cover;
   background-position: top;
+  background-repeat: no-repeat;
   filter: saturate(1.05);
 }
 .spotlight .overlay {
@@ -693,7 +708,7 @@ h1, .display-3 { text-transform: uppercase; }
   background: linear-gradient(135deg, rgba(0,0,0,0.75), rgba(0,0,0,0.35));
   z-index: 0;
 }
-.leader-card.has-bg { background-size: cover; background-position: top; }
+.leader-card.has-bg { background-size: cover; background-position: top; background-repeat: no-repeat; }
 .leader-card > * { position: relative; z-index: 1; }
 
 /* ── Erzfeind badge ─────────────────────────────────────────────  */
@@ -796,7 +811,7 @@ h1, .display-3 { text-transform: uppercase; }
   box-shadow: var(--shadow-md);
   min-height: 120px;
 }
-.deck-tile.has-bg { background-size: cover; background-position: top; }
+.deck-tile.has-bg { background-size: cover; background-position: top; background-repeat: no-repeat; }
 .deck-tile::before {
   content: "";
   position: absolute;
@@ -837,6 +852,18 @@ h1, .display-3 { text-transform: uppercase; }
 .deck-win-badge.good { border-color: var(--green); background: var(--green-trans); }
 .deck-win-badge.mid  { border-color: var(--blue);  background: var(--blue-trans);  }
 .deck-win-badge.bad  { border-color: var(--red);   background: var(--red-trans);   }
+
+.deck-mmr-badge {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
 
 .deck-progress {
   margin-top: 12px;

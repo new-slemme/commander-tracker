@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp /home/slemme/mine/css-design/fonts/mtg-symbols.ttf /home/slemme/mine/commander-tracker-test/static/fonts/)",
+      "Bash(mkdir -p /home/slemme/mine/commander-tracker-test/static/img/mana)",
+      "Bash(cp /home/slemme/mine/css-design/img/mana/*.svg /home/slemme/mine/commander-tracker-test/static/img/mana/)",
+      "Bash(docker compose *)",
+      "Bash(sed -i 's/\\\\xe2\\\\x80\\\\x9c/\"/g; s/\\\\xe2\\\\x80\\\\x9d/\"/g; s/\\\\xe2\\\\x80\\\\x98/'\"'\"'/g; s/\\\\xe2\\\\x80\\\\x99/'\"'\"'/g' ~/mine/commander-tracker/templates/play_game.html)",
+      "Bash(sed -i 's/class=\"btn btn-success btn-lg app-btn\" id=\"startGameBtn\"/class=\"btn btn-primary btn-lg app-btn\" id=\"startGameBtn\"/' ~/mine/commander-tracker/templates/play_game.html)"
+    ]
+  }
+}

@@ -218,10 +218,11 @@
           <div class="editor-settings-file-row">
             <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
               Choose file
-              <input type="file" id="settingsCommanderArtFile" accept="image/*" style="display:none;">
+              <input type="file" id="settingsCommanderArtFile" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" style="display:none;">
             </label>
             <span id="settingsCommanderArtFilename" class="editor-settings-filename">No file chosen</span>
           </div>
+          <div class="editor-settings-help">Animated GIFs are supported (max 15 MB).</div>
           {% endif %}
         </div>
 
@@ -236,7 +237,7 @@
           <div class="editor-settings-file-row">
             <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
               Choose file
-              <input type="file" id="settingsCardArtFile" accept="image/*" style="display:none;">
+              <input type="file" id="settingsCardArtFile" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" style="display:none;">
             </label>
             <span id="settingsCardArtFilename" class="editor-settings-filename">No file chosen</span>
           </div>

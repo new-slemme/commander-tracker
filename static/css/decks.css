@@ -32,7 +32,7 @@
     box-shadow: 0 6px 28px rgba(0,0,0,0.45);
     transform: translateY(-2px);
   }
-  .deck-tile.has-bg { background-size: var(--deck-art-scale, cover); background-position: top; }
+  .deck-tile.has-bg { background-size: var(--deck-art-scale, cover); background-position: top; background-repeat: no-repeat; }
   .deck-tile::before{
     content:"";
     position:absolute; inset:0;

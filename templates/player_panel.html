@@ -193,6 +193,7 @@ function renderCommanderDamage(){
       card.style.backgroundImage = `url(${JSON.stringify(artUrl)})`;
       card.style.backgroundSize = artScale;
       card.style.backgroundPosition = "center 15%";
+      card.style.backgroundRepeat = "no-repeat";
     }
     card.innerHTML = `
       <div class="cd-art-overlay">

@@ -317,3 +317,70 @@
     color: inherit;
     border-color: rgba(143,153,197,0.38);
   }
+
+  /* Light theme refinements for index-only cards.
+     index.css is loaded after light_theme.css, so these must live here. */
+  html[data-bs-theme="light"] .stats-card,
+  html[data-bs-theme="light"] .recent-card {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,250,241,0.90)),
+      var(--darker);
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-md);
+    color: var(--font-base);
+  }
+
+  html[data-bs-theme="light"] .stats-card-head,
+  html[data-bs-theme="light"] .recent-card-head {
+    background:
+      linear-gradient(90deg, rgba(232, 215, 184, 0.48), rgba(255,255,255,0.36));
+    border-bottom-color: var(--border-color-subtle);
+  }
+
+  html[data-bs-theme="light"] .stats-chip,
+  html[data-bs-theme="light"] .recent-date,
+  html[data-bs-theme="light"] .player-pill {
+    background: rgba(255,255,255,0.58);
+    border-color: var(--border-color);
+    color: var(--font-base);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.72);
+  }
+
+  html[data-bs-theme="light"] .stats-chip b,
+  html[data-bs-theme="light"] .rank-pill,
+  html[data-bs-theme="light"] .player-name,
+  html[data-bs-theme="light"] .stats-table .player-name:hover,
+  html[data-bs-theme="light"] .stat-mini b,
+  html[data-bs-theme="light"] .player-pill .name {
+    color: var(--font-base);
+  }
+
+  html[data-bs-theme="light"] .rank-pill,
+  html[data-bs-theme="light"] .win-badge,
+  html[data-bs-theme="light"] .winner-pill,
+  html[data-bs-theme="light"] .player-pill.win {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.62);
+  }
+
+  html[data-bs-theme="light"] .win-badge.good,
+  html[data-bs-theme="light"] .winner-pill,
+  html[data-bs-theme="light"] .player-pill.win {
+    border-color: rgba(47,107,79,0.42);
+    background: rgba(47,107,79,0.14);
+    color: #214d39;
+  }
+  html[data-bs-theme="light"] .win-badge.mid  { border-color: rgba(40,95,143,0.42); background: rgba(40,95,143,0.13); color: #214d73; }
+  html[data-bs-theme="light"] .win-badge.bad  { border-color: rgba(178,58,52,0.42); background: rgba(178,58,52,0.13); color: #87312d; }
+
+  html[data-bs-theme="light"] .wr-progress {
+    background: rgba(88,72,49,0.12);
+    box-shadow: inset 0 1px 2px rgba(64,48,28,0.12);
+  }
+
+  html[data-bs-theme="light"] .stats-table thead th {
+    color: var(--font-base-trans);
+  }
+
+  html[data-bs-theme="light"] .stats-table tbody tr {
+    border-top-color: var(--border-color-subtle);
+  }

@@ -22,7 +22,7 @@
 .filter-card,
 .recent-card {
   border-radius: var(--radius-xl);
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(143,153,197,0.25);
   background: rgba(23,26,38,0.55);
   box-shadow: 0 0 28px rgba(0,0,0,0.45);
   overflow:hidden;
@@ -58,7 +58,7 @@
   font-size: 0.82rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.75);
+  color: var(--stats-panel-muted-color);
   margin-bottom: 6px;
   font-weight: 800;
 }
@@ -765,9 +765,9 @@
 /* ========== Stats panel ========== */
 .games-stats-panel {
   border-radius: var(--radius-xl);
-  border: 1px solid var(--border-color);
-  background: rgba(23,26,38,0.55);
-  box-shadow: 0 0 28px rgba(0,0,0,0.45);
+  border: 1px solid var(--surface-gradient-border);
+  background: var(--surface-gradient-bg);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
   padding: 16px 18px;
   display: flex;
@@ -789,15 +789,15 @@
   gap: 2px;
   padding: 10px 20px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(143,153,197,0.22);
-  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-color-subtle);
+  background: var(--stats-panel-chip-bg);
   min-width: 80px;
 }
 
 .gsp-val {
   font-size: 1.5rem;
   font-weight: 900;
-  color: #fff;
+  color: var(--stats-panel-value-color);
   line-height: 1;
 }
 
@@ -806,7 +806,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.55);
+  color: var(--stats-panel-label-color);
   margin-top: 2px;
 }
 
@@ -822,7 +822,7 @@
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(255,255,255,0.55);
+  color: var(--stats-panel-label-color);
 }
 
 /* Win type segmented bar */
@@ -848,7 +848,7 @@
 .gsp-wt-label {
   font-size: 0.70rem;
   font-weight: 900;
-  color: rgba(255,255,255,0.92);
+  color: var(--stats-panel-value-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -877,7 +877,7 @@
   gap: 6px;
   font-size: 0.78rem;
   font-weight: 800;
-  color: rgba(255,255,255,0.8);
+  color: var(--stats-panel-muted-color);
   border-radius: 3px;
 }
 
@@ -927,14 +927,14 @@
   flex: 1;
   height: 10px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.08);
+  background: var(--stats-panel-track-bg);
   overflow: hidden;
 }
 
 .gsp-cw-bar {
   height: 100%;
   border-radius: 999px;
-  background: rgba(120,160,255,0.65);
+  background: var(--stats-panel-bar-bg);
   transition: width .3s ease;
 }
 
@@ -970,24 +970,24 @@
 .gsp-tl-bar {
   width: 20px;
   border-radius: 4px 4px 2px 2px;
-  background: rgba(120,160,255,0.55);
+  background: var(--stats-panel-bar-bg);
   transition: background .15s ease;
   flex-shrink: 0;
 }
 
-.gsp-tl-col:hover .gsp-tl-bar { background: rgba(120,160,255,0.8); }
+.gsp-tl-col:hover .gsp-tl-bar { background: var(--stats-panel-bar-hover-bg); }
 
 .gsp-tl-count {
   font-size: 0.65rem;
   font-weight: 900;
-  color: rgba(255,255,255,0.6);
+  color: var(--stats-panel-muted-color);
   line-height: 1;
 }
 
 .gsp-tl-label {
   font-size: 0.60rem;
   font-weight: 800;
-  color: rgba(255,255,255,0.4);
+  color: var(--stats-panel-label-color);
   line-height: 1;
   letter-spacing: 0.02em;
 }
@@ -1044,3 +1044,33 @@
   }
 
 }
+
+/* Light theme refinements for games-page cards.
+   games.css is loaded after light_theme.css, so these overrides live here. */
+html[data-bs-theme="light"] .filter-card,
+html[data-bs-theme="light"] .recent-card {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.62), rgba(255,250,241,0.90)),
+    var(--darker);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-md);
+  color: var(--font-base);
+}
+
+html[data-bs-theme="light"] .filter-card-head,
+html[data-bs-theme="light"] .recent-card-head {
+  background:
+    linear-gradient(90deg, rgba(232, 215, 184, 0.48), rgba(255,255,255,0.36));
+  border-bottom-color: var(--border-color-subtle);
+}
+
+html[data-bs-theme="light"] .filter-label {
+  color: var(--font-base-trans);
+}
+
+html[data-bs-theme="light"] .scope-indicator {
+  background: rgba(255,250,241,0.94);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+

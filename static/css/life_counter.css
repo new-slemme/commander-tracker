@@ -169,6 +169,7 @@ body.sigtaara-ui .h4 {
       background-image:var(--bg-layer);
       background-size:var(--bg-size, cover);
       background-position:center;
+      background-repeat:no-repeat;
       transform:rotate(var(--card-rotation));
       transform-origin:center;
     }

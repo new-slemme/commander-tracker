@@ -46,6 +46,20 @@
   --border-color:        rgba(88, 72, 49, 0.18);
   --border-color-subtle: rgba(88, 72, 49, 0.12);
   --border-color-strong: rgba(88, 72, 49, 0.30);
+
+  --surface-gradient-border: rgba(115,81,143,0.24);
+  --surface-gradient-bg:
+    radial-gradient(circle at 12% 8%, rgba(255,255,255,0.88), transparent 14rem),
+    radial-gradient(circle at 88% 18%, rgba(115,81,143,0.13), transparent 18rem),
+    linear-gradient(180deg, rgba(255,255,255,0.70), rgba(255,250,241,0.88));
+
+  --stats-panel-chip-bg: rgba(255,255,255,0.56);
+  --stats-panel-label-color: var(--font-base-trans);
+  --stats-panel-value-color: var(--font-base);
+  --stats-panel-muted-color: var(--font-base-trans);
+  --stats-panel-track-bg: rgba(88,72,49,0.12);
+  --stats-panel-bar-bg: rgba(82,99,163,0.58);
+  --stats-panel-bar-hover-bg: rgba(82,99,163,0.78);
 }
 
 body {
