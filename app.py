@@ -4139,7 +4139,7 @@ def index():
     top_decks = deck_stats[:6]
 
     # Recent games
-    recent_games = game_q.order_by(Game.date.desc()).limit(10).all()
+    recent_games = game_q.order_by(Game.date.desc(), Game.id.desc()).limit(10).all()
     _recent_ids = [g.id for g in recent_games]
     _all_parts = GameParticipant.query.filter(GameParticipant.game_id.in_(_recent_ids)).all() if _recent_ids else []
     game_parts: dict[int, list] = {}
@@ -7761,7 +7761,7 @@ def api_stats():
         player_stats.append({"player_id": p.id, "name": p.name, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
 
-    recent_games_list = game_q.order_by(Game.date.desc()).limit(10).all()
+    recent_games_list = game_q.order_by(Game.date.desc(), Game.id.desc()).limit(10).all()
     recent_game_ids = [g.id for g in recent_games_list]
     parts = GameParticipant.query.filter(
         GameParticipant.game_id.in_(recent_game_ids if recent_game_ids else [-1])
