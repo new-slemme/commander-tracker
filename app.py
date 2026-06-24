@@ -5126,6 +5126,92 @@ def compare_players():
     )
 
 
+@app.route("/api/compare")
+@api_login_required
+def api_compare():
+    a_id = request.args.get("a", type=int)
+    b_id = request.args.get("b", type=int)
+    if not a_id or not b_id or a_id == b_id:
+        return jsonify({"error": "Select two different players to compare."}), 400
+
+    player_a = db.session.get(Player, a_id)
+    player_b = db.session.get(Player, b_id)
+    if not player_a or not player_b:
+        abort(404)
+
+    def _stats(p):
+        played = GameParticipant.query.filter_by(player_id=p.id).count()
+        won = Game.query.filter_by(winner_id=p.id).count()
+        deck_count = Deck.query.filter_by(player_id=p.id).count()
+        winrate = round((won / played) * 100, 1) if played else 0.0
+        return {"played": played, "won": won, "deck_count": deck_count, "winrate": winrate}
+
+    stats_a = _stats(player_a)
+    stats_b = _stats(player_b)
+
+    a_game_ids = db.session.query(GameParticipant.game_id).filter_by(player_id=a_id)
+    b_game_ids = db.session.query(GameParticipant.game_id).filter_by(player_id=b_id)
+    shared_games_q = (
+        Game.query
+        .filter(Game.id.in_(a_game_ids), Game.id.in_(b_game_ids))
+        .order_by(Game.date.desc())
+        .all()
+    )
+
+    h2h_a_wins = sum(1 for g in shared_games_q if g.winner_id == a_id)
+    h2h_b_wins = sum(1 for g in shared_games_q if g.winner_id == b_id)
+    h2h_other = len(shared_games_q) - h2h_a_wins - h2h_b_wins
+
+    shared_game_ids = [g.id for g in shared_games_q]
+    _ab_parts = (
+        GameParticipant.query
+        .filter(
+            GameParticipant.game_id.in_(shared_game_ids),
+            GameParticipant.player_id.in_([a_id, b_id]),
+        )
+        .all()
+    ) if shared_game_ids else []
+    _parts_by_game: dict[int, dict[int, GameParticipant]] = {}
+    for _part in _ab_parts:
+        _parts_by_game.setdefault(_part.game_id, {})[_part.player_id] = _part
+
+    _part_counts = dict(
+        db.session.query(GameParticipant.game_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.game_id.in_(shared_game_ids))
+        .group_by(GameParticipant.game_id)
+        .all()
+    ) if shared_game_ids else {}
+
+    winner_ids = {g.winner_id for g in shared_games_q}
+    _winners = {p.id: p for p in Player.query.filter(Player.id.in_(winner_ids)).all()} if winner_ids else {}
+
+    shared_games = []
+    for g in shared_games_q:
+        gp_a = _parts_by_game.get(g.id, {}).get(a_id)
+        gp_b = _parts_by_game.get(g.id, {}).get(b_id)
+        winner = _winners.get(g.winner_id)
+        shared_games.append({
+            "game_id": g.id,
+            "date": g.date.isoformat(),
+            "winner_id": g.winner_id,
+            "winner_name": winner.name if winner else "Unknown",
+            "deck_a": gp_a.deck.name if gp_a and gp_a.deck else "Unknown",
+            "deck_b": gp_b.deck.name if gp_b and gp_b.deck else "Unknown",
+            "participant_count": _part_counts.get(g.id, 0),
+        })
+
+    return jsonify({
+        "player_a": {"id": player_a.id, "name": player_a.name},
+        "player_b": {"id": player_b.id, "name": player_b.name},
+        "stats_a": stats_a,
+        "stats_b": stats_b,
+        "h2h_a_wins": h2h_a_wins,
+        "h2h_b_wins": h2h_b_wins,
+        "h2h_other": h2h_other,
+        "shared_games": shared_games,
+    })
+
+
 @app.route("/player/<int:player_id>/export")
 def player_export(player_id):
     player = db.session.get(Player, player_id)
@@ -7746,6 +7832,18 @@ def api_android_latest_release():
 @api_login_required
 def api_stats():
     game_q, scope, active_pod = game_query_for_scope()
+    date_from_raw = request.args.get("date_from", "").strip()
+    date_to_raw = request.args.get("date_to", "").strip()
+    try:
+        if date_from_raw:
+            game_q = game_q.filter(Game.date >= datetime.strptime(date_from_raw, "%Y-%m-%d"))
+    except ValueError:
+        date_from_raw = ""
+    try:
+        if date_to_raw:
+            game_q = game_q.filter(Game.date <= datetime.strptime(date_to_raw, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+    except ValueError:
+        date_to_raw = ""
     game_ids_subquery = game_q.with_entities(Game.id)
 
     players = Player.query.all()
@@ -7831,6 +7929,8 @@ def api_stats():
         "top_decks": deck_stats[:6],
         "scope": scope,
         "pod_name": active_pod.name if active_pod else None,
+        "date_from": date_from_raw,
+        "date_to": date_to_raw,
     })
 
 
@@ -7838,6 +7938,18 @@ def api_stats():
 @api_login_required
 def api_saltmine():
     game_q, scope, active_pod = game_query_for_scope()
+    date_from_raw = request.args.get("date_from", "").strip()
+    date_to_raw = request.args.get("date_to", "").strip()
+    try:
+        if date_from_raw:
+            game_q = game_q.filter(Game.date >= datetime.strptime(date_from_raw, "%Y-%m-%d"))
+    except ValueError:
+        date_from_raw = ""
+    try:
+        if date_to_raw:
+            game_q = game_q.filter(Game.date <= datetime.strptime(date_to_raw, "%Y-%m-%d").replace(hour=23, minute=59, second=59))
+    except ValueError:
+        date_to_raw = ""
 
     scoped_games = game_q.all()
     scoped_game_ids = [g.id for g in scoped_games]
@@ -8112,6 +8224,8 @@ def api_saltmine():
             for game in salty_games
         ],
         "mechanic_stats": mechanic_stats,
+        "date_from": date_from_raw,
+        "date_to": date_to_raw,
     })
 
 
