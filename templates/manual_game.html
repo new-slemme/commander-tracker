@@ -60,8 +60,8 @@
 </div>
 
 <script>
-  // decks_json is passed by the Flask route /manual_game
-  const DECKS_BY_PLAYER = {{ decks_json | safe }};
+  // decks_by_player is passed by the Flask route /manual_game
+  const DECKS_BY_PLAYER = {{ decks_by_player | tojson }};
 
   function resetDeckSelect(deckSelect) {
     deckSelect.innerHTML = '<option value="">Select player first</option>';

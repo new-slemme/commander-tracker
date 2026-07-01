@@ -154,7 +154,7 @@
 </div>
 
 <script>
-  const decksData = {{ decks_json | safe }};
+  const decksData = {{ decks_by_player | tojson }};
   let playerCount = 2;
   const borrowModeSlots = new Set();
 

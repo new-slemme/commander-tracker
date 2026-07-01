@@ -162,6 +162,10 @@
     return document.querySelector(`.pcard[data-player-id="${playerId}"]`);
   }
 
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
   function render() {
     const bar = document.getElementById('compare-bar');
     const namesEl = document.getElementById('compare-bar-names');
@@ -192,12 +196,12 @@
 
     const names = Array.from(selected.values());
     if (count === 1) {
-      namesEl.innerHTML = `<span class="compare-bar__sel">${names[0]}</span><span class="compare-bar__prompt"> — select one more</span>`;
+      namesEl.innerHTML = `<span class="compare-bar__sel">${escapeHtml(names[0])}</span><span class="compare-bar__prompt"> — select one more</span>`;
       btn.classList.add('compare-bar-btn--disabled');
       btn.href = '#';
     } else {
       const [a, b] = Array.from(selected.entries());
-      namesEl.innerHTML = `<span class="compare-bar__sel">${names[0]}</span><span class="compare-bar__vs"> vs </span><span class="compare-bar__sel">${names[1]}</span>`;
+      namesEl.innerHTML = `<span class="compare-bar__sel">${escapeHtml(names[0])}</span><span class="compare-bar__vs"> vs </span><span class="compare-bar__sel">${escapeHtml(names[1])}</span>`;
       btn.classList.remove('compare-bar-btn--disabled');
       btn.href = compareUrl + '?a=' + a[0] + '&b=' + b[0];
     }

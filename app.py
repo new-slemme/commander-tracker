@@ -4551,9 +4551,14 @@ def remove_pod_member(pod_id, player_id):
 
 @app.route("/delete_deck/<int:deck_id>", methods=["POST"])
 def delete_deck(deck_id):
+    u = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to delete this deck.")
         return redirect(url_for("decks"))
 
     used = GameParticipant.query.filter_by(deck_id=deck_id).count()
@@ -4572,9 +4577,14 @@ def delete_deck(deck_id):
 
 @app.route("/deck/<int:deck_id>/retire", methods=["POST"])
 def retire_deck(deck_id):
+    u = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to retire this deck.")
         return redirect(url_for("decks"))
 
     deck.retired = True
@@ -4586,9 +4596,14 @@ def retire_deck(deck_id):
 
 @app.route("/deck/<int:deck_id>/unretire", methods=["POST"])
 def unretire_deck(deck_id):
+    u = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to unretire this deck.")
         return redirect(url_for("decks"))
 
     deck.retired = False
@@ -4599,9 +4614,14 @@ def unretire_deck(deck_id):
 
 @app.route("/deck/<int:deck_id>/plan", methods=["POST"])
 def plan_deck(deck_id):
+    u = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to plan this deck.")
         return redirect(url_for("decks"))
 
     deck.planned = True
@@ -4613,9 +4633,14 @@ def plan_deck(deck_id):
 
 @app.route("/deck/<int:deck_id>/unplan", methods=["POST"])
 def unplan_deck(deck_id):
+    u = get_current_user()
     deck = db.session.get(Deck, deck_id)
     if not deck:
         flash("Deck not found.")
+        return redirect(url_for("decks"))
+
+    if not u.is_admin and (not u.player or deck.player_id != u.player.id):
+        flash("You don't have permission to unplan this deck.")
         return redirect(url_for("decks"))
 
     deck.planned = False
@@ -4626,9 +4651,14 @@ def unplan_deck(deck_id):
 
 @app.route("/delete_player/<int:player_id>", methods=["POST"])
 def delete_player(player_id):
+    u = get_current_user()
     player = db.session.get(Player, player_id)
     if not player:
         flash("Player not found.")
+        return redirect(url_for("players"))
+
+    if not u.is_admin:
+        flash("You don't have permission to delete this player.")
         return redirect(url_for("players"))
 
     # Never allow deleting a user-linked player through this route
@@ -6287,8 +6317,7 @@ def play_game():
             for d in active_decks
         ]
 
-    decks_json = json.dumps(decks_by_player)
-    return render_template("play_game.html", players=players, decks_json=decks_json)
+    return render_template("play_game.html", players=players, decks_by_player=decks_by_player)
 
 
 @app.route("/start_game", methods=["POST"])
@@ -7257,8 +7286,7 @@ def manual_game():
             Deck.query.filter_by(player_id=p.id, retired=False, planned=False).order_by(Deck.name.asc()).all()
         )
         decks_by_player[str(p.id)] = [{"id": d.id, "name": d.name} for d in active_decks]
-    decks_json = json.dumps(decks_by_player)
-    return render_template("manual_game.html", players=players, decks_json=decks_json)
+    return render_template("manual_game.html", players=players, decks_by_player=decks_by_player)
 
 
 @app.route("/manual_record_game", methods=["POST"])
@@ -7767,6 +7795,7 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
 
 
 @app.route("/api/login", methods=["POST"])
+@limiter.limit("10 per minute", methods=["POST"])
 def api_login():
     data = request.get_json(silent=True)
     if not data:
@@ -8742,6 +8771,7 @@ def api_pod_member_detail(pod_id, player_id):
 @app.route("/api/players/<int:player_id>", methods=["GET", "PATCH", "DELETE"])
 @api_login_required
 def api_player_detail(player_id):
+    current_user = get_current_user()
     player = db.session.get(Player, player_id)
     if not player:
         return jsonify({"error": "Not found"}), 404
