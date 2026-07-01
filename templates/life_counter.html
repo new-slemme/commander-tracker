@@ -539,6 +539,10 @@ function computeCommanderDamageMaxBySource(playerId){
   return Object.values(state.commander_damage || {}).reduce((maxVal, value)=>Math.max(maxVal, Math.max(0, Number(value) || 0)), 0);
 }
 
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
 function renderCommanderDamageSources(playerId){
   const pid = String(playerId);
   const sourcesContainer = document.querySelector(`.commander-damage-sources[data-player="${pid}"]`);
@@ -567,6 +571,7 @@ function renderCommanderDamageSources(playerId){
   sourceIds.forEach((sourceId)=>{
     const sourceCard = cards.find((card)=>String(card.dataset.player) === sourceId);
     const sourceName = sourceCard?.querySelector('.player-name')?.textContent?.trim() || `Player ${sourceId}`;
+    const safeSourceName = escapeHtml(sourceName);
     const value = getCommanderDamageBySource(pid, sourceId);
 
     const row = document.createElement('div');
@@ -575,11 +580,11 @@ function renderCommanderDamageSources(playerId){
     row.dataset.sourcePlayer = sourceId;
 
     row.innerHTML = `
-      <button type="button" class="counter-chip-btn" data-commander-action="decrement" aria-label="Decrease commander damage to ${sourceName}">−</button>
-      <span class="counter-chip-label" title="Commander damage from ${sourceName}">${sourceName}</span>
+      <button type="button" class="counter-chip-btn" data-commander-action="decrement" aria-label="Decrease commander damage to ${safeSourceName}">−</button>
+      <span class="counter-chip-label" title="Commander damage from ${safeSourceName}">${safeSourceName}</span>
       <span class="counter-chip-value">${value}</span>
-      <button type="button" class="counter-chip-btn" data-commander-action="increment" aria-label="Increase commander damage to ${sourceName}">+</button>
-      <button type="button" class="counter-chip-btn" data-commander-action="reset" aria-label="Reset commander damage from ${sourceName}">↺</button>
+      <button type="button" class="counter-chip-btn" data-commander-action="increment" aria-label="Increase commander damage to ${safeSourceName}">+</button>
+      <button type="button" class="counter-chip-btn" data-commander-action="reset" aria-label="Reset commander damage from ${safeSourceName}">↺</button>
     `;
 
     row.querySelectorAll('[data-commander-action]').forEach((button)=>{
