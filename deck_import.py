@@ -222,7 +222,7 @@ def parse_archidekt_url(url: str, *, timeout: int = 15) -> ParsedDeck:
             continue
 
         card_obj = card_entry.get("card") or {}
-        name = card_obj.get("oracleCard", {}).get("name") or card_obj.get("name")
+        name = (card_obj.get("oracleCard") or {}).get("name") or card_obj.get("name")
         if not name:
             continue
 
@@ -448,7 +448,7 @@ def _merge_mapping_cards(
             quantity = entry.get("quantity", 1)
             card_name = (
                 (entry.get("card") or {}).get("name")
-                or (entry.get("card") or {}).get("oracleCard", {}).get("name")
+                or ((entry.get("card") or {}).get("oracleCard") or {}).get("name")
                 or entry.get("name")
             )
             try:
