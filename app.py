@@ -59,6 +59,15 @@ if not _flask_secret:
         stacklevel=2,
     )
 app.secret_key = _flask_secret
+# Explicit session-cookie security flags (VETO-R01): SameSite=Lax mitigates CSRF on
+# /api/* (which is intentionally exempt from a required CSRF header — see docs/API.md
+# for session-cookie mobile/native clients). Secure is env-gated so local HTTP dev
+# (e.g. the :5001 test container) still works; set SESSION_COOKIE_SECURE=1 behind HTTPS.
+SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
+app.config.update(
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
+)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # How long a blocked SQLite writer waits for the write lock before giving up.
@@ -145,7 +154,7 @@ def handle_upload_too_large(_exc):
     return redirect(request.referrer or url_for("decks"))
 
 
-DEFAULT_POD_NAME = "Der Keller â€“ Die Salzmine"
+DEFAULT_POD_NAME = "Der Keller – Die Salzmine"
 DEFAULT_POD_SLUG = "der-keller-die-salzmine"
 
 ART_DIR = Path("/data/art")
@@ -637,6 +646,53 @@ def calculate_mmr_deltas(deck_mmrs: list[int], winner_index: int) -> list[int]:
         round(K_FACTOR * ((1 if i == winner_index else 0) - expected[i]))
         for i in range(len(deck_mmrs))
     ]
+
+
+def _apply_mmr_for_game(game, participant_rows, winner_player_id) -> None:
+    """Compute and persist MMR deltas for a finished game.
+
+    Given the game and its persisted `GameParticipant` rows (each carrying a
+    `player_id` and `deck_id`), this writes:
+      - `GameParticipant.mmr_delta` on every row,
+      - each played `Deck.mmr` and appended `Deck.mmr_history_json`,
+      - `Game.mmr_deltas_json`.
+
+    Deltas are only applied when at least two decks are involved and the winner
+    played a deck; otherwise every row's `mmr_delta` is set to None (unrated).
+    Mutates ORM objects on the current `db.session`; the caller commits.
+    """
+    deck_ids = [row.deck_id for row in participant_rows]
+    winner_deck_id = next(
+        (row.deck_id for row in participant_rows if row.player_id == winner_player_id),
+        None,
+    )
+    if winner_deck_id is None or len(deck_ids) < 2:
+        for row in participant_rows:
+            row.mmr_delta = None
+        return
+
+    winner_index = deck_ids.index(winner_deck_id)
+    pod_decks = [db.session.get(Deck, did) for did in deck_ids]
+    mmr_deltas = calculate_mmr_deltas([d.mmr for d in pod_decks], winner_index)
+
+    for row, delta in zip(participant_rows, mmr_deltas):
+        row.mmr_delta = delta
+
+    for deck, delta in zip(pod_decks, mmr_deltas):
+        new_mmr = max(MMR_FLOOR, deck.mmr + delta)
+        history = json.loads(deck.mmr_history_json or "[]")
+        history.append({
+            "game_id": game.id,
+            "delta": delta,
+            "mmr_after": new_mmr,
+            "date": datetime.utcnow().isoformat(),
+        })
+        deck.mmr = new_mmr
+        deck.mmr_history_json = json.dumps(history)
+
+    game.mmr_deltas_json = json.dumps(
+        [{"deck_id": did, "delta": d} for did, d in zip(deck_ids, mmr_deltas)]
+    )
 
 
 # -------------------------
@@ -1955,7 +2011,7 @@ def analyze_scryfall_card(card_json: dict) -> dict:
     return {
         "monarch": "monarch" in oracle_text,
         "initiative": "initiative" in oracle_text,
-        "citys_blessing": ("city's blessing" in oracle_text) or ("cityâ€™s blessing" in oracle_text),
+        "citys_blessing": ("city's blessing" in oracle_text) or ("city’s blessing" in oracle_text),
         "poison": "poison" in oracle_text,
         "proliferate": "proliferate" in oracle_text,
         "energy": "{e}" in oracle_text,
@@ -1965,6 +2021,23 @@ def analyze_scryfall_card(card_json: dict) -> dict:
     }
 
 
+
+
+def _commander_bracket_for_score(score: int) -> int:
+    """Map a Commander-bracket score to a bracket (1..5).
+
+    Mapping (see CLAUDE.md "Commander Bracket System"):
+    0 -> 1, 1-2 -> 2, 3-4 -> 3, 5-7 -> 4, 8+ -> 5.
+    """
+    if score >= 8:
+        return 5
+    if score >= 5:
+        return 4
+    if score >= 3:
+        return 3
+    if score >= 1:
+        return 2
+    return 1
 
 
 def compute_commander_bracket(decklist_cards: list[str]) -> dict:
@@ -1980,16 +2053,9 @@ def compute_commander_bracket(decklist_cards: list[str]) -> dict:
 
     score = (len(fast_mana_hits) * 2) + len(tutor_hits) + (len(combo_hits) * 2)
 
+    bracket = _commander_bracket_for_score(score)
     if len(combo_hits) >= 2 and len(fast_mana_hits) >= 1:
         bracket = 5
-    elif score >= 7:
-        bracket = 5
-    elif score >= 4:
-        bracket = 4
-    elif score >= 2:
-        bracket = 3
-    else:
-        bracket = 2 if unique_cards else 1
 
     return {
         "bracket": bracket,
@@ -3578,9 +3644,7 @@ def _load_android_release_manifest() -> tuple[dict | None, tuple[Response, int] 
         except (json.JSONDecodeError, OSError) as exc:
             manifest_error = exc
 
-    artifact_path = _find_manifest_android_release_artifact(manifest)
-    if artifact_path is None:
-        artifact_path = _find_latest_android_release_artifact()
+    artifact_path = _select_android_release_artifact(manifest)
     if artifact_path is None:
         if manifest_error is not None:
             return None, (jsonify({"error": f"Invalid Android release manifest: {manifest_error}"}), 500)
@@ -3619,6 +3683,38 @@ def _find_latest_android_release_artifact() -> Path | None:
         return None
     apk_paths.sort(key=lambda path: (path.stat().st_mtime, path.name), reverse=True)
     return apk_paths[0]
+
+
+def _extract_apk_version_code(artifact_path: Path) -> int | None:
+    """Parse the `+<versionCode>` suffix out of a release APK filename, if present."""
+    match = APK_VERSION_FILENAME_RE.match(artifact_path.name)
+    if not match:
+        return None
+    version_code = match.group("version_code")
+    if version_code is None:
+        return None
+    return int(version_code)
+
+
+def _select_android_release_artifact(manifest: dict | None) -> Path | None:
+    """Prefer the manifest's referenced APK, but fall back to a newer on-disk APK
+    when the manifest is stale (its version code is lower than the newest APK's)."""
+    manifest_artifact = _find_manifest_android_release_artifact(manifest)
+    latest_artifact = _find_latest_android_release_artifact()
+
+    if manifest_artifact is None:
+        return latest_artifact
+    if latest_artifact is None or latest_artifact == manifest_artifact:
+        return manifest_artifact
+
+    manifest_version = manifest.get("versionCode") if isinstance(manifest, dict) else None
+    if manifest_version is None:
+        manifest_version = _extract_apk_version_code(manifest_artifact)
+    latest_version = _extract_apk_version_code(latest_artifact)
+
+    if latest_version is not None and (manifest_version is None or latest_version > manifest_version):
+        return latest_artifact
+    return manifest_artifact
 
 
 def _build_android_release_payload(artifact_path: Path, manifest: dict | None = None) -> dict:
@@ -3949,6 +4045,7 @@ def saltmine():
         .join(GameParticipant, GameParticipant.deck_id == Deck.id)
         .join(Game, Game.id == GameParticipant.game_id)
         .filter(Deck.retired == False, Deck.planned == False)
+        .filter(Game.id.in_(game_q.with_entities(Game.id)))
         .group_by(Deck.id)
         .order_by(Deck.mmr.desc())
         .all()
@@ -4819,13 +4916,13 @@ def games():
         q = q.join(gp_deck, gp_deck.game_id == Game.id).filter(gp_deck.deck_id == deck_id)
 
     # Player count filters (HAVING)
-    if min_players or max_players:
+    if min_players is not None or max_players is not None:
         gp_count = aliased(GameParticipant)
         q = q.join(gp_count, gp_count.game_id == Game.id).group_by(Game.id)
 
-        if min_players:
+        if min_players is not None:
             q = q.having(func.count(gp_count.id) >= min_players)
-        if max_players:
+        if max_players is not None:
             q = q.having(func.count(gp_count.id) <= max_players)
 
     # Ensure no duplicates when joining for filters
@@ -4927,8 +5024,8 @@ def games():
 
     games_stats = {
         "total": len(all_game_ids),
-        "avg_turns": round(avg_turns_val, 1) if avg_turns_val else None,
-        "avg_duration": int(avg_duration_val) if avg_duration_val else None,
+        "avg_turns": round(avg_turns_val, 1) if avg_turns_val is not None else None,
+        "avg_duration": int(avg_duration_val) if avg_duration_val is not None else None,
         "win_types": win_type_sorted,
         "win_types_total": sum(win_type_counts.values()) if win_type_counts else 0,
         "color_wins": color_wins,
@@ -5069,6 +5166,10 @@ def players():
 
 @app.route("/player/<int:player_id>")
 def player_detail(player_id):
+    # NOTE (VETO-R02, resolved 2026-07-01): deliberately NOT pod-scoped. This is a
+    # lifetime/career view of the player across every pod they've played in, unlike
+    # the pod-scoped /games, /saltmine, /api/stats pages. Do not re-flag as an R14-style
+    # missing-scope bug without confirming the intended scope first.
     player = db.session.get(Player, player_id)
     if not player:
         abort(404)
@@ -5134,6 +5235,8 @@ def player_detail(player_id):
 
 @app.route("/compare")
 def compare_players():
+    # NOTE (VETO-R02, resolved 2026-07-01): deliberately NOT pod-scoped — a lifetime/
+    # career comparison across every pod, same rationale as player_detail above.
     a_id = request.args.get("a", type=int)
     b_id = request.args.get("b", type=int)
     if not a_id or not b_id or a_id == b_id:
@@ -5223,6 +5326,8 @@ def compare_players():
 @app.route("/api/compare")
 @api_login_required
 def api_compare():
+    # NOTE (VETO-R02, resolved 2026-07-01): deliberately NOT pod-scoped — a lifetime/
+    # career comparison across every pod, same rationale as player_detail above.
     a_id = request.args.get("a", type=int)
     b_id = request.args.get("b", type=int)
     if not a_id or not b_id or a_id == b_id:
@@ -5773,16 +5878,18 @@ def api_deck_upload_art(deck_id):
     try:
         if field == "commander":
             local_path = _store_custom_art_upload(upload, "commander", deck.name)
-            if local_path:
-                old_art = deck.commander_local_art_custom
-                deck.commander_local_art_custom = local_path
-                deck.custom_commander_art_url = None
+            if local_path is None:
+                return jsonify({"error": "No file provided"}), 400
+            old_art = deck.commander_local_art_custom
+            deck.commander_local_art_custom = local_path
+            deck.custom_commander_art_url = None
         elif field == "card":
             local_path = _store_custom_art_upload(upload, "card", deck.name)
-            if local_path:
-                old_art = deck.custom_card_art_local
-                deck.custom_card_art_local = local_path
-                deck.custom_card_art_url = None
+            if local_path is None:
+                return jsonify({"error": "No file provided"}), 400
+            old_art = deck.custom_card_art_local
+            deck.custom_card_art_local = local_path
+            deck.custom_card_art_url = None
         else:
             return jsonify({"error": "Invalid field (use 'commander' or 'card')"}), 400
         db.session.commit()
@@ -5839,7 +5946,15 @@ def add_deck():
         return redirect(url_for("decks"))
 
     db.session.add(deck)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        prune_custom_art_file(deck.commander_local_art_custom)
+        prune_custom_art_file(deck.custom_card_art_local)
+        app.logger.error("add_deck commit failed: %s", exc)
+        flash(f"Failed to add deck: {exc}")
+        return redirect(url_for("decks"))
 
     parsed_import = diagnostics["parsed_import"]
     commander_meta = diagnostics["commander_meta"]
@@ -6061,7 +6176,13 @@ def retag_deck(deck_id):
         return redirect(next_url)
 
     apply_deck_tags(deck, tags)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        app.logger.error("retag_deck commit failed for deck_id=%s: %s", deck_id, exc)
+        flash(f"Failed to retag deck: {exc}")
+        return redirect(next_url)
     flash(f"Retagged deck: {deck.name}")
     flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(next_url)
@@ -6749,14 +6870,14 @@ def life_counter():
 
     card_logic_catalog = {
         "statuses": [
-            {"id": "monarch", "label": "Monarch", "icon": "ðŸ‘‘", "kind": "exclusive"},
-            {"id": "initiative", "label": "Initiative", "icon": "âš”ï¸", "kind": "exclusive"},
-            {"id": "citys_blessing", "label": "City's Blessing", "icon": "ðŸ™ï¸", "kind": "toggle"},
+            {"id": "monarch", "label": "Monarch", "icon": "👑", "kind": "exclusive"},
+            {"id": "initiative", "label": "Initiative", "icon": "⚔️", "kind": "exclusive"},
+            {"id": "citys_blessing", "label": "City's Blessing", "icon": "🏙️", "kind": "toggle"},
         ],
         "counters": [
-            {"id": "energy", "label": "Energy", "icon": "âš¡", "step": 1, "min": 0},
-            {"id": "experience", "label": "Experience", "icon": "âœ¨", "step": 1, "min": 0},
-            {"id": "poison", "label": "Poison", "icon": "â˜ ï¸", "step": 1, "min": 0, "max": 10},
+            {"id": "energy", "label": "Energy", "icon": "⚡", "step": 1, "min": 0},
+            {"id": "experience", "label": "Experience", "icon": "✨", "step": 1, "min": 0},
+            {"id": "poison", "label": "Poison", "icon": "☠️", "step": 1, "min": 0, "max": 10},
         ],
         "commander_damage_threshold": 21,
     }
@@ -7005,52 +7126,26 @@ def end_game():
     db.session.add(game)
     db.session.flush()
 
-    # Pre-compute MMR deltas before creating participants
-    pod_deck_ids = [p["deck_id"] for p in participants]
-    winner_deck_id = next((p["deck_id"] for p in participants if p["player_id"] == winner_id), None)
-    if winner_deck_id is not None and len(pod_deck_ids) >= 2:
-        _winner_index = pod_deck_ids.index(winner_deck_id)
-        _pod_decks = [db.session.get(Deck, did) for did in pod_deck_ids]
-        _pod_mmrs = [d.mmr for d in _pod_decks]
-        _mmr_deltas = calculate_mmr_deltas(_pod_mmrs, _winner_index)
-    else:
-        _pod_decks = []
-        _mmr_deltas = [None] * len(participants)
-
-    for i, p in enumerate(participants):
+    participant_rows = []
+    for p in participants:
         participant_flags_json = participant_flags_by_player.get(p["player_id"])
         participant_hot_fields = participant_hot_fields_from_flags(participant_flags_json)
-        db.session.add(
-            GameParticipant(
-                game_id=game.id,
-                player_id=p["player_id"],
-                deck_id=p["deck_id"],
-                borrowed_from_player_id=p.get("borrowed_from_player_id"),
-                seat_position=p.get("seat_position"),
-                flags_json=participant_flags_json,
-                salt_count=int(participant_hot_fields["salt_count"]),
-                mana_fucked=bool(participant_hot_fields["mana_fucked"]),
-                misplayed=bool(participant_hot_fields["misplayed"]),
-                life_delta_total=int(participant_hot_fields["life_delta_total"]),
-                mmr_delta=_mmr_deltas[i],
-            )
+        row = GameParticipant(
+            game_id=game.id,
+            player_id=p["player_id"],
+            deck_id=p["deck_id"],
+            borrowed_from_player_id=p.get("borrowed_from_player_id"),
+            seat_position=p.get("seat_position"),
+            flags_json=participant_flags_json,
+            salt_count=int(participant_hot_fields["salt_count"]),
+            mana_fucked=bool(participant_hot_fields["mana_fucked"]),
+            misplayed=bool(participant_hot_fields["misplayed"]),
+            life_delta_total=int(participant_hot_fields["life_delta_total"]),
         )
+        db.session.add(row)
+        participant_rows.append(row)
 
-    if _pod_decks:
-        for deck, delta in zip(_pod_decks, _mmr_deltas):
-            new_mmr = max(MMR_FLOOR, deck.mmr + delta)
-            history = json.loads(deck.mmr_history_json or "[]")
-            history.append({
-                "game_id": game.id,
-                "delta": delta,
-                "mmr_after": new_mmr,
-                "date": datetime.utcnow().isoformat(),
-            })
-            deck.mmr = new_mmr
-            deck.mmr_history_json = json.dumps(history)
-        game.mmr_deltas_json = json.dumps(
-            [{"deck_id": did, "delta": d} for did, d in zip(pod_deck_ids, _mmr_deltas)]
-        )
+    _apply_mmr_for_game(game, participant_rows, winner_id)
 
     db.session.commit()
 
@@ -7090,7 +7185,7 @@ def api_game_state(token):
             state = {}
         return jsonify(state)
 
-    # POST â€” apply a state update
+    # POST — apply a state update
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid request body"}), 400
@@ -7415,44 +7510,18 @@ def manual_record_game():
     if seat_validation_error:
         return seat_validation_error, 400
 
-    # Pre-compute MMR deltas
-    _winner_player_id = winner_id
-    _pod_deck_ids = [p["deck_id"] for p in participants]
-    _winner_deck_id = next((p["deck_id"] for p in participants if p["player_id"] == _winner_player_id), None)
-    if _winner_deck_id is not None and len(_pod_deck_ids) >= 2:
-        _winner_index = _pod_deck_ids.index(_winner_deck_id)
-        _pod_decks = [db.session.get(Deck, did) for did in _pod_deck_ids]
-        _mmr_deltas = calculate_mmr_deltas([d.mmr for d in _pod_decks], _winner_index)
-    else:
-        _pod_decks = []
-        _mmr_deltas = [None] * len(participants)
-
-    for i, participant in enumerate(participants):
-        db.session.add(
-            GameParticipant(
-                game_id=game.id,
-                player_id=participant["player_id"],
-                deck_id=participant["deck_id"],
-                seat_position=participant["seat_position"],
-                mmr_delta=_mmr_deltas[i],
-            )
+    participant_rows = []
+    for participant in participants:
+        row = GameParticipant(
+            game_id=game.id,
+            player_id=participant["player_id"],
+            deck_id=participant["deck_id"],
+            seat_position=participant["seat_position"],
         )
+        db.session.add(row)
+        participant_rows.append(row)
 
-    if _pod_decks:
-        for deck, delta in zip(_pod_decks, _mmr_deltas):
-            new_mmr = max(MMR_FLOOR, deck.mmr + delta)
-            history = json.loads(deck.mmr_history_json or "[]")
-            history.append({
-                "game_id": game.id,
-                "delta": delta,
-                "mmr_after": new_mmr,
-                "date": datetime.utcnow().isoformat(),
-            })
-            deck.mmr = new_mmr
-            deck.mmr_history_json = json.dumps(history)
-        game.mmr_deltas_json = json.dumps(
-            [{"deck_id": did, "delta": d} for did, d in zip(_pod_deck_ids, _mmr_deltas)]
-        )
+    _apply_mmr_for_game(game, participant_rows, winner_id)
 
     db.session.commit()
     return redirect(url_for("index"))
@@ -7570,7 +7639,7 @@ def _serialize_deck_detail(deck: Deck) -> dict:
         recent_games.append({
             "game_id": game.id,
             "date": game.date.isoformat(),
-            "won": game.winner_id == deck.player_id,
+            "won": game.winner_id == gp.player_id,
             "win_type": game.win_type,
             "ending_turn": game.ending_turn,
             "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
@@ -9071,22 +9140,25 @@ def api_games_list():
         db.session.add(game)
         db.session.flush()
 
+        participant_rows = []
         for participant in parsed_payload["participants"]:
             participant_flags_json = parsed_payload["participant_flags_by_player"].get(participant["player_id"])
             hot_fields = participant_hot_fields_from_flags(participant_flags_json)
-            db.session.add(
-                GameParticipant(
-                    game_id=game.id,
-                    player_id=participant["player_id"],
-                    deck_id=participant["deck_id"],
-                    seat_position=participant["seat_position"],
-                    flags_json=participant_flags_json,
-                    salt_count=int(hot_fields["salt_count"]),
-                    mana_fucked=bool(hot_fields["mana_fucked"]),
-                    misplayed=bool(hot_fields["misplayed"]),
-                    life_delta_total=int(hot_fields["life_delta_total"]),
-                )
+            row = GameParticipant(
+                game_id=game.id,
+                player_id=participant["player_id"],
+                deck_id=participant["deck_id"],
+                seat_position=participant["seat_position"],
+                flags_json=participant_flags_json,
+                salt_count=int(hot_fields["salt_count"]),
+                mana_fucked=bool(hot_fields["mana_fucked"]),
+                misplayed=bool(hot_fields["misplayed"]),
+                life_delta_total=int(hot_fields["life_delta_total"]),
             )
+            db.session.add(row)
+            participant_rows.append(row)
+
+        _apply_mmr_for_game(game, participant_rows, parsed_payload["winner_id"])
 
         db.session.commit()
         return api_game_detail(game.id)
@@ -9273,7 +9345,14 @@ def api_decks():
             return jsonify({"error": message}), 400
 
         db.session.add(deck)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            prune_custom_art_file(deck.commander_local_art_custom)
+            prune_custom_art_file(deck.custom_card_art_local)
+            app.logger.error("api_decks POST commit failed: %s", exc)
+            return jsonify({"error": f"Failed to create deck: {exc}"}), 500
 
         response_payload = _serialize_deck_summary(deck)
         if diagnostics["tag_diagnostics"].get("unresolved_count", 0) > 0:
@@ -9314,7 +9393,12 @@ def api_deck_detail(deck_id):
             return jsonify({"error": "Cannot delete a deck that has been used in recorded games."}), 409
         orphaned_art = [deck.commander_local_art_custom, deck.custom_card_art_local]
         db.session.delete(deck)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error("api_deck_detail DELETE commit failed for deck_id=%s: %s", deck_id, exc)
+            return jsonify({"error": f"Failed to delete deck: {exc}"}), 500
         for stale in orphaned_art:
             prune_custom_art_file(stale)
         return jsonify({"ok": True}), 200
@@ -9396,6 +9480,7 @@ def api_deck_detail(deck_id):
 
         # Custom art URLs (deck editor sends these when changed)
         orphaned_art: list[str | None] = []
+        newly_created_art: list[str | None] = []
         if "custom_commander_art_url" in payload:
             old_local = deck.commander_local_art_custom
             url_val = (payload.get("custom_commander_art_url") or "").strip()
@@ -9412,6 +9497,7 @@ def api_deck_detail(deck_id):
                 deck.commander_local_art_custom = None
             if deck.commander_local_art_custom != old_local:
                 orphaned_art.append(old_local)
+                newly_created_art.append(deck.commander_local_art_custom)
 
         if "custom_card_art_url" in payload:
             old_local = deck.custom_card_art_local
@@ -9429,8 +9515,16 @@ def api_deck_detail(deck_id):
                 deck.custom_card_art_local = None
             if deck.custom_card_art_local != old_local:
                 orphaned_art.append(old_local)
+                newly_created_art.append(deck.custom_card_art_local)
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            for stale in newly_created_art:
+                prune_custom_art_file(stale)
+            app.logger.error("api_deck_detail PATCH/PUT commit failed for deck_id=%s: %s", deck_id, exc)
+            return jsonify({"error": f"Failed to update deck: {exc}"}), 500
         for stale in orphaned_art:
             prune_custom_art_file(stale)
         response_payload = _serialize_deck_detail(deck)

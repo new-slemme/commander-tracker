@@ -5,3 +5,4 @@ Flask-Limiter
 alembic
 Werkzeug
 requests
+gunicorn
