@@ -6274,27 +6274,6 @@ def remove_deck_decklist(deck_id):
     return redirect(url_for("deck_detail", deck_id=deck_id))
 
 
-@app.route("/add_game")
-def add_game():
-    players = Player.query.all()
-    decks_by_player = {}
-    for p in players:
-        active_decks = (
-            Deck.query.filter_by(player_id=p.id, retired=False, planned=False).order_by(Deck.name.asc()).all()
-        )
-        decks_by_player[str(p.id)] = [
-            {
-                "id": d.id,
-                "name": d.name,
-                "art": d.commander_art_url,
-                "art_scale": d.commander_art_scale,
-            }
-            for d in active_decks
-        ]
-    decks_json = json.dumps(decks_by_player)
-    return render_template("add_game.html", players=players, decks_json=decks_json)
-
-
 @app.route("/play_game")
 def play_game():
     players = Player.query.all()
@@ -7301,8 +7280,11 @@ def manual_record_game():
         p_id = request.form.get(f"player{i}")
         d_id = request.form.get(f"deck{i}")
         if p_id and d_id:
-            p_id = int(p_id)
-            d_id = int(d_id)
+            try:
+                p_id = int(p_id)
+                d_id = int(d_id)
+            except (KeyError, TypeError, ValueError):
+                return "Invalid player or deck id", 400
 
             if p_id in seen:
                 return "Duplicate players not allowed", 400
@@ -7316,14 +7298,18 @@ def manual_record_game():
 
     if len(participants) < 2:
         return "Need at least 2 players", 400
-    if int(winner_id) not in seen:
+    try:
+        winner_id = int(winner_id)
+    except (KeyError, TypeError, ValueError):
+        return "Invalid winner id", 400
+    if winner_id not in seen:
         return "Winner must be a participant", 400
 
     active_pod = get_active_pod()
     if not active_pod:
         return "No active pod available", 400
 
-    game = Game(winner_id=int(winner_id), pod_id=active_pod.id)
+    game = Game(winner_id=winner_id, pod_id=active_pod.id)
     db.session.add(game)
     db.session.flush()
 
@@ -7332,7 +7318,7 @@ def manual_record_game():
         return seat_validation_error, 400
 
     # Pre-compute MMR deltas
-    _winner_player_id = int(winner_id)
+    _winner_player_id = winner_id
     _pod_deck_ids = [p["deck_id"] for p in participants]
     _winner_deck_id = next((p["deck_id"] for p in participants if p["player_id"] == _winner_player_id), None)
     if _winner_deck_id is not None and len(_pod_deck_ids) >= 2:
@@ -7387,8 +7373,11 @@ def record_game():
         p_id = request.form.get(f"player{i}")
         d_id = request.form.get(f"deck{i}")
         if p_id and d_id:
-            p_id = int(p_id)
-            d_id = int(d_id)
+            try:
+                p_id = int(p_id)
+                d_id = int(d_id)
+            except (KeyError, TypeError, ValueError):
+                return "Invalid player or deck id", 400
 
             if p_id in seen:
                 return "Duplicate players not allowed", 400
@@ -7402,14 +7391,18 @@ def record_game():
 
     if len(participants) < 2:
         return "Need at least 2 players", 400
-    if int(winner_id) not in seen:
+    try:
+        winner_id = int(winner_id)
+    except (KeyError, TypeError, ValueError):
+        return "Invalid winner id", 400
+    if winner_id not in seen:
         return "Winner must be a participant", 400
 
     active_pod = get_active_pod()
     if not active_pod:
         return "No active pod available", 400
 
-    game = Game(winner_id=int(winner_id), pod_id=active_pod.id)
+    game = Game(winner_id=winner_id, pod_id=active_pod.id)
     db.session.add(game)
     db.session.flush()
 
