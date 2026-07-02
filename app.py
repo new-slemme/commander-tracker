@@ -24,6 +24,7 @@ import re
 import random
 import requests
 import secrets
+import sqlite3
 import threading
 import time
 import warnings
@@ -31,7 +32,9 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, text, case
+from sqlalchemy import func, text, case, event
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import aliased
 from functools import wraps
 from types import SimpleNamespace
@@ -58,9 +61,70 @@ if not _flask_secret:
 app.secret_key = _flask_secret
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# How long a blocked SQLite writer waits for the write lock before giving up.
+# Used both as the pysqlite connect timeout and the PRAGMA busy_timeout so the
+# game-state read-modify-write (ADR-014) serialises via the write lock instead
+# of racing. Kept generous — contention windows here are milliseconds.
+SQLITE_BUSY_TIMEOUT_SECONDS = 15
+SQLITE_BUSY_TIMEOUT_MS = SQLITE_BUSY_TIMEOUT_SECONDS * 1000
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "connect_args": {"timeout": SQLITE_BUSY_TIMEOUT_SECONDS}
+}
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB — enough for animated GIF commander art
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 db = SQLAlchemy(app)
+
+
+@event.listens_for(Engine, "connect")
+def _sqlite_connect_pragmas(dbapi_connection, _connection_record):
+    """Configure every SQLite connection: WAL for reader/writer concurrency, a
+    busy timeout so a blocked writer waits for the lock instead of erroring
+    instantly, and NORMAL synchronous (safe under WAL). Registered on the Engine
+    class so it fires for both the ORM engine and the dedicated game-state
+    read-modify-write engine, regardless of app/db init order (ADR-014).
+
+    Transaction control (isolation_level) is intentionally left at the driver
+    default here so the ORM session keeps its ordinary deferred-BEGIN behaviour;
+    only the isolated RMW engine below switches to explicit transactions."""
+    if not isinstance(dbapi_connection, sqlite3.Connection):
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+    finally:
+        cursor.close()
+
+
+# Dedicated engine for the live game-state read-modify-write (ADR-014). It runs
+# in AUTOCOMMIT so the api_game_state POST handler can issue an explicit
+# BEGIN IMMEDIATE — taking the SQLite write lock up front — and serialise
+# concurrent updates via that lock. Because it is a *separate* connection pool
+# to the same database file, this locking works across gunicorn -w 4 worker
+# processes (an in-process threading.Lock would not) and, crucially, leaves the
+# main ORM session's transaction handling completely untouched. Built lazily
+# from the ORM engine's resolved URL so it always targets the same database.
+_rmw_engine = None
+_rmw_engine_init_lock = threading.Lock()
+
+
+def get_game_state_rmw_engine():
+    """Return the shared AUTOCOMMIT engine used for the atomic game-state RMW,
+    constructing it once on first use. The lock guards one-time construction
+    only; request serialisation is done by the SQLite write lock, not here."""
+    global _rmw_engine
+    if _rmw_engine is None:
+        with _rmw_engine_init_lock:
+            if _rmw_engine is None:
+                from sqlalchemy import create_engine
+
+                _rmw_engine = create_engine(
+                    db.engine.url,
+                    isolation_level="AUTOCOMMIT",
+                    connect_args={"timeout": SQLITE_BUSY_TIMEOUT_SECONDS},
+                )
+    return _rmw_engine
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -7054,125 +7118,159 @@ def api_game_state(token):
         if claimed_pid is None or int(claimed_pid) != player_id:
             return jsonify({"error": "Unauthorized"}), 403
 
+    # --- Atomic read-modify-write under the SQLite write lock (ADR-014) ---
+    # Serialise the whole read-modify-write behind SQLite's write lock so
+    # concurrent POSTs from multiple devices cannot clobber each other. A
+    # dedicated AUTOCOMMIT engine (a separate connection pool to the same file)
+    # lets us hold BEGIN IMMEDIATE from the authoritative re-read through the
+    # write + commit; the lock spans gunicorn -w 4 worker processes (an
+    # in-process threading.Lock would not) and leaves the ORM session untouched.
+    # The per-key merge below is byte-for-byte the previous logic — only its
+    # atomicity was broken. Any exit from the `with` block (return or exception)
+    # closes the connection and rolls back an uncommitted BEGIN IMMEDIATE,
+    # releasing the lock; only the explicit COMMIT persists a change.
     try:
-        state = json.loads(active_game_rec.state_json)
-    except (json.JSONDecodeError, Exception):
-        state = {}
-
-    if "life" not in state:
-        state["life"] = {}
-    if "flags" not in state:
-        state["flags"] = {}
-    if "card_state" not in state:
-        state["card_state"] = {}
-    if "version" not in state:
-        state["version"] = 0
-
-    pid = str(player_id)
-
-    # Life: prefer absolute value from host, delta from phone
-    life_abs = data.get("life")
-    if life_abs is not None:
-        try:
-            life_abs = int(life_abs)
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid life value"}), 400
-        state["life"][pid] = life_abs
-
-    life_delta = data.get("life_delta")
-    if life_delta is not None and life_abs is None:
-        try:
-            life_delta = int(life_delta)
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid life_delta"}), 400
-        if life_delta < -1000 or life_delta > 1000:
-            return jsonify({"error": "life_delta out of range"}), 400
-        current_life = int(state["life"].get(pid, 40))
-        state["life"][pid] = max(0, current_life + life_delta)
-
-    # Flags
-    flags_update = data.get("flags")
-    if flags_update is not None and isinstance(flags_update, dict):
-        if pid not in state["flags"]:
-            state["flags"][pid] = {}
-        for k, v in flags_update.items():
-            if k in {"mana_fucked", "misplayed"} and isinstance(v, bool):
-                state["flags"][pid][k] = v
-            elif k == "salt_count" and isinstance(v, int) and not isinstance(v, bool) and v >= 0:
-                state["flags"][pid][k] = v
-
-    # Card state (scoped to requested player id for non-host via authorization above)
-    card_state_update = data.get("card_state")
-    if card_state_update is not None:
-        sanitized_card_state = sanitize_card_state_payload(card_state_update, valid_player_ids)
-        if sanitized_card_state:
-            existing_player_card_state = state["card_state"].get(pid)
-            if not isinstance(existing_player_card_state, dict):
-                existing_player_card_state = {}
-
-            merged_player_card_state = {
-                "counters": dict(existing_player_card_state.get("counters", {}))
-                if isinstance(existing_player_card_state.get("counters"), dict)
-                else {},
-                "commander_damage": dict(existing_player_card_state.get("commander_damage", {}))
-                if isinstance(existing_player_card_state.get("commander_damage"), dict)
-                else {},
-                "statuses": dict(existing_player_card_state.get("statuses", {}))
-                if isinstance(existing_player_card_state.get("statuses"), dict)
-                else {},
-            }
-
-            for section in ("counters", "commander_damage", "statuses"):
-                section_update = sanitized_card_state.get(section)
-                if isinstance(section_update, dict) and section_update:
-                    merged_player_card_state[section].update(section_update)
-
-            state["card_state"][pid] = merged_player_card_state
-
-    # Host-only: update active_player_id and turn number
-    if is_host:
-        active_player_raw = data.get("active_player_id")
-        if active_player_raw is not None:
+        with get_game_state_rmw_engine().connect() as connection:
+            connection.exec_driver_sql("BEGIN IMMEDIATE")  # take the write lock
+            row = connection.exec_driver_sql(
+                "SELECT state_json FROM active_game WHERE token = ?", (token,)
+            ).fetchone()
+            if row is None:
+                return jsonify({"error": "Game not found"}), 404
             try:
-                apid = int(active_player_raw)
-            except (TypeError, ValueError):
-                apid = None
-            if apid in valid_player_ids:
-                state["active_player_id"] = apid
-        turn_raw = data.get("turn")
-        if turn_raw is not None:
-            try:
-                t = int(turn_raw)
-                if 1 <= t <= 500:
-                    state["turn"] = t
-            except (TypeError, ValueError):
-                pass
+                state = json.loads(row[0])
+            except (json.JSONDecodeError, Exception):
+                state = {}
 
-    # pass_turn: advance the active player to the next in seat order
-    if data.get("pass_turn"):
-        pid_list = [p["player_id"] for p in participants]
-        if len(pid_list) > 1:
-            if "passed" not in state or not isinstance(state["passed"], list):
-                state["passed"] = []
-            if player_id not in state["passed"]:
-                state["passed"].append(player_id)
-            current_active = state.get("active_player_id")
-            # Advance to next player
-            if current_active in pid_list:
-                current_idx = pid_list.index(current_active)
-            else:
-                current_idx = 0
-            next_idx = (current_idx + 1) % len(pid_list)
-            state["active_player_id"] = pid_list[next_idx]
-            # Increment turn counter when all players have passed
-            if len(set(state["passed"])) >= len(pid_list):
-                state["turn"] = int(state.get("turn", 1)) + 1
-                state["passed"] = []
+            if "life" not in state:
+                state["life"] = {}
+            if "flags" not in state:
+                state["flags"] = {}
+            if "card_state" not in state:
+                state["card_state"] = {}
+            if "version" not in state:
+                state["version"] = 0
 
-    state["version"] = int(state.get("version", 0)) + 1
-    active_game_rec.state_json = json.dumps(state)
-    active_game_rec.updated_at = datetime.utcnow()
-    db.session.commit()
+            pid = str(player_id)
+
+            # Life: prefer absolute value from host, delta from phone
+            life_abs = data.get("life")
+            if life_abs is not None:
+                try:
+                    life_abs = int(life_abs)
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid life value"}), 400
+                state["life"][pid] = life_abs
+
+            life_delta = data.get("life_delta")
+            if life_delta is not None and life_abs is None:
+                try:
+                    life_delta = int(life_delta)
+                except (TypeError, ValueError):
+                    return jsonify({"error": "Invalid life_delta"}), 400
+                if life_delta < -1000 or life_delta > 1000:
+                    return jsonify({"error": "life_delta out of range"}), 400
+                current_life = int(state["life"].get(pid, 40))
+                state["life"][pid] = max(0, current_life + life_delta)
+
+            # Flags
+            flags_update = data.get("flags")
+            if flags_update is not None and isinstance(flags_update, dict):
+                if pid not in state["flags"]:
+                    state["flags"][pid] = {}
+                for k, v in flags_update.items():
+                    if k in {"mana_fucked", "misplayed"} and isinstance(v, bool):
+                        state["flags"][pid][k] = v
+                    elif k == "salt_count" and isinstance(v, int) and not isinstance(v, bool) and v >= 0:
+                        state["flags"][pid][k] = v
+
+            # Card state (scoped to requested player id for non-host via authorization above)
+            card_state_update = data.get("card_state")
+            if card_state_update is not None:
+                sanitized_card_state = sanitize_card_state_payload(card_state_update, valid_player_ids)
+                if sanitized_card_state:
+                    existing_player_card_state = state["card_state"].get(pid)
+                    if not isinstance(existing_player_card_state, dict):
+                        existing_player_card_state = {}
+
+                    merged_player_card_state = {
+                        "counters": dict(existing_player_card_state.get("counters", {}))
+                        if isinstance(existing_player_card_state.get("counters"), dict)
+                        else {},
+                        "commander_damage": dict(existing_player_card_state.get("commander_damage", {}))
+                        if isinstance(existing_player_card_state.get("commander_damage"), dict)
+                        else {},
+                        "statuses": dict(existing_player_card_state.get("statuses", {}))
+                        if isinstance(existing_player_card_state.get("statuses"), dict)
+                        else {},
+                    }
+
+                    for section in ("counters", "commander_damage", "statuses"):
+                        section_update = sanitized_card_state.get(section)
+                        if isinstance(section_update, dict) and section_update:
+                            merged_player_card_state[section].update(section_update)
+
+                    state["card_state"][pid] = merged_player_card_state
+
+            # Host-only: update active_player_id and turn number
+            if is_host:
+                active_player_raw = data.get("active_player_id")
+                if active_player_raw is not None:
+                    try:
+                        apid = int(active_player_raw)
+                    except (TypeError, ValueError):
+                        apid = None
+                    if apid in valid_player_ids:
+                        state["active_player_id"] = apid
+                turn_raw = data.get("turn")
+                if turn_raw is not None:
+                    try:
+                        t = int(turn_raw)
+                        if 1 <= t <= 500:
+                            state["turn"] = t
+                    except (TypeError, ValueError):
+                        pass
+
+            # pass_turn: advance the active player to the next in seat order
+            if data.get("pass_turn"):
+                pid_list = [p["player_id"] for p in participants]
+                if len(pid_list) > 1:
+                    if "passed" not in state or not isinstance(state["passed"], list):
+                        state["passed"] = []
+                    if player_id not in state["passed"]:
+                        state["passed"].append(player_id)
+                    current_active = state.get("active_player_id")
+                    # Advance to next player
+                    if current_active in pid_list:
+                        current_idx = pid_list.index(current_active)
+                    else:
+                        current_idx = 0
+                    next_idx = (current_idx + 1) % len(pid_list)
+                    state["active_player_id"] = pid_list[next_idx]
+                    # Increment turn counter when all players have passed
+                    if len(set(state["passed"])) >= len(pid_list):
+                        state["turn"] = int(state.get("turn", 1)) + 1
+                        state["passed"] = []
+
+            state["version"] = int(state.get("version", 0)) + 1
+            connection.exec_driver_sql(
+                "UPDATE active_game SET state_json = ?, updated_at = ? WHERE token = ?",
+                (
+                    json.dumps(state),
+                    # Match SQLAlchemy's SQLite DateTime storage format so the
+                    # ORM reads updated_at back correctly on other routes.
+                    datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"),
+                    token,
+                ),
+            )
+            connection.exec_driver_sql("COMMIT")
+    except OperationalError as exc:
+        app.logger.warning(
+            "api_game_state: write-lock contention for token %s (%s); returning 503",
+            token,
+            exc,
+        )
+        return jsonify({"error": "State is busy, please retry"}), 503
 
     return jsonify(state)
 
