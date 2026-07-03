@@ -25,6 +25,8 @@ import random
 import requests
 import secrets
 import sqlite3
+import sys
+import tempfile
 import threading
 import time
 import warnings
@@ -68,7 +70,33 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
 )
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
+PROD_DB_PATH = "/data/commander.db"
+
+
+def _resolve_database_uri() -> str:
+    """Pick the DB URI. Explicit COMMANDER_DB_URI always wins. Otherwise, if we
+    are clearly running under a test runner, bind to an isolated temp file so the
+    suite can NEVER touch production (a test setUp calling db.drop_all() against
+    the real DB is exactly how the production database once got wiped). Only real
+    runtime falls through to the production path."""
+    explicit = os.getenv("COMMANDER_DB_URI")
+    if explicit:
+        return explicit
+    under_test = (
+        "pytest" in sys.modules
+        or bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or "unittest" in (sys.argv[0] if sys.argv else "")
+        or "unittest.__main__" in sys.modules
+    )
+    if under_test:
+        # Per-process name so concurrent runs (unittest discover skips
+        # tests/__init__.py) never share one SQLite file. See tests/__init__.py.
+        tmp = os.path.join(tempfile.gettempdir(), f"commander_test_suite_{os.getpid()}.db")
+        return f"sqlite:///{tmp}"
+    return f"sqlite:///{PROD_DB_PATH}"
+
+
+app.config["SQLALCHEMY_DATABASE_URI"] = _resolve_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # How long a blocked SQLite writer waits for the write lock before giving up.
 # Used both as the pysqlite connect timeout and the PRAGMA busy_timeout so the
@@ -82,6 +110,31 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB — enough for animated GIF commander art
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 db = SQLAlchemy(app)
+
+
+# Fail-closed safety net: refuse to drop all tables against the production
+# database, no matter who calls it or how the test runner was invoked. The
+# production app never calls drop_all(); only tests do — and a test that binds
+# to the real DB by mistake must ERROR loudly, never silently wipe it. Override
+# only with an explicit COMMANDER_ALLOW_DESTRUCTIVE=1 for intentional resets.
+_unguarded_drop_all = db.drop_all
+
+
+def _guarded_drop_all(*args, **kwargs):
+    try:
+        url = str(db.engine.url)
+    except Exception:
+        url = ""
+    if PROD_DB_PATH in url and os.getenv("COMMANDER_ALLOW_DESTRUCTIVE") != "1":
+        raise RuntimeError(
+            f"Refusing db.drop_all() against the production database ({url}). "
+            "This is the guard that stops the test suite from wiping prod. "
+            "Set COMMANDER_ALLOW_DESTRUCTIVE=1 only for an intentional reset."
+        )
+    return _unguarded_drop_all(*args, **kwargs)
+
+
+db.drop_all = _guarded_drop_all
 
 
 @event.listens_for(Engine, "connect")
@@ -730,6 +783,12 @@ class Player(db.Model):
     # Nullable to allow guest/manual players
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=True)
 
+    # Pre-wipe games that exist only as aggregate tallies (recovered from the
+    # Android cache after the April backup); added to recorded stats so the
+    # leaderboard reflects true all-time totals. Attributed to the default pod.
+    historical_wins = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    historical_games = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+
     decks = db.relationship("Deck", backref="owner", lazy=True)
 
 
@@ -761,6 +820,12 @@ class Deck(db.Model):
     tags_computed_at = db.Column(db.DateTime, nullable=True)
     mmr = db.Column(db.Integer, nullable=False, default=STARTING_MMR)
     mmr_history_json = db.Column(db.Text, nullable=False, default="[]")
+
+    # Pre-wipe games that exist only as aggregate tallies (recovered from the
+    # Android cache after the April backup); added to recorded stats so deck
+    # winrates reflect true all-time totals. See Player.historical_* above.
+    historical_wins = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+    historical_games = db.Column(db.Integer, nullable=False, default=0, server_default="0")
 
     @property
     def commander_art_url(self):
@@ -972,9 +1037,87 @@ def bootstrap_test_user():
 
 
 # -------------------------
+# Startup safety backup
+# -------------------------
+STARTUP_BACKUP_KEEP = 48  # rotated timestamped snapshots to retain
+# gunicorn imports the module once per worker (-w 4, no --preload), so several
+# workers would each snapshot on startup. Skip if one was taken very recently —
+# dedupes the worker fan-out without a cross-process lock.
+STARTUP_BACKUP_MIN_INTERVAL_SECONDS = 120
+
+
+def backup_database_on_startup():
+    """Take a WAL-safe, consistent snapshot of the live SQLite DB before the app
+    does anything to it (migrations, etc.). Rotated timestamped copies land in
+    <data>/backups/. Never raises — a backup failure is logged loudly but must
+    not block startup. Skipped for in-memory/test DBs and brand-new/empty installs."""
+    if os.getenv("COMMANDER_SKIP_STARTUP_BACKUP") == "1":
+        return
+    uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if not uri.startswith("sqlite:///") or ":memory:" in uri:
+        return
+    # sqlite:///relative.db -> relative.db ; sqlite:////abs/path.db -> /abs/path.db
+    db_path = uri[len("sqlite:///"):]
+    if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+        return
+    try:
+        src = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            # Skip a fresh/empty install — only snapshot DBs that hold real data.
+            has_data = False
+            for tbl in ("deck", "game", "user"):
+                try:
+                    if src.execute(f"SELECT 1 FROM {tbl} LIMIT 1").fetchone():
+                        has_data = True
+                        break
+                except sqlite3.Error:
+                    continue
+            if not has_data:
+                return
+            backups_dir = os.path.join(os.path.dirname(db_path) or ".", "backups")
+            os.makedirs(backups_dir, exist_ok=True)
+            existing = [
+                os.path.join(backups_dir, f) for f in os.listdir(backups_dir)
+                if f.startswith("commander-") and f.endswith(".db")
+            ]
+            newest_age = min(
+                (time.time() - os.path.getmtime(p) for p in existing), default=None
+            )
+            if newest_age is not None and newest_age < STARTUP_BACKUP_MIN_INTERVAL_SECONDS:
+                # Another worker (or a very recent restart) already snapshotted.
+                return
+            stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%SZ")
+            dest = os.path.join(backups_dir, f"commander-{stamp}.db")
+            dst = sqlite3.connect(dest)
+            try:
+                src.backup(dst)  # online backup API — consistent across WAL
+            finally:
+                dst.close()
+            # Rotate: keep the newest STARTUP_BACKUP_KEEP snapshots.
+            snaps = sorted(
+                (os.path.join(backups_dir, f) for f in os.listdir(backups_dir)
+                 if f.startswith("commander-") and f.endswith(".db")),
+                key=os.path.getmtime,
+                reverse=True,
+            )
+            for stale in snaps[STARTUP_BACKUP_KEEP:]:
+                try:
+                    os.remove(stale)
+                except OSError:
+                    pass
+            app.logger.info("startup DB backup written: %s", dest)
+        finally:
+            src.close()
+    except Exception as exc:  # never block startup on a backup failure
+        app.logger.error("startup DB backup FAILED (continuing): %s", exc)
+
+
+# -------------------------
 # App bootstrap
 # -------------------------
 with app.app_context():
+    backup_database_on_startup()
+
     def run_schema_migrations():
         existing_tables = {
             row[0]
@@ -1583,6 +1726,33 @@ with app.app_context():
                 )
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('024_gameparticipant_mmr_delta')")
+            )
+
+        if "025_historical_stats" not in applied:
+            player_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(player)")).fetchall()
+            }
+            if "historical_wins" not in player_cols:
+                db.session.execute(
+                    text("ALTER TABLE player ADD COLUMN historical_wins INTEGER NOT NULL DEFAULT 0")
+                )
+            if "historical_games" not in player_cols:
+                db.session.execute(
+                    text("ALTER TABLE player ADD COLUMN historical_games INTEGER NOT NULL DEFAULT 0")
+                )
+            deck_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()
+            }
+            if "historical_wins" not in deck_cols:
+                db.session.execute(
+                    text("ALTER TABLE deck ADD COLUMN historical_wins INTEGER NOT NULL DEFAULT 0")
+                )
+            if "historical_games" not in deck_cols:
+                db.session.execute(
+                    text("ALTER TABLE deck ADD COLUMN historical_games INTEGER NOT NULL DEFAULT 0")
+                )
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('025_historical_stats')")
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -3308,6 +3478,48 @@ def game_query_for_scope():
 
 
 # -------------------------
+# Historical (pre-wipe) stat baseline
+# -------------------------
+# A block of games played before the April backup survives only as aggregate
+# tallies recovered from the Android cache (Player/Deck.historical_*). These
+# helpers fold that baseline into recorded stats so winrates reflect true
+# all-time totals. The baseline is attributed to the default pod, so pod-scoped
+# views only include it for the default pod or the unscoped ("all") view.
+def scope_includes_history(scope: str, active_pod, *, date_filtered: bool = False) -> bool:
+    # The recovered baseline has no per-game dates, so any date-range filter
+    # excludes it (it can't be attributed to a window).
+    if date_filtered:
+        return False
+    if scope == "all":
+        return True
+    # No active pod means the game query is effectively unscoped (all pods),
+    # which includes the default pod the baseline belongs to.
+    if active_pod is None:
+        return True
+    return active_pod.slug == DEFAULT_POD_SLUG
+
+
+def player_totals_with_history(player: Player, wins: int, played: int, *, include: bool = True):
+    if not include:
+        return wins, played
+    return wins + (player.historical_wins or 0), played + (player.historical_games or 0)
+
+
+def deck_totals_with_history(deck: Deck, wins: int, uses: int, *, include: bool = True):
+    if not include:
+        return wins, uses
+    return wins + (deck.historical_wins or 0), uses + (deck.historical_games or 0)
+
+
+def player_has_history(player: Player) -> bool:
+    return bool((player.historical_wins or 0) or (player.historical_games or 0))
+
+
+def deck_has_history(deck: Deck) -> bool:
+    return bool((deck.historical_wins or 0) or (deck.historical_games or 0))
+
+
+# -------------------------
 # Login Required
 # -------------------------
 def get_csrf_token() -> str:
@@ -3869,6 +4081,7 @@ def admin_approve_user(user_id):
 @login_required
 def saltmine():
     game_q, scope, active_pod = game_query_for_scope()
+    history_ok = scope_includes_history(scope, active_pod)
 
     scoped_games = game_q.all()
     scoped_game_ids = [g.id for g in scoped_games]
@@ -4054,6 +4267,7 @@ def saltmine():
     for deck, player, games_played, wins in mmr_leaderboard_rows:
         games_played = int(games_played or 0)
         wins = int(wins or 0)
+        wins, games_played = deck_totals_with_history(deck, wins, games_played, include=history_ok)
         winrate = round((wins / games_played) * 100, 1) if games_played else 0.0
         mmr_leaderboard.append({
             "deck": deck,
@@ -4217,6 +4431,7 @@ def index():
     game_ids_subquery = game_q.with_entities(Game.id)
     current_user = get_current_user()
     available_pods = get_accessible_pods(current_user)
+    history_ok = scope_includes_history(scope, active_pod)
 
     # Player stats — aggregate queries instead of per-player counts
     players = Player.query.all()
@@ -4243,6 +4458,7 @@ def index():
     for p in players:
         wins = wins_by_player.get(p.id, 0)
         played = played_by_player.get(p.id, 0)
+        wins, played = player_totals_with_history(p, wins, played, include=history_ok)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         raw_avg = avg_mmr_by_player.get(p.id)
         avg_mmr = round(raw_avg) if raw_avg is not None else None
@@ -4293,6 +4509,7 @@ def index():
     for d in decks:
         wins = wins_by_deck.get(d.id, 0)
         uses = uses_by_deck.get(d.id, 0)
+        wins, uses = deck_totals_with_history(d, wins, uses, include=history_ok)
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({"deck": d, "wins": wins, "uses": uses, "winrate": winrate, "mmr": d.mmr})
 
@@ -4723,7 +4940,7 @@ def delete_deck(deck_id):
         return redirect(url_for("decks"))
 
     used = GameParticipant.query.filter_by(deck_id=deck_id).count()
-    if used > 0:
+    if used > 0 or deck_has_history(deck):
         flash("Can't delete this deck: it has been used in recorded games.")
         return redirect(url_for("deck_detail", deck_id=deck_id))
 
@@ -4834,10 +5051,16 @@ def delete_player(player_id):
         flash("Can't delete this player: they appear in recorded games.")
         return redirect(url_for("players"))
 
+    # Recovered pre-wipe history has no game rows to trip the checks above, so
+    # guard it explicitly — deleting would silently drop that recovered slice.
+    if player_has_history(player):
+        flash("Can't delete this player: they carry recovered pre-wipe stats.")
+        return redirect(url_for("players"))
+
     # If player has decks, only delete if those decks aren't used in games
     for d in player.decks:
         used = GameParticipant.query.filter_by(deck_id=d.id).count()
-        if used > 0:
+        if used > 0 or deck_has_history(d):
             flash(f"Can't delete {player.name}: deck '{d.name}' has recorded games.")
             return redirect(url_for("players"))
 
@@ -5116,7 +5339,8 @@ def players():
         won = Game.query.filter_by(winner_id=p.id).count()
 
         deck_count = Deck.query.filter_by(player_id=p.id).count()
-        winrate = round((won / played) * 100, 1) if played else 0.0
+        disp_won, disp_played = player_totals_with_history(p, won, played)
+        winrate = round((disp_won / disp_played) * 100, 1) if disp_played else 0.0
         joined_on = p.user.created_at if p.user else None
 
         raw_avg = avg_mmr_by_player.get(p.id)
@@ -5136,8 +5360,8 @@ def players():
             "winrate": winrate,
             "deck_count": deck_count,
             "joined_on": joined_on,
-            "won": won,
-            "played": played,
+            "won": disp_won,
+            "played": disp_played,
             "avg_mmr": avg_mmr,
             "card_art": card_art,
         }
@@ -5154,7 +5378,10 @@ def players():
         # - not linked to a user
         # - not in any game (played or won)
         # - none of their decks are used
-        player_can_delete[p.id] = (p.user_id is None and played == 0 and won == 0 and not deck_used)
+        player_can_delete[p.id] = (
+            p.user_id is None and played == 0 and won == 0 and not deck_used
+            and not player_has_history(p)
+        )
 
     return render_template(
         "players.html",
@@ -5179,6 +5406,7 @@ def player_detail(player_id):
     games_played = GameParticipant.query.filter_by(player_id=player.id).count()
     games_won = Game.query.filter_by(winner_id=player.id).count()
     games_started = Game.query.filter_by(starting_player_id=player.id).count()
+    games_won, games_played = player_totals_with_history(player, games_won, games_played)
     winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
 
     deck_stats = {}
@@ -5189,6 +5417,7 @@ def player_detail(player_id):
             .count()
         )
         deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_wins, deck_games = deck_totals_with_history(d, deck_wins, deck_games)
         deck_losses = max(0, deck_games - deck_wins)
         deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
 
@@ -5252,6 +5481,7 @@ def compare_players():
         played = GameParticipant.query.filter_by(player_id=p.id).count()
         won = Game.query.filter_by(winner_id=p.id).count()
         deck_count = Deck.query.filter_by(player_id=p.id).count()
+        won, played = player_totals_with_history(p, won, played)
         winrate = round((won / played) * 100, 1) if played else 0.0
         return {"played": played, "won": won, "deck_count": deck_count, "winrate": winrate}
 
@@ -5342,6 +5572,7 @@ def api_compare():
         played = GameParticipant.query.filter_by(player_id=p.id).count()
         won = Game.query.filter_by(winner_id=p.id).count()
         deck_count = Deck.query.filter_by(player_id=p.id).count()
+        won, played = player_totals_with_history(p, won, played)
         winrate = round((won / played) * 100, 1) if played else 0.0
         return {"played": played, "won": won, "deck_count": deck_count, "winrate": winrate}
 
@@ -5422,6 +5653,7 @@ def player_export(player_id):
     games_played = GameParticipant.query.filter_by(player_id=player.id).count()
     games_won = Game.query.filter_by(winner_id=player.id).count()
     games_started = Game.query.filter_by(starting_player_id=player.id).count()
+    games_won, games_played = player_totals_with_history(player, games_won, games_played)
     winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
 
     decks_data = []
@@ -5432,6 +5664,7 @@ def player_export(player_id):
             .count()
         )
         deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_wins, deck_games = deck_totals_with_history(d, deck_wins, deck_games)
         deck_losses = max(0, deck_games - deck_wins)
         deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
         tags = {}
@@ -5572,6 +5805,7 @@ def decks():
             .count()
         )
         uses = GameParticipant.query.filter_by(deck_id=d.id).count()
+        wins, uses = deck_totals_with_history(d, wins, uses)
         losses = max(0, uses - wins)
         winrate = round((wins / uses) * 100, 1) if uses else 0.0
         stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate, "mmr": d.mmr}
@@ -5580,7 +5814,7 @@ def decks():
     deck_tags_stale = {}
     for d in decks_list:
         used = GameParticipant.query.filter_by(deck_id=d.id).count()
-        deck_can_delete[d.id] = (used == 0)
+        deck_can_delete[d.id] = (used == 0 and not deck_has_history(d))
         deck_tags_stale[d.id] = bool(d.decklist_text and is_deck_tags_stale(d))
 
     stale_deck_count = sum(1 for stale in deck_tags_stale.values() if stale)
@@ -5631,6 +5865,7 @@ def deck_detail(deck_id):
     )
 
     games = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    wins, games = deck_totals_with_history(deck, wins, games)
     losses = max(0, games - wins)
     winrate = round((wins / games) * 100, 1) if games else 0.0
 
@@ -6206,8 +6441,12 @@ def api_commander_bracket():
 @app.route("/api/homepage")
 def api_homepage():
     """Public read-only summary for the figurenhome dashboard."""
-    total_games = Game.query.count()
     players = Player.query.all()
+    # Include recovered pre-wipe games so total_games stays consistent with the
+    # history-inflated per-player totals below. Each game has exactly one winner,
+    # so summing historical_wins yields the distinct pre-wipe game count.
+    historical_games = sum((p.historical_wins or 0) for p in players)
+    total_games = Game.query.count() + historical_games
 
     wins_by_player = dict(
         db.session.query(Game.winner_id, func.count(Game.id))
@@ -6224,6 +6463,7 @@ def api_homepage():
     for p in players:
         wins = wins_by_player.get(p.id, 0)
         played = played_by_player.get(p.id, 0)
+        wins, played = player_totals_with_history(p, wins, played)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"name": p.name, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
@@ -7603,6 +7843,7 @@ def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, 
         .count()
     )
     uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    wins, uses = deck_totals_with_history(deck, wins, uses)
     winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
     deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
     deck_mechanics = derive_deck_mechanics(deck_tags)
@@ -8034,6 +8275,9 @@ def api_stats():
     except ValueError:
         date_to_raw = ""
     game_ids_subquery = game_q.with_entities(Game.id)
+    history_ok = scope_includes_history(
+        scope, active_pod, date_filtered=bool(date_from_raw or date_to_raw)
+    )
 
     players = Player.query.all()
     player_stats = []
@@ -8044,6 +8288,7 @@ def api_stats():
             .filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery))
             .count()
         )
+        wins, played = player_totals_with_history(p, wins, played, include=history_ok)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"player_id": p.id, "name": p.name, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
@@ -8097,6 +8342,7 @@ def api_stats():
             .filter(GameParticipant.deck_id == d.id, Game.id.in_(game_ids_subquery))
             .count()
         )
+        wins, uses = deck_totals_with_history(d, wins, uses, include=history_ok)
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({
             "id": d.id,
@@ -8685,6 +8931,7 @@ def api_players():
         played = GameParticipant.query.filter_by(player_id=p.id).count()
         won = Game.query.filter_by(winner_id=p.id).count()
         deck_count = Deck.query.filter_by(player_id=p.id).count()
+        won, played = player_totals_with_history(p, won, played)
         winrate = round((won / played) * 100, 1) if played else 0.0
         result.append({
             "id": p.id,
@@ -8961,9 +9208,11 @@ def api_player_detail(player_id):
         started = Game.query.filter_by(starting_player_id=player_id).count()
         if played > 0 or won > 0 or started > 0:
             return jsonify({"error": "Cannot delete a player who appears in recorded games"}), 409
+        if player_has_history(player):
+            return jsonify({"error": "Cannot delete a player who carries recovered pre-wipe stats"}), 409
         for d in player.decks:
             used = GameParticipant.query.filter_by(deck_id=d.id).count()
-            if used > 0:
+            if used > 0 or deck_has_history(d):
                 return jsonify({"error": f"Cannot delete player: deck '{d.name}' has recorded games"}), 409
         for d in list(player.decks):
             db.session.delete(d)
@@ -8975,6 +9224,7 @@ def api_player_detail(player_id):
     decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
     games_played = GameParticipant.query.filter_by(player_id=player.id).count()
     games_won = Game.query.filter_by(winner_id=player.id).count()
+    games_won, games_played = player_totals_with_history(player, games_won, games_played)
     winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
     deck_list = []
     for d in decks:
@@ -8984,6 +9234,7 @@ def api_player_detail(player_id):
             .count()
         )
         deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_wins, deck_games = deck_totals_with_history(d, deck_wins, deck_games)
         deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
         deck_list.append({
             "id": d.id,
@@ -9037,6 +9288,7 @@ def api_player_export(player_id):
     games_played = GameParticipant.query.filter_by(player_id=player.id).count()
     games_won = Game.query.filter_by(winner_id=player.id).count()
     games_started = Game.query.filter_by(starting_player_id=player.id).count()
+    games_won, games_played = player_totals_with_history(player, games_won, games_played)
     winrate = round((games_won / games_played) * 100, 1) if games_played else 0.0
     decks_data = []
     for d in decks:
@@ -9046,6 +9298,7 @@ def api_player_export(player_id):
             .count()
         )
         deck_games = GameParticipant.query.filter_by(deck_id=d.id).count()
+        deck_wins, deck_games = deck_totals_with_history(d, deck_wins, deck_games)
         deck_losses = max(0, deck_games - deck_wins)
         deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
         tags = {}
@@ -9389,7 +9642,7 @@ def api_deck_detail(deck_id):
         if not current_user.is_admin and (not current_user.player or deck.player_id != current_user.player.id):
             return jsonify({"error": "Forbidden"}), 403
         used = GameParticipant.query.filter_by(deck_id=deck.id).count()
-        if used > 0:
+        if used > 0 or deck_has_history(deck):
             return jsonify({"error": "Cannot delete a deck that has been used in recorded games."}), 409
         orphaned_art = [deck.commander_local_art_custom, deck.custom_card_art_local]
         db.session.delete(deck)
