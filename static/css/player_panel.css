@@ -55,6 +55,22 @@ html, body {
   white-space: nowrap;
 }
 
+/* Shown when a push to the server has failed and is retrying/needs attention */
+.panel-sync-badge {
+  display: none;
+  font-size: .7rem;
+  font-weight: 600;
+  color: #ff8080;
+  background: #3a1a1a;
+  border: 1px solid #5a2a2a;
+  border-radius: 20px;
+  padding: .15rem .55rem;
+  white-space: nowrap;
+}
+.panel-sync-badge.is-visible {
+  display: inline-block;
+}
+
 .panel-life-total {
   font-size: 5.5rem;
   font-weight: 700;

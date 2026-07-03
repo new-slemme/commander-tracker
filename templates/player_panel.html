@@ -15,6 +15,7 @@
   <div class="panel-top-row">
     <div class="panel-player-name">{{ this_player.player_name }}</div>
     <div class="panel-turn-badge" id="turnBadge">Turn 1</div>
+    <div class="panel-sync-badge" id="syncFailedBadge" role="status" aria-live="polite">Sync failed</div>
   </div>
   <div class="panel-life-zone-hints" aria-hidden="true">
     <span class="panel-life-hint panel-life-hint--minus">−</span>
@@ -145,7 +146,11 @@ function commitLife(){
   pendingDelta = 0;
   renderPending();
   renderLife();
-  pushUpdate({ life_delta: delta });
+  // Push the absolute value (not the delta) so a dropped POST can be safely
+  // retried without double-applying the change — mirrors how life_counter.html
+  // pushes absolute life for its own players. The server already prefers
+  // "life" over "life_delta" when both could apply (app.py api_game_state).
+  pushUpdate({ life: committedLife });
 }
 
 // ---- Flags ----
@@ -288,7 +293,23 @@ function renderPassTurnBtn(){
   btn.disabled = !isMyTurn;
 }
 
-async function pushUpdate(patch){
+// Sync-failure bookkeeping for pushUpdate. Mirrors the capped-exponential
+// backoff pattern used by life_counter.html's syncPoll/_syncFailCount so a
+// dropped POST (common on mobile) is retried instead of silently dropped.
+let _pushFailCount = 0;
+
+function setSyncFailedIndicator(isFailing){
+  const badge = document.getElementById("syncFailedBadge");
+  if(badge) badge.classList.toggle("is-visible", !!isFailing);
+}
+
+// `opts.retry` defaults to true. Only pass `{ retry: false }` for patches
+// that are NOT safe to resend blindly (e.g. pass_turn, which advances the
+// active player on every accepted call rather than converging on a value).
+// life/flags/card_state patches are absolute values, so resending the same
+// patch on retry is idempotent and safe.
+async function pushUpdate(patch, opts = {}){
+  const allowRetry = opts.retry !== false;
   const body = Object.assign({ player_id: MY_PLAYER_ID }, patch);
   try {
     const resp = await fetch(`/api/game/${TOKEN}/state`, {
@@ -296,11 +317,22 @@ async function pushUpdate(patch){
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if(resp.ok){
-      const data = await resp.json();
-      applyRemoteState(data);
+    if(!resp.ok){
+      throw new Error(`push failed with status ${resp.status}`);
     }
-  } catch(e){}
+    // Only now is the push confirmed.
+    _pushFailCount = 0;
+    setSyncFailedIndicator(false);
+    const data = await resp.json();
+    applyRemoteState(data);
+  } catch(e){
+    _pushFailCount = Math.min(_pushFailCount + 1, 4);
+    setSyncFailedIndicator(true);
+    if(allowRetry){
+      const backoffMs = Math.min(1000 * (1 << (_pushFailCount - 1)), 8000);
+      setTimeout(() => pushUpdate(patch, opts), backoffMs);
+    }
+  }
 }
 
 async function poll(){
@@ -341,7 +373,11 @@ document.getElementById("misplayedBtn").addEventListener("click", () => {
 
 document.getElementById("passTurnBtn").addEventListener("click", () => {
   if(activePlayerId !== MY_PID) return;
-  pushUpdate({ pass_turn: true });
+  // pass_turn is not idempotent (advances the active player every accepted
+  // call), so it is not safe to auto-retry blindly. On failure the button
+  // stays enabled (activePlayerId is unchanged locally) so the player can
+  // just tap again; the sync-failed badge signals that something went wrong.
+  pushUpdate({ pass_turn: true }, { retry: false });
 });
 
 document.getElementById("commanderDamageList").addEventListener("click", (event) => {

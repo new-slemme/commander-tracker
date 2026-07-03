@@ -2044,8 +2044,19 @@ if(JOIN_TOKEN){
   let _syncSkipNextPoll = false;
   let _syncPollSkipUntilMs = 0;
 
+  // Per-player push bookkeeping so a dropped POST doesn't silently desync
+  // that player: only lastPushedLife[pid] is updated on a CONFIRMED
+  // response, and a failure gets a capped exponential backoff (mirrors the
+  // _syncFailCount pattern used by syncPoll below) so syncFlushLifeChanges
+  // keeps retrying until it succeeds instead of swallowing the error.
+  const _lifePushInFlight = {};
+  const _lifePushFailCount = {};
+  const _lifePushSkipUntilMs = {};
+
   async function syncPushLifeForPlayer(playerId, absoluteLife){
     if(!JOIN_TOKEN) return;
+    const pid = String(playerId);
+    _lifePushInFlight[pid] = true;
     try {
       const resp = await fetch(`/api/game/${JOIN_TOKEN}/state`, {
         method: "POST",
@@ -2056,11 +2067,23 @@ if(JOIN_TOKEN){
         }),
       });
       if(resp.ok){
+        // Only now is the push confirmed — safe to mark it as sent.
+        lastPushedLife[pid] = absoluteLife;
+        _lifePushFailCount[pid] = 0;
+        _lifePushSkipUntilMs[pid] = 0;
         _syncSkipNextPoll = true;
         const data = await resp.json();
         applyRemoteGameState(data, playerId);
+      } else {
+        _lifePushFailCount[pid] = Math.min((_lifePushFailCount[pid] || 0) + 1, 4);
+        _lifePushSkipUntilMs[pid] = Date.now() + Math.min(1000 * (1 << (_lifePushFailCount[pid] - 1)), 8000);
       }
-    } catch(e){}
+    } catch(e){
+      _lifePushFailCount[pid] = Math.min((_lifePushFailCount[pid] || 0) + 1, 4);
+      _lifePushSkipUntilMs[pid] = Date.now() + Math.min(1000 * (1 << (_lifePushFailCount[pid] - 1)), 8000);
+    } finally {
+      _lifePushInFlight[pid] = false;
+    }
   }
 
   async function syncPushFlagsForPlayer(playerId, flagsObj){
@@ -2150,9 +2173,15 @@ if(JOIN_TOKEN){
     }
   }
 
-  // We track last-pushed life values and push on change.
+  // We track last-pushed (CONFIRMED, not merely attempted) life values and
+  // push on change. lastPushedLife[pid] is only updated inside
+  // syncPushLifeForPlayer once the POST actually succeeds, so a dropped
+  // request leaves committedLife[pid] !== lastPushedLife[pid] and this same
+  // flush loop retries it on the next tick (subject to the per-player
+  // backoff set on failure).
   const lastPushedLife = {};
   function syncFlushLifeChanges(){
+    const now = Date.now();
     // Fast path: skip DOM iteration if nothing is pending
     const hasPending = cards.some((card) => {
       const pid = String(card.dataset.player || "");
@@ -2164,10 +2193,10 @@ if(JOIN_TOKEN){
       const pid = String(card.dataset.player || "");
       if(!pid) return;
       const current = committedLife[pid];
-      if(current !== undefined && current !== lastPushedLife[pid]){
-        lastPushedLife[pid] = current;
-        syncPushLifeForPlayer(pid, current);
-      }
+      if(current === undefined || current === lastPushedLife[pid]) return;
+      if(_lifePushInFlight[pid]) return; // already awaiting a response for this player
+      if(now < (_lifePushSkipUntilMs[pid] || 0)) return; // backing off after a failure
+      syncPushLifeForPlayer(pid, current);
     });
   }
 
