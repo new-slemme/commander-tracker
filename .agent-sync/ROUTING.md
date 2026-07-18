@@ -47,4 +47,4 @@ Bootstrap 5 (no build system), Docker Compose, GDPR scope.
 ## File Claims
 | File | Agent | Task | Status |
 |------|-------|------|--------|
-| (empty — populated at dispatch time) | | | |
+| (empty — all waves complete 2026-07-02; backlog 25/25) | | | |
