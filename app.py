@@ -95,6 +95,9 @@ def _resolve_database_uri() -> str:
     return f"sqlite:////data/{database_name}"
 
 
+PROD_DB_PATH = "/data/commander.db"
+
+
 app.config["SQLALCHEMY_DATABASE_URI"] = _resolve_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # How long a blocked SQLite writer waits for the write lock before giving up.
