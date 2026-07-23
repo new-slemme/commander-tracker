@@ -157,11 +157,18 @@
                     <span class="win-badge {{ badge_class }}">{{ wr }}%</span>
                   </td>
                   <td>
-                    <div class="wr-progress" aria-label="Win rate progress">
-                      <div class="progress-bar"
-                           role="progressbar"
-                           style="width: {{ wr }}%;"
-                           aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    <div class="d-flex align-items-center gap-2">
+                      <div class="wr-progress flex-grow-1" aria-label="Win rate progress">
+                        <div class="progress-bar"
+                             role="progressbar"
+                             style="width: {{ wr }}%;"
+                             aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+                      </div>
+                      <button class="compare-add-btn"
+                              type="button"
+                              data-compare-player="{{ s.player.id }}"
+                              data-compare-name="{{ s.player.name }}"
+                              aria-label="Add {{ s.player.name }} to compare">+</button>
                     </div>
                   </td>
                 </tr>
@@ -323,12 +330,12 @@
             {% set n = ns.arts|length %}
             {% if n == 0 %}{% set n = 1 %}{% endif %}
 
-            <a class="list-group-item p-0 recent-game-tile recent-game-link"
-               href="{{ url_for('game_detail', game_id=g.id) }}"
-               data-entity-type="game"
-               data-entity-id="{{ g.id }}">
-              <div class="recent-game-inner">
+            <div class="list-group-item p-0 recent-game-tile"
+                 data-entity-type="game"
+                 data-entity-id="{{ g.id }}">
 
+              <!-- Summary header: always visible -->
+              <div class="recent-game-inner">
                 <div class="recent-game-bg">
                   {% if ns.arts|length == 0 %}
                     <div class="recent-game-slice" style="background: rgba(255,255,255,0.04);"></div>
@@ -338,18 +345,23 @@
                     {% endfor %}
                   {% endif %}
                 </div>
-
                 <div class="recent-game-overlay"></div>
-
                 <div class="recent-game-content">
                   <div class="recent-topline">
                     <div class="recent-date">
                       {{ g.date.strftime('%Y-%m-%d %H:%M') }}
                     </div>
-
-                    <div class="winner-pill">
-                      <span class="dot"></span>
-                      Winner: {{ g.winner.name }}{% if g.ending_turn is not none %} · Turn {{ g.ending_turn }}{% endif %}
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <div class="winner-pill">
+                        <span class="dot"></span>
+                        Winner: {{ g.winner.name }}{% if g.ending_turn is not none %} · Turn {{ g.ending_turn }}{% endif %}
+                      </div>
+                      <a class="game-full-link" href="{{ url_for('game_detail', game_id=g.id) }}">Full page</a>
+                      <button class="game-expand-btn"
+                              type="button"
+                              aria-expanded="false"
+                              aria-controls="game-detail-{{ g.id }}"
+                              aria-label="Expand game {{ g.id }} details">Details</button>
                     </div>
                   </div>
 
@@ -364,24 +376,47 @@
                           {% endif %}
                           <span class="name">{{ gp.player.name }}</span>
                         </span>
-                        <span class="deck">
-                          {{ gp.deck.name }}
-                          {% set delta = mmr_delta_by_game_deck.get((g.id, gp.deck_id)) %}
-                          {% if delta is not none and delta != 0 %}
-                            {% if delta > 0 %}
-                              <span style="color: var(--green); font-weight:700;">+{{ delta }}</span>
-                            {% else %}
-                              <span style="color: var(--red); font-weight:700;">{{ delta }}</span>
-                            {% endif %}
-                          {% endif %}
-                        </span>
+                        <span class="deck">{{ gp.deck.name }}</span>
                       </span>
                     {% endfor %}
                   </div>
-
                 </div>
               </div>
-            </a>
+
+              <!-- Expandable detail region -->
+              <div id="game-detail-{{ g.id }}"
+                   class="game-detail-region"
+                   aria-hidden="true">
+                <div class="game-detail-inner">
+                  {% for gp in game_parts[g.id] %}
+                    {% set delta = mmr_delta_by_game_deck.get((g.id, gp.deck_id)) %}
+                    <div class="game-detail-row"
+                         data-entity-type="player"
+                         data-entity-id="{{ gp.player_id }}"
+                         style="--player-accent: {{ player_accent(gp.player_id) }};">
+                      <div class="game-detail-avatar">{{ gp.player.name[:1]|upper }}</div>
+                      <div class="game-detail-body">
+                        <div class="game-detail-player">
+                          <a href="{{ url_for('player_detail', player_id=gp.player_id) }}">{{ gp.player.name }}</a>
+                          {% if gp.player_id == g.winner_id %}<span class="win-badge good ms-1">W</span>{% endif %}
+                        </div>
+                        <div class="game-detail-deck">
+                          <a href="{{ url_for('deck_detail', deck_id=gp.deck_id) }}">{{ gp.deck.name }}</a>
+                        </div>
+                      </div>
+                      {% if delta is not none and delta != 0 %}
+                        {% if delta > 0 %}
+                          <span class="win-badge good">+{{ delta }}</span>
+                        {% else %}
+                          <span class="win-badge bad">{{ delta }}</span>
+                        {% endif %}
+                      {% endif %}
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+
+            </div>
 
           {% endfor %}
         </div>

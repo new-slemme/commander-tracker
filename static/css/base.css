@@ -2361,6 +2361,121 @@ mark.hl {
   pointer-events: none;
 }
 
+/* ── Compare tray ────────────────────────────────────────────── */
+.compare-tray {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%);
+  z-index: 1100;
+  width: min(600px, 96vw);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  transition: transform var(--motion-base) var(--ease-out);
+  pointer-events: none;
+}
+
+.compare-tray.is-visible {
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+.compare-tray__inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-xl);
+  background: var(--darker);
+  border: 1px solid var(--border-color-strong);
+  box-shadow: var(--shadow-lg);
+}
+
+.compare-tray__slots {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.compare-tray__empty {
+  font-size: 0.85rem;
+  color: var(--font-base-trans);
+}
+
+.compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--blue-trans);
+  border: 1px solid var(--blue);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.compare-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.compare-chip__remove:hover { background: rgba(255,255,255,0.3); }
+
+.compare-tray__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.compare-tray__go[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.compare-tray__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color-subtle);
+  background: transparent;
+  color: var(--font-base);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background var(--motion-micro) var(--ease-out);
+}
+
+.compare-tray__clear:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+html[data-bs-theme="light"] .compare-tray__inner {
+  background: #fff;
+  border-color: var(--border-color);
+}
+
+html[data-bs-theme="light"] .compare-chip {
+  background: rgba(40,95,143,0.12);
+  border-color: rgba(40,95,143,0.35);
+  color: var(--font-base);
+}
+
 /* ── Entity detail drawer ────────────────────────────────────── */
 .entity-drawer {
   display: none;

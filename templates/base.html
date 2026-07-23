@@ -187,6 +187,21 @@
   {% block content %}{% endblock %}
 </div>
 
+<!-- Player compare tray -->
+{% if session.get("user_id") %}
+<div id="compare-tray" class="compare-tray" aria-label="Compare players" aria-hidden="true">
+  <div class="compare-tray__inner">
+    <div class="compare-tray__slots" id="compare-tray-slots">
+      <span class="compare-tray__empty">Add players to compare</span>
+    </div>
+    <div class="compare-tray__actions">
+      <a id="compare-tray-link" href="/compare" class="btn btn-sm btn-primary compare-tray__go" aria-disabled="true">Compare</a>
+      <button id="compare-tray-clear" class="compare-tray__clear" type="button" aria-label="Clear comparison">✕</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <!-- Entity detail drawer shell -->
 <div id="entity-drawer"
      class="entity-drawer"

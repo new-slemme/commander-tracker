@@ -333,6 +333,143 @@
     });
   }
 
+  // ── Expandable game activity ─────────────────────────────────────
+  function initGameExpand() {
+    var openRegionId = null;
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('.game-expand-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      var controlsId = btn.getAttribute('aria-controls');
+      var region = controlsId ? document.getElementById(controlsId) : null;
+      if (!region) return;
+
+      var isOpen = btn.getAttribute('aria-expanded') === 'true';
+
+      // Close previously open region
+      if (openRegionId && openRegionId !== controlsId) {
+        var prev = document.getElementById(openRegionId);
+        var prevBtn = document.querySelector('[aria-controls="' + openRegionId + '"]');
+        if (prev) { prev.setAttribute('aria-hidden', 'true'); prev.classList.remove('is-open'); }
+        if (prevBtn) { prevBtn.setAttribute('aria-expanded', 'false'); prevBtn.textContent = 'Details'; }
+      }
+
+      if (isOpen) {
+        region.setAttribute('aria-hidden', 'true');
+        region.classList.remove('is-open');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.textContent = 'Details';
+        openRegionId = null;
+      } else {
+        region.setAttribute('aria-hidden', 'false');
+        region.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        btn.textContent = 'Close';
+        openRegionId = controlsId;
+      }
+    });
+  }
+
+  // ── Compare tray ─────────────────────────────────────────────────
+  function initCompareTray() {
+    var tray = document.getElementById('compare-tray');
+    var slots = document.getElementById('compare-tray-slots');
+    var goLink = document.getElementById('compare-tray-link');
+    var clearBtn = document.getElementById('compare-tray-clear');
+    if (!tray || !slots || !goLink) return;
+
+    var KEY = 'cmp_players';
+    var MAX = 2;
+
+    function load() {
+      try { return JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (_) { return []; }
+    }
+
+    function save(players) {
+      sessionStorage.setItem(KEY, JSON.stringify(players.slice(0, MAX)));
+    }
+
+    function render() {
+      var players = load();
+      slots.innerHTML = '';
+
+      if (players.length === 0) {
+        var empty = document.createElement('span');
+        empty.className = 'compare-tray__empty';
+        empty.textContent = 'Add players to compare';
+        slots.appendChild(empty);
+        goLink.setAttribute('aria-disabled', 'true');
+        goLink.href = '/compare';
+      } else {
+        players.forEach(function (pl) {
+          var chip = document.createElement('span');
+          chip.className = 'compare-chip';
+          chip.textContent = pl.name;
+          var rm = document.createElement('button');
+          rm.type = 'button';
+          rm.className = 'compare-chip__remove';
+          rm.setAttribute('aria-label', 'Remove ' + pl.name);
+          rm.textContent = '×';
+          rm.addEventListener('click', function () {
+            save(load().filter(function (p) { return p.id !== pl.id; }));
+            render();
+          });
+          chip.appendChild(rm);
+          slots.appendChild(chip);
+        });
+
+        if (players.length === MAX) {
+          goLink.removeAttribute('aria-disabled');
+          goLink.href = '/compare?a=' + players[0].id + '&b=' + players[1].id;
+        } else {
+          goLink.setAttribute('aria-disabled', 'true');
+          goLink.href = '/compare';
+        }
+      }
+
+      if (players.length > 0) {
+        tray.setAttribute('aria-hidden', 'false');
+        tray.classList.add('is-visible');
+      } else {
+        tray.setAttribute('aria-hidden', 'true');
+        tray.classList.remove('is-visible');
+      }
+    }
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-compare-player]');
+      if (!btn) return;
+      e.preventDefault();
+      var id = parseInt(btn.getAttribute('data-compare-player'), 10);
+      var name = btn.getAttribute('data-compare-name') || ('Player ' + id);
+      var players = load();
+      if (players.some(function (p) { return p.id === id; })) return;
+      if (players.length >= MAX) {
+        players = players.slice(1);
+      }
+      players.push({ id: id, name: name });
+      save(players);
+      render();
+    });
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        save([]);
+        render();
+      });
+    }
+
+    // Prevent disabled link navigation
+    goLink.addEventListener('click', function (e) {
+      if (goLink.getAttribute('aria-disabled') === 'true') e.preventDefault();
+    });
+
+    render();
+  }
+
   // ── Entity detail drawer ─────────────────────────────────────────
   function initEntityDrawer() {
     var drawer = document.getElementById('entity-drawer');
@@ -635,6 +772,8 @@
     initLeaderboardMetrics();
     initDeckSort();
     initEntityHighlighting();
+    initGameExpand();
+    initCompareTray();
     initEntityDrawer();
   };
 
