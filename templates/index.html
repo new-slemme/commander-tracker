@@ -388,8 +388,10 @@
                    class="game-detail-region"
                    aria-hidden="true">
                 <div class="game-detail-inner">
+                  {% set win_labels = {'combat': 'Combat', 'combo': 'Combo', 'alt_win': 'Alt Win', 'concede': 'Concede', 'time': 'Time', 'lock': 'Lock', 'other': 'Other'} %}
                   {% for gp in game_parts[g.id] %}
                     {% set delta = mmr_delta_by_game_deck.get((g.id, gp.deck_id)) %}
+                    {% set flags = game_flags.get((g.id, gp.player_id), {}) %}
                     <div class="game-detail-row"
                          data-entity-type="player"
                          data-entity-id="{{ gp.player_id }}"
@@ -402,7 +404,22 @@
                         </div>
                         <div class="game-detail-deck">
                           <a href="{{ url_for('deck_detail', deck_id=gp.deck_id) }}">{{ gp.deck.name }}</a>
+                          {% if gp.deck.commander %}
+                            <span class="game-detail-cmdr">{{ gp.deck.commander }}</span>
+                          {% endif %}
                         </div>
+                        {% set active_chips = [] %}
+                        {% if flags.get('monarch') %}{% set active_chips = active_chips + [('Monarch', 'monarch')] %}{% endif %}
+                        {% if flags.get('poison', 0) > 0 %}{% set active_chips = active_chips + [('Poison ×' ~ flags['poison'], 'poison')] %}{% endif %}
+                        {% if flags.get('mana_fucked') %}{% set active_chips = active_chips + [('Mana Fucked', 'mana')] %}{% endif %}
+                        {% if flags.get('misplayed') %}{% set active_chips = active_chips + [('Misplayed', 'misplayed')] %}{% endif %}
+                        {% if active_chips %}
+                          <div class="game-mechanic-chips">
+                            {% for label, key in active_chips %}
+                              <span class="game-mechanic-chip game-mechanic-chip--{{ key }}">{{ label }}</span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
                       </div>
                       {% if delta is not none and delta != 0 %}
                         {% if delta > 0 %}
@@ -413,6 +430,16 @@
                       {% endif %}
                     </div>
                   {% endfor %}
+
+                  <div class="game-detail-footer">
+                    {% if g.win_type %}
+                      <span class="game-meta-chip">{{ win_labels.get(g.win_type, g.win_type) }}</span>
+                    {% endif %}
+                    {% if g.salt_rating is not none and g.salt_rating > 0 %}
+                      <span class="game-meta-chip game-meta-chip--salt">Salt {{ g.salt_rating }}/5</span>
+                    {% endif %}
+                    <a class="game-rematch-link" href="{{ url_for('play_game') }}">Rematch</a>
+                  </div>
                 </div>
               </div>
 

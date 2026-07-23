@@ -4605,6 +4605,12 @@ def index():
             except Exception:
                 pass
 
+    # Pre-parse participant flags for recent games (keyed by (game_id, player_id))
+    game_flags: dict[tuple[int, int], dict] = {}
+    for g in recent_games:
+        for gp in game_parts.get(g.id, []):
+            game_flags[(g.id, gp.player_id)] = parse_participant_flags(gp.flags_json)
+
     # Deck Spotlight: deck that won last (winner's deck in most recent game)
     last_winning_deck = None
     if recent_games:
@@ -4710,6 +4716,7 @@ def index():
         recent_games=recent_games,
         game_parts=game_parts,
         mmr_delta_by_game_deck=mmr_delta_by_game_deck,
+        game_flags=game_flags,
         top_players=top_players,
         best_deck=best_deck,
         last_winning_deck=last_winning_deck,

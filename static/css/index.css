@@ -995,3 +995,87 @@
   html[data-bs-theme="light"] .game-detail-player { color: var(--font-base); }
   html[data-bs-theme="light"] .game-full-link,
   html[data-bs-theme="light"] .game-expand-btn { color: var(--font-base); }
+
+  /* ===== Phase 6: game detail narrative ===== */
+  .game-detail-region.is-open { max-height: 1400px; }
+
+  .game-detail-cmdr {
+    margin-left: 4px;
+    color: var(--font-accent);
+    opacity: 0.75;
+    font-size: 0.72rem;
+  }
+  .game-detail-cmdr::before { content: '· '; }
+
+  .game-mechanic-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .game-mechanic-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    background: rgba(255,255,255,0.08);
+    color: var(--font-base);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .game-mechanic-chip--monarch { background: rgba(255,200,50,0.15); color: var(--yellow); border-color: rgba(255,200,50,0.25); }
+  .game-mechanic-chip--poison  { background: rgba(80,200,80,0.15);  color: var(--green);  border-color: rgba(80,200,80,0.25); }
+  .game-mechanic-chip--mana    { background: rgba(220,80,80,0.15);  color: var(--red);    border-color: rgba(220,80,80,0.25); }
+  .game-mechanic-chip--misplayed { background: rgba(180,100,220,0.15); color: var(--purple); border-color: rgba(180,100,220,0.25); }
+
+  .game-detail-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
+  }
+
+  .game-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    background: rgba(255,255,255,0.07);
+    color: var(--font-base);
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .game-meta-chip--salt { background: rgba(255,120,40,0.15); color: var(--orange); border-color: rgba(255,120,40,0.25); }
+
+  .game-rematch-link {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--font-accent);
+    text-decoration: none;
+    opacity: 0.7;
+    transition: opacity var(--motion-micro) var(--ease-out);
+  }
+  .game-rematch-link:hover { opacity: 1; text-decoration: underline; }
+
+  /* Light theme */
+  html[data-bs-theme="light"] .game-detail-footer {
+    border-top-color: var(--border-color-subtle);
+  }
+  html[data-bs-theme="light"] .game-meta-chip {
+    background: rgba(0,0,0,0.05);
+    border-color: var(--border-color-subtle);
+    color: var(--font-base);
+  }
+  html[data-bs-theme="light"] .game-mechanic-chip {
+    background: rgba(0,0,0,0.05);
+    border-color: var(--border-color-subtle);
+  }
+  html[data-bs-theme="light"] .game-detail-cmdr { color: var(--font-accent); }
