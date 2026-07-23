@@ -1,5 +1,6 @@
 """Phase 3 tests: additive entity API extensions for the drawer."""
 import json
+import os
 import unittest
 from datetime import datetime
 from werkzeug.security import generate_password_hash

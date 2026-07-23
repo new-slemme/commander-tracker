@@ -1,4 +1,5 @@
 """Phase 1 tests: deterministic entity identity and persistent scope context."""
+import os
 import re
 import unittest
 from pathlib import Path

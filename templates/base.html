@@ -33,6 +33,16 @@
       <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="28" height="28">
     </button>
 
+    <!-- Search / command palette trigger -->
+    {% if session.get("user_id") %}
+    <button id="palette-trigger" class="palette-trigger d-none d-lg-flex" type="button"
+            aria-label="Search (Ctrl+K)" aria-haspopup="dialog">
+      <span class="palette-trigger__icon" aria-hidden="true">⌕</span>
+      <span class="palette-trigger__hint">Search…</span>
+      <kbd class="palette-trigger__kbd">Ctrl K</kbd>
+    </button>
+    {% endif %}
+
     <!-- Desktop nav (unchanged content) -->
     <div class="d-none d-lg-flex w-100 align-items-center ms-3">
       <div class="navbar-nav">
@@ -236,8 +246,37 @@
   </div>
 </div>
 
+<!-- Command palette -->
+{% if session.get("user_id") %}
+<div id="command-palette"
+     class="command-palette"
+     role="dialog"
+     aria-modal="true"
+     aria-label="Search and commands"
+     aria-hidden="true">
+  <div id="palette-backdrop" class="command-palette__backdrop"></div>
+  <div class="command-palette__panel" role="document">
+    <div class="command-palette__search-wrap">
+      <span class="command-palette__search-icon" aria-hidden="true">⌕</span>
+      <input id="palette-input"
+             class="command-palette__input"
+             type="search"
+             placeholder="Search players, decks, games…"
+             autocomplete="off"
+             aria-label="Search"
+             aria-controls="palette-results"
+             aria-autocomplete="list">
+    </div>
+    <div id="palette-results"
+         class="command-palette__results"
+         role="listbox"
+         aria-label="Search results"></div>
+  </div>
+</div>
+{% endif %}
+
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js', v='p2') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js', v='p3') }}" defer></script>
 
 <script>
   if ('serviceWorker' in navigator) {

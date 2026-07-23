@@ -764,6 +764,153 @@
     });
   }
 
+  // ── Command Palette ───────────────────────────────────────────────
+  function initCommandPalette() {
+    var palette = document.getElementById('command-palette');
+    if (!palette) return;
+
+    var input     = document.getElementById('palette-input');
+    var results   = document.getElementById('palette-results');
+    var backdrop  = document.getElementById('palette-backdrop');
+    var trigger   = document.getElementById('palette-trigger');
+
+    var _open        = false;
+    var _debounce    = null;
+    var _activeXhr   = null;
+    var _activeIdx   = -1;
+    var DEBOUNCE_MS  = 180;
+
+    function openPalette() {
+      if (_open) return;
+      _open = true;
+      palette.setAttribute('aria-hidden', 'false');
+      palette.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      input.value = '';
+      results.innerHTML = '';
+      _activeIdx = -1;
+      input.focus();
+    }
+
+    function closePalette() {
+      if (!_open) return;
+      _open = false;
+      palette.setAttribute('aria-hidden', 'true');
+      palette.classList.remove('is-open');
+      document.body.style.overflow = '';
+      if (_debounce) { clearTimeout(_debounce); _debounce = null; }
+      if (_activeXhr) { _activeXhr.abort(); _activeXhr = null; }
+      if (trigger) trigger.focus();
+    }
+
+    function esc(s) {
+      var d = document.createElement('div');
+      d.appendChild(document.createTextNode(String(s)));
+      return d.innerHTML;
+    }
+
+    function renderSection(label, items, makeRow) {
+      if (!items || !items.length) return '';
+      var rows = items.map(makeRow).join('');
+      return '<div class="palette-section"><div class="palette-section__label">' + esc(label) + '</div>' + rows + '</div>';
+    }
+
+    function renderResults(data) {
+      var html = '';
+      html += renderSection('Players', data.players, function (p) {
+        return '<a class="palette-row" role="option" href="' + esc(p.url) + '" style="--player-accent:' + esc(p.accent) + '">'
+             + '<span class="palette-row__avatar" aria-hidden="true">' + esc(p.name[0] || '?') + '</span>'
+             + '<span class="palette-row__name">' + esc(p.name) + '</span>'
+             + '</a>';
+      });
+      html += renderSection('Decks', data.decks, function (d) {
+        var badge = d.retired ? ' <span class="palette-row__badge">Retired</span>' : (d.planned ? ' <span class="palette-row__badge">Planned</span>' : '');
+        var cmdrLabel = d.commander_match
+          ? '<span class="palette-row__cmdr-match">Cmdr: ' + esc(d.commander) + '</span>'
+          : '<span class="palette-row__meta">' + esc(d.commander || '') + '</span>';
+        return '<a class="palette-row" role="option" href="' + esc(d.url) + '">'
+             + '<span class="palette-row__name">' + esc(d.name) + badge + '</span>'
+             + cmdrLabel
+             + '</a>';
+      });
+      html += renderSection('Actions', data.actions, function (a) {
+        return '<a class="palette-row palette-row--action" role="option" href="' + esc(a.url) + '">'
+             + '<span class="palette-row__name">' + esc(a.label) + '</span>'
+             + '</a>';
+      });
+      results.innerHTML = html || '<div class="palette-empty">No results</div>';
+      _activeIdx = -1;
+    }
+
+    function fetchResults(q) {
+      if (_activeXhr) { _activeXhr.abort(); _activeXhr = null; }
+      var xhr = new XMLHttpRequest();
+      _activeXhr = xhr;
+      xhr.open('GET', '/api/search?q=' + encodeURIComponent(q));
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          try {
+            renderResults(JSON.parse(xhr.responseText));
+          } catch (_) {}
+        }
+        _activeXhr = null;
+      };
+      xhr.onerror = function () { _activeXhr = null; };
+      xhr.send();
+    }
+
+    function navigateList(dir) {
+      var rows = results.querySelectorAll('.palette-row');
+      if (!rows.length) return;
+      _activeIdx = (_activeIdx + dir + rows.length) % rows.length;
+      rows.forEach(function (r, i) {
+        r.classList.toggle('is-active', i === _activeIdx);
+        if (i === _activeIdx) r.scrollIntoView({ block: 'nearest' });
+      });
+    }
+
+    function confirmActive() {
+      var rows = results.querySelectorAll('.palette-row');
+      if (_activeIdx >= 0 && rows[_activeIdx]) {
+        rows[_activeIdx].click();
+      }
+    }
+
+    if (trigger) {
+      trigger.addEventListener('click', openPalette);
+    }
+
+    if (backdrop) {
+      backdrop.addEventListener('click', closePalette);
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        _open ? closePalette() : openPalette();
+        return;
+      }
+      if (!_open) return;
+      if (e.key === 'Escape') { e.preventDefault(); closePalette(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); navigateList(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); navigateList(-1); return; }
+      if (e.key === 'Enter') { e.preventDefault(); confirmActive(); return; }
+    });
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (_debounce) clearTimeout(_debounce);
+      _debounce = setTimeout(function () {
+        fetchResults(q);
+      }, DEBOUNCE_MS);
+    });
+
+    results.addEventListener('click', function (e) {
+      var row = e.target.closest('.palette-row');
+      if (row) closePalette();
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
   UI.init = function () {
     initMobileMenu();
@@ -775,6 +922,7 @@
     initGameExpand();
     initCompareTray();
     initEntityDrawer();
+    initCommandPalette();
   };
 
   global.CommandersohnUI = UI;

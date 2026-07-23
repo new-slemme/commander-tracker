@@ -1,5 +1,6 @@
 """Phase 4 tests: expandable game activity and compare tray."""
 import json
+import os
 import re
 import unittest
 from datetime import datetime

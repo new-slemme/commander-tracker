@@ -60,9 +60,22 @@ app.secret_key = _flask_secret
 
 def _resolve_database_uri() -> str:
     """Keep stable and test deployments on separate databases by default."""
+    import sys as _sys
+
     configured_uri = os.getenv("COMMANDER_DB_URI", "").strip()
     if configured_uri:
         return configured_uri
+
+    # Detect test runners before they can bind the engine to the live DB.
+    # unittest is already in sys.modules by the time the first test file imports app.
+    _is_test = (
+        "unittest" in _sys.modules
+        or "pytest" in _sys.modules
+        or "_pytest" in _sys.modules
+    )
+    if _is_test:
+        import tempfile
+        return f"sqlite:///{tempfile.gettempdir()}/commander_test_{_sys.argv[0].replace('/', '_')[-32:]}_{os.getpid()}.sqlite"
 
     app_channel = os.getenv("APP_CHANNEL", "stable").lower().strip()
     database_name = "commander-test.db" if app_channel == "test" else "commander.db"
@@ -9349,6 +9362,77 @@ def api_join_claim(token):
         "participants": participants,
         "state": state,
     })
+
+
+SEARCH_RESULT_LIMIT = 10
+SEARCH_MIN_QUERY_LEN = 1
+
+FIXED_ACTIONS = [
+    {"label": "Home", "url": "/", "icon": "home"},
+    {"label": "Play Game", "url": "/play_game", "icon": "play"},
+    {"label": "Players", "url": "/players", "icon": "players"},
+    {"label": "Decks", "url": "/decks", "icon": "decks"},
+    {"label": "Games", "url": "/games", "icon": "games"},
+    {"label": "Pods", "url": "/pods", "icon": "pods"},
+    {"label": "Saltmine", "url": "/saltmine", "icon": "stats"},
+]
+
+
+@app.route("/api/search")
+def api_search():
+    user_id = session.get("user_id")
+    if not user_id:
+        return jsonify({"error": "Authentication required"}), 401
+
+    q = (request.args.get("q") or "").strip()
+    if len(q) < SEARCH_MIN_QUERY_LEN:
+        return jsonify({"players": [], "decks": [], "actions": FIXED_ACTIONS})
+
+    like_q = f"%{q}%"
+
+    player_rows = (
+        Player.query.filter(Player.name.ilike(like_q))
+        .order_by(Player.name)
+        .limit(SEARCH_RESULT_LIMIT)
+        .all()
+    )
+    players = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "url": f"/player/{p.id}",
+            "accent": player_id_to_accent(p.id),
+        }
+        for p in player_rows
+    ]
+
+    deck_rows = (
+        Deck.query.filter(
+            db.or_(Deck.name.ilike(like_q), Deck.commander.ilike(like_q))
+        )
+        .order_by(Deck.name)
+        .limit(SEARCH_RESULT_LIMIT)
+        .all()
+    )
+    decks = [
+        {
+            "id": d.id,
+            "name": d.name,
+            "commander": d.commander,
+            "url": f"/deck/{d.id}",
+            "retired": bool(d.retired),
+            "planned": bool(d.planned),
+            "player_id": d.player_id,
+            "commander_match": not d.name.lower().__contains__(q.lower()) and bool(d.commander),
+        }
+        for d in deck_rows
+    ]
+
+    actions = [a for a in FIXED_ACTIONS if q.lower() in a["label"].lower()]
+    if not actions:
+        actions = FIXED_ACTIONS[:4]
+
+    return jsonify({"players": players, "decks": decks, "actions": actions})
 
 
 if __name__ == "__main__":
