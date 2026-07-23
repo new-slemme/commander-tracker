@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-    <link href="{{ url_for('static', filename='css/index.css', v='batch07') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/index.css', v='p2') }}" rel="stylesheet">
 
 <div class="app-hero mb-4">
   <div class="app-hero__head">
@@ -18,7 +18,7 @@
       {% for s in top_players[:3] %}
         <span class="persona-avatar"
               title="{{ s.player.name }}"
-              style="--agent: {{ loop.cycle('var(--orange)', 'var(--blue)', 'var(--purple)') }}; --agent-trans: {{ loop.cycle('var(--orange-trans)', 'var(--blue-trans)', 'var(--purple-trans)') }};">
+              style="--agent: {{ player_accent(s.player.id) }}; --agent-trans: {{ player_accent_trans(s.player.id) }};">
           {{ s.player.name[:1]|upper }}
         </span>
       {% endfor %}
@@ -32,197 +32,259 @@
 </div>
 
 
-  <!-- =========================
-      TOP PLAYERS (PYRAMID)
-      ========================== -->
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
-    <h2 class="m-0">Top Players</h2>
-  </div>
+  <!-- LEADERBOARD -->
+  <section id="leaderboard" class="mb-5">
 
-  <div class="pyramid mb-5">
-    {% if top_players|length > 0 %}
-      {% set bg0 = top_players[0].bg_art %}
-      <div class="leader-card p-top {% if bg0 %}has-bg{% endif %}"
-           {% if bg0 %}style="background-image:url('{{ bg0 }}');"{% endif %}>
-        <span class="erzfeind-badge">ERZFEIND</span>
-        <div class="d-flex justify-content-between align-items-start">
-          <span class="rank-badge">#1</span>
-        </div>
-        <h3 class="mt-3 mb-1 text-white">{{ top_players[0].player.name }}</h3>
-        {% if top_players[0].most_played_deck %}
-          <div class="muted mb-2">
-            Most played: <span class="text-white">{{ top_players[0].most_played_deck.name }}</span>
-          </div>
-        {% endif %}
-        <div class="d-flex gap-3 flex-wrap muted">
-          <div><span class="text-white fw-bold">{{ top_players[0].wins }}</span> wins</div>
-          <div><span class="text-white fw-bold">{{ top_players[0].played }}</span> games</div>
-          <div><span class="text-white fw-bold">{{ top_players[0].winrate }}%</span> winrate</div>
-          {% if top_players[0].avg_mmr is not none %}
-            <div>Avg. MMR: <span class="text-white fw-bold">{{ top_players[0].avg_mmr }}</span></div>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-
-    {% if top_players|length > 1 %}
-      {% set bg1 = top_players[1].bg_art %}
-      <div class="leader-card p-left {% if bg1 %}has-bg{% endif %}"
-           {% if bg1 %}style="background-image:url('{{ bg1 }}');"{% endif %}>
-        <div class="d-flex justify-content-between align-items-start">
-          <span class="rank-badge">#2</span>
-        </div>
-        <h4 class="mt-3 mb-1 text-white">{{ top_players[1].player.name }}</h4>
-        {% if top_players[1].most_played_deck %}
-          <div class="muted mb-2">
-            Most played: <span class="text-white">{{ top_players[1].most_played_deck.name }}</span>
-          </div>
-        {% endif %}
-        <div class="d-flex gap-3 flex-wrap muted">
-          <div><span class="text-white fw-bold">{{ top_players[1].wins }}</span> wins</div>
-          <div><span class="text-white fw-bold">{{ top_players[1].winrate }}%</span> winrate</div>
-          {% if top_players[1].avg_mmr is not none %}
-            <div>Avg. MMR: <span class="text-white fw-bold">{{ top_players[1].avg_mmr }}</span></div>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-
-    {% if top_players|length > 2 %}
-      {% set bg2 = top_players[2].bg_art %}
-      <div class="leader-card p-right {% if bg2 %}has-bg{% endif %}"
-           {% if bg2 %}style="background-image:url('{{ bg2 }}');"{% endif %}>
-        <div class="d-flex justify-content-between align-items-start">
-          <span class="rank-badge">#3</span>
-        </div>
-        <h4 class="mt-3 mb-1 text-white">{{ top_players[2].player.name }}</h4>
-        {% if top_players[2].most_played_deck %}
-          <div class="muted mb-2">
-            Most played: <span class="text-white">{{ top_players[2].most_played_deck.name }}</span>
-          </div>
-        {% endif %}
-        <div class="d-flex gap-3 flex-wrap muted">
-          <div><span class="text-white fw-bold">{{ top_players[2].wins }}</span> wins</div>
-          <div><span class="text-white fw-bold">{{ top_players[2].winrate }}%</span> winrate</div>
-          {% if top_players[2].avg_mmr is not none %}
-            <div>Avg. MMR: <span class="text-white fw-bold">{{ top_players[2].avg_mmr }}</span></div>
-          {% endif %}
-        </div>
-      </div>
-    {% endif %}
-  </div>
-
-  <!-- =========================
-      PLAYER STATS
-      ========================== -->
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
-    <h2 class="m-0">Player Stats</h2>
-  </div>
-
-  <div class="stats-card mb-5">
-    <div class="stats-card-head">
-      <div class="muted">
-        Ranked by <span class="text-white fw-bold">wins</span> (and games played)
-      </div>
-      <div class="d-flex gap-2 flex-wrap">
-        <div class="stats-chip">Players: <b>{{ player_stats|length }}</b></div>
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+      <h2 class="m-0">Leaderboard</h2>
+      <div class="metric-selector" role="group" aria-label="Sort leaderboard by">
+        <button class="metric-btn is-active" data-metric="wins" type="button">Wins</button>
+        <button class="metric-btn" data-metric="mmr" type="button">MMR</button>
+        <button class="metric-btn" data-metric="winrate" type="button">Win Rate</button>
       </div>
     </div>
 
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 stats-table">
-        <thead>
-          <tr>
-            <th style="width:70px;">#</th>
-            <th>Player</th>
-            <th class="text-end">Wins</th>
-            <th class="text-end">Games</th>
-            <th class="text-end d-none d-sm-table-cell">Avg. MMR</th>
-            <th class="text-end">Win %</th>
-            <th style="width:220px;">&nbsp;</th>
-          </tr>
-        </thead>
+    {% if player_stats|length == 0 %}
+      <div class="empty-state mb-5">
+        <div class="empty-state__icon">⚔️</div>
+        <div class="empty-state__title">No players yet</div>
+        <div class="empty-state__body">Add players to start tracking your pod's standings.</div>
+        <a class="btn btn-primary" href="{{ url_for('players') }}">Add Player</a>
+      </div>
+    {% else %}
 
-        <tbody>
-          {% for s in player_stats %}
-            {% set wr = s.winrate %}
-            {% set badge_class = 'bad' %}
-            {% if wr >= 60 %}{% set badge_class = 'good' %}
-            {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+      <!-- Podium: top 3 -->
+      {% if player_stats|length >= 1 %}
+      <div class="leaderboard-podium mb-4" id="leaderboard-podium">
+        {% for s in player_stats[:3] %}
+          {% set wr = s.winrate %}
+          <a class="podium-card podium-rank-{{ loop.index }}"
+             href="{{ url_for('player_detail', player_id=s.player.id) }}"
+             data-entity-type="player"
+             data-entity-id="{{ s.player.id }}"
+             data-wins="{{ s.wins }}"
+             data-winrate="{{ s.winrate }}"
+             data-mmr="{{ s.avg_mmr or 0 }}"
+             style="--player-accent: {{ player_accent(s.player.id) }}; --player-accent-trans: {{ player_accent_trans(s.player.id) }};"
+             {% if s.bg_art %}data-bg-art="{{ s.bg_art }}"{% endif %}>
+            {% if s.bg_art %}
+            <div class="podium-bg" style="background-image:url('{{ s.bg_art }}');"></div>
             {% endif %}
-
-            <tr>
-              <td><span class="rank-pill">{{ loop.index }}</span></td>
-
-              <td>
-                <a class="player-name" href="{{ url_for('player_detail', player_id=s.player.id) }}">{{ s.player.name }}</a>
-                <div class="stat-mini mt-1 d-sm-none">
-                  <div><b>{{ s.wins }}</b> W</div>
-                  <div><b>{{ s.played }}</b> games</div>
+            <div class="podium-overlay"></div>
+            <div class="podium-body">
+              <div class="d-flex align-items-center gap-3 mb-2">
+                <span class="rank-badge">#{{ loop.index }}</span>
+                <div class="entity-avatar" style="--player-accent: {{ player_accent(s.player.id) }};">
+                  {{ s.player.name[:1]|upper }}
                 </div>
-              </td>
-
-              <td class="text-end d-none d-sm-table-cell">{{ s.wins }}</td>
-              <td class="text-end">{{ s.played }}</td>
-
-              <td class="text-end d-none d-sm-table-cell">
+              </div>
+              <div class="podium-name">{{ s.player.name }}</div>
+              {% if s.most_played_deck %}
+              <div class="podium-deck muted">{{ s.most_played_deck.name }}</div>
+              {% endif %}
+              <div class="podium-stats mt-2">
+                <span class="podium-stat" data-metric-value="wins">
+                  <b>{{ s.wins }}</b> wins
+                </span>
+                <span class="podium-stat" data-metric-value="winrate">
+                  <b>{{ wr }}%</b> WR
+                </span>
                 {% if s.avg_mmr is not none %}
-                  <span class="text-white fw-bold">{{ s.avg_mmr }}</span>
-                {% else %}
-                  <span class="muted">—</span>
+                <span class="podium-stat" data-metric-value="mmr">
+                  <b>{{ s.avg_mmr }}</b> MMR
+                </span>
                 {% endif %}
-              </td>
+              </div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+      {% endif %}
 
-              <td class="text-end">
-                <span class="win-badge {{ badge_class }}">{{ wr }}%</span>
-              </td>
+      <!-- Full table -->
+      <div class="stats-card" id="leaderboard-table">
+        <div class="stats-card-head">
+          <div class="muted">
+            Ranked by <span class="text-white fw-bold" id="leaderboard-sort-label">wins</span>
+          </div>
+          <div class="stats-chip">Players: <b>{{ player_stats|length }}</b></div>
+        </div>
 
-              <td>
-                <div class="wr-progress" aria-label="Winrate progress">
-                  <div class="progress-bar"
-                       role="progressbar"
-                       style="width: {{ wr }}%;"
-                       aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-              </td>
-            </tr>
-          {% endfor %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0 stats-table">
+            <thead>
+              <tr>
+                <th style="width:70px;">#</th>
+                <th>Player</th>
+                <th class="text-end">Wins</th>
+                <th class="text-end">Games</th>
+                <th class="text-end d-none d-sm-table-cell">Avg. MMR</th>
+                <th class="text-end">Win %</th>
+                <th style="width:180px;">&nbsp;</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-tbody">
+              {% for s in player_stats %}
+                {% set wr = s.winrate %}
+                {% set badge_class = 'bad' %}
+                {% if wr >= 60 %}{% set badge_class = 'good' %}
+                {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+                {% endif %}
+                <tr data-entity-type="player"
+                    data-entity-id="{{ s.player.id }}"
+                    data-wins="{{ s.wins }}"
+                    data-winrate="{{ s.winrate }}"
+                    data-mmr="{{ s.avg_mmr or 0 }}"
+                    style="--player-accent: {{ player_accent(s.player.id) }}; --player-accent-trans: {{ player_accent_trans(s.player.id) }};">
+                  <td><span class="rank-pill">{{ loop.index }}</span></td>
+                  <td>
+                    <a class="player-name" href="{{ url_for('player_detail', player_id=s.player.id) }}">{{ s.player.name }}</a>
+                    <div class="stat-mini mt-1 d-sm-none">
+                      <div><b>{{ s.wins }}</b> W</div>
+                      <div><b>{{ s.played }}</b> games</div>
+                    </div>
+                  </td>
+                  <td class="text-end d-none d-sm-table-cell">{{ s.wins }}</td>
+                  <td class="text-end">{{ s.played }}</td>
+                  <td class="text-end d-none d-sm-table-cell">
+                    {% if s.avg_mmr is not none %}
+                      <span class="text-white fw-bold">{{ s.avg_mmr }}</span>
+                    {% else %}
+                      <span class="muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    <span class="win-badge {{ badge_class }}">{{ wr }}%</span>
+                  </td>
+                  <td>
+                    <div class="wr-progress" aria-label="Win rate progress">
+                      <div class="progress-bar"
+                           role="progressbar"
+                           style="width: {{ wr }}%;"
+                           aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-          {% if player_stats|length == 0 %}
-            <tr>
-              <td colspan="7" class="text-center py-4 muted">No players yet.</td>
-            </tr>
-          {% endif %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+    {% endif %}
+  </section>
 
-  <!-- =========================
-      DECK SPOTLIGHT
-      ========================== -->
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
-    <h2 class="m-0">Deck Spotlight</h2>
-  </div>
 
-  {% if last_winning_deck %}
-    {% set art = last_winning_deck.commander_art_url %}
-    <div class="spotlight mb-5">
-      <div class="bg" style="{% if art %}background-image:url('{{ art }}'); background-position: top;{% endif %}"></div>
-      <div class="overlay"></div>
-      <div class="content">
-        <div class="muted mb-1">Last winning deck</div>
-        <h3 class="text-white mb-1">{{ last_winning_deck.name }}</h3>
-        <div class="muted mb-1">{{ last_winning_deck.commander_name or last_winning_deck.commander }}</div>
-        <div class="muted mb-3">Owner: <span class="text-white">{{ last_winning_deck.owner.name }}</span></div>
-        <a class="btn btn-primary" href="{{ url_for('deck_detail', deck_id=last_winning_deck.id) }}">View Deck</a>
+  <!-- DECKS IN FORM -->
+  <section id="decks-in-form" class="mb-5">
+
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+      <h2 class="m-0">Decks in Form</h2>
+      <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-primary" id="deck-sort-wr-btn" data-deck-sort="winrate" type="button">Sort: Win Rate</button>
+        <button class="btn btn-sm btn-outline-light" id="deck-sort-mmr-btn" data-deck-sort="mmr" type="button">Sort: MMR</button>
       </div>
     </div>
-  {% else %}
-    <div class="recent-card p-3 mb-5">
-      <div class="muted">No games recorded yet.</div>
-    </div>
-  {% endif %}
+
+    {% if deck_stats|length == 0 %}
+      <div class="empty-state mb-5">
+        <div class="empty-state__icon">🃏</div>
+        <div class="empty-state__title">No decks yet</div>
+        <div class="empty-state__body">Import or add a deck to see it here.</div>
+        <a class="btn btn-primary" href="{{ url_for('decks') }}">Add Deck</a>
+      </div>
+    {% else %}
+
+      {# Featured deck: last winning or best MMR #}
+      {% set featured = last_winning_deck or best_deck %}
+      {% if featured %}
+        {% set feat_art = featured.commander_art_url %}
+        <div class="deck-featured mb-4"
+             data-entity-type="deck"
+             data-entity-id="{{ featured.id }}">
+          <div class="deck-featured__bg" {% if feat_art %}style="background-image:url('{{ feat_art }}');"{% endif %}></div>
+          <div class="deck-featured__overlay"></div>
+          <div class="deck-featured__body">
+            <div class="muted small mb-1">
+              {{ "Last winning deck" if last_winning_deck else "Top rated deck" }}
+            </div>
+            <h3 class="text-white mb-1">{{ featured.name }}</h3>
+            <div class="muted mb-1">{{ featured.commander_name or featured.commander }}</div>
+            <div class="muted mb-3">Owner: <span class="text-white">{{ featured.owner.name }}</span></div>
+            <a class="btn btn-primary" href="{{ url_for('deck_detail', deck_id=featured.id) }}">View Deck</a>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="deck-grid" id="decks-in-form-grid">
+        {% for s in deck_stats %}
+          {% set d = s.deck %}
+          {% set art = d.commander_art_url %}
+          {% set wr = s.winrate %}
+          {% set badge_class = 'bad' %}
+          {% if wr >= 60 %}{% set badge_class = 'good' %}
+          {% elif wr >= 45 %}{% set badge_class = 'mid' %}
+          {% endif %}
+          {% set mmr = s.mmr %}
+          {% if mmr >= 1300 %}{% set tier = "S" %}{% set tier_cls = "success" %}
+          {% elif mmr >= 1200 %}{% set tier = "A" %}{% set tier_cls = "info" %}
+          {% elif mmr >= 1100 %}{% set tier = "B" %}{% set tier_cls = "primary" %}
+          {% elif mmr >= 950 %}{% set tier = "C" %}{% set tier_cls = "" %}
+          {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
+          {% set form_label = deck_form_labels.get(d.id) %}
+
+          <a class="deck-tile {% if art %}has-bg{% endif %}"
+             href="{{ url_for('deck_detail', deck_id=d.id) }}"
+             data-entity-type="deck"
+             data-entity-id="{{ d.id }}"
+             data-mmr="{{ mmr }}"
+             data-winrate="{{ wr }}"
+             {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
+
+            <div class="deck-tile-inner">
+              <div class="deck-title">
+                <div>
+                  {% if form_label %}
+                    <span class="deck-form-label form-label-{{ form_label|lower }}">{{ form_label }}</span>
+                  {% endif %}
+                  <h3 class="deck-name">{{ d.name }}</h3>
+                  <div class="deck-meta">
+                    <span class="strong">{{ d.commander_name or d.commander }}</span>
+                    <span class="muted"> · </span>
+                    <span>Owner: <span class="strong">{{ d.owner.name }}</span></span>
+                  </div>
+                </div>
+
+                <div class="deck-actions">
+                  {% if d.retired %}
+                    <span class="deck-retired-pill">Retired</span>
+                  {% endif %}
+                  <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
+                  <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
+                  <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
+                </div>
+              </div>
+
+              <div class="stat-chips">
+                <div><b>{{ s.wins }}</b> wins</div>
+                <div><b>{{ s.uses }}</b> games</div>
+                <div><b>{{ (s.uses - s.wins) if s.uses >= s.wins else 0 }}</b> losses</div>
+              </div>
+
+              <div class="deck-progress" aria-label="Win rate progress">
+                <div class="progress-bar"
+                     role="progressbar"
+                     style="width: {{ wr }}%;"
+                     aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
+              </div>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+
+    {% endif %}
+  </section>
+
 
   <!-- =========================
       RECENT GAMES
@@ -241,7 +303,10 @@
 
     <div class="p-3">
       {% if recent_games|length == 0 %}
-        <div class="muted">No games recorded yet.</div>
+        <div class="empty-state empty-state--inline">
+          <div class="muted">No games recorded yet.</div>
+          <a class="btn btn-sm btn-primary ms-3" href="{{ url_for('play_game') }}">Start a Game</a>
+        </div>
       {% else %}
         <div class="list-group" style="gap: 12px;">
           {% for g in recent_games %}
@@ -257,10 +322,11 @@
 
             {% set n = ns.arts|length %}
             {% if n == 0 %}{% set n = 1 %}{% endif %}
-            {% set slice = (100 / n) %}
 
             <a class="list-group-item p-0 recent-game-tile recent-game-link"
-               href="{{ url_for('game_detail', game_id=g.id) }}">
+               href="{{ url_for('game_detail', game_id=g.id) }}"
+               data-entity-type="game"
+               data-entity-id="{{ g.id }}">
               <div class="recent-game-inner">
 
                 <div class="recent-game-bg">
@@ -289,7 +355,9 @@
 
                   <div class="recent-players">
                     {% for gp in game_parts[g.id] %}
-                      <span class="player-pill {% if gp.player_id == g.winner_id %}win{% endif %}">
+                      <span class="player-pill {% if gp.player_id == g.winner_id %}win{% endif %}"
+                            data-entity-type="player"
+                            data-entity-id="{{ gp.player_id }}">
                         <span style="display:flex; align-items:center; gap:8px; min-width:0;">
                           {% if gp.player_id == g.winner_id %}
                             <span class="wmark">W</span>
@@ -321,103 +389,6 @@
     </div>
   </div>
 
-  <!-- =========================
-      TOP DECKS
-      ========================== -->
-  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
-    <h2 class="m-0">Top Decks</h2>
-    <div class="d-flex gap-2">
-      <button class="btn btn-sm btn-primary" id="deck-sort-wr-btn" onclick="sortTopDecks('winrate')">Sort: Win Rate</button>
-      <button class="btn btn-sm btn-outline-light" id="deck-sort-mmr-btn" onclick="sortTopDecks('mmr')">Sort: MMR</button>
-    </div>
-  </div>
-
-  {% if deck_stats|length == 0 %}
-    <div class="card p-3 mb-5">
-      <div class="muted">No decks yet.</div>
-    </div>
-  {% else %}
-    <div class="deck-grid mb-5" id="top-deck-grid">
-      {% for s in deck_stats %}
-        {% set d = s.deck %}
-        {% set art = d.commander_art_url %}
-        {% set wr = s.winrate %}
-        {% set badge_class = 'bad' %}
-        {% if wr >= 60 %}{% set badge_class = 'good' %}
-        {% elif wr >= 45 %}{% set badge_class = 'mid' %}
-        {% endif %}
-        {% set mmr = s.mmr %}
-        {% if mmr >= 1300 %}{% set tier = "S" %}{% set tier_cls = "success" %}
-        {% elif mmr >= 1200 %}{% set tier = "A" %}{% set tier_cls = "info" %}
-        {% elif mmr >= 1100 %}{% set tier = "B" %}{% set tier_cls = "primary" %}
-        {% elif mmr >= 950 %}{% set tier = "C" %}{% set tier_cls = "" %}
-        {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
-
-        <a class="deck-tile {% if art %}has-bg{% endif %}"
-           href="{{ url_for('deck_detail', deck_id=d.id) }}"
-           data-mmr="{{ mmr }}" data-winrate="{{ wr }}"
-           {% if art %}style="background-image:url('{{ art }}');"{% endif %}>
-
-          <div class="deck-tile-inner">
-            <div class="deck-title">
-              <div>
-                <h3 class="deck-name">{{ d.name }}</h3>
-                <div class="deck-meta">
-                  <span class="strong">{{ d.commander_name or d.commander }}</span>
-                  <span class="muted"> · </span>
-                  <span>Owner: <span class="strong">{{ d.owner.name }}</span></span>
-                </div>
-              </div>
-
-              <div class="deck-actions">
-                {% if d.retired %}
-                  <span class="deck-retired-pill">Retired</span>
-                {% endif %}
-                <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
-                <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
-                <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
-              </div>
-            </div>
-
-            <div class="stat-chips">
-              <div><b>{{ s.wins }}</b> wins</div>
-              <div><b>{{ s.uses }}</b> games</div>
-              <div><b>{{ (s.uses - s.wins) if s.uses >= s.wins else 0 }}</b> losses</div>
-            </div>
-
-            <div class="deck-progress" aria-label="Winrate progress">
-              <div class="progress-bar"
-                   role="progressbar"
-                   style="width: {{ wr }}%;"
-                   aria-valuenow="{{ wr }}" aria-valuemin="0" aria-valuemax="100"></div>
-            </div>
-          </div>
-        </a>
-      {% endfor %}
-    </div>
-    <script>
-    (function() {
-      window.sortTopDecks = function(col) {
-        document.getElementById('deck-sort-wr-btn').className = col === 'winrate'
-          ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-light';
-        document.getElementById('deck-sort-mmr-btn').className = col === 'mmr'
-          ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-light';
-        var grid = document.getElementById('top-deck-grid');
-        if (!grid) return;
-        var tiles = Array.from(grid.querySelectorAll('.deck-tile'));
-        tiles.sort(function(a, b) {
-          if (col === 'mmr') {
-            return parseFloat(b.dataset.mmr) - parseFloat(a.dataset.mmr);
-          }
-          var d = parseFloat(b.dataset.winrate) - parseFloat(a.dataset.winrate);
-          if (d !== 0) return d;
-          return parseFloat(b.dataset.mmr) - parseFloat(a.dataset.mmr);
-        });
-        tiles.forEach(function(t) { grid.appendChild(t); });
-      };
-    })();
-    </script>
-  {% endif %}
 
   <!-- =========================
       MECHANIC ACTIVATION

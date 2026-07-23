@@ -4106,6 +4106,31 @@ def admin_deny_user(user_id):
     flash(f"Denied registration request for '{denied_user.username}'.")
     return redirect(url_for("admin_users"))
 
+MIN_GAMES_FOR_LABEL = 3
+HOT_WINRATE_THRESHOLD = 60.0
+SLUMPING_WINRATE_THRESHOLD = 20.0
+
+
+def deck_form_label(stat: dict, *, is_top_mmr: bool = False) -> str | None:
+    """Return a deterministic form label for a deck stat row, or None if insufficient data."""
+    uses = stat.get("uses", 0)
+    winrate = stat.get("winrate", 0.0)
+    if uses == 0:
+        return "New"
+    if uses < MIN_GAMES_FOR_LABEL:
+        return None
+    if is_top_mmr:
+        return "Leader"
+    if winrate >= HOT_WINRATE_THRESHOLD:
+        return "Hot"
+    if winrate < SLUMPING_WINRATE_THRESHOLD:
+        return "Slumping"
+    return None
+
+
+app.jinja_env.globals["deck_form_label_fn"] = deck_form_label
+
+
 @app.route("/")
 def index():
     game_q, scope, active_pod = game_query_for_scope()
@@ -4303,10 +4328,18 @@ def index():
         else:
             counts["activation_given_capability"] = 0.0
 
+    # Deck form labels for Decks in Form section
+    top_mmr_deck_id = max(deck_stats, key=lambda s: s["mmr"])["deck"].id if deck_stats else None
+    deck_form_labels = {
+        s["deck"].id: deck_form_label(s, is_top_mmr=(s["deck"].id == top_mmr_deck_id))
+        for s in deck_stats
+    }
+
     return render_template(
         "index.html",
         player_stats=player_stats,
         deck_stats=top_decks,
+        deck_form_labels=deck_form_labels,
         recent_games=recent_games,
         game_parts=game_parts,
         mmr_delta_by_game_deck=mmr_delta_by_game_deck,

@@ -143,11 +143,204 @@
     });
   }
 
+  // ── Leaderboard metric switching ─────────────────────────────────
+  function initLeaderboardMetrics() {
+    var section = document.getElementById('leaderboard');
+    if (!section) return;
+
+    var btns = section.querySelectorAll('.metric-btn');
+    var tbody = document.getElementById('leaderboard-tbody');
+    var podium = document.getElementById('leaderboard-podium');
+    var sortLabel = document.getElementById('leaderboard-sort-label');
+
+    function getMetricVal(row, metric) {
+      return parseFloat(row.getAttribute('data-' + metric) || '0');
+    }
+
+    function sortByMetric(metric) {
+      // Update sort label
+      var labels = { wins: 'wins', mmr: 'MMR', winrate: 'win rate' };
+      if (sortLabel) sortLabel.textContent = labels[metric] || metric;
+
+      // Sort table rows
+      if (tbody) {
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-entity-type="player"]'));
+        rows.sort(function (a, b) {
+          return getMetricVal(b, metric) - getMetricVal(a, metric);
+        });
+        rows.forEach(function (row, i) {
+          var rankCell = row.querySelector('.rank-pill');
+          if (rankCell) rankCell.textContent = i + 1;
+          tbody.appendChild(row);
+        });
+      }
+
+      // Reorder podium cards
+      if (podium) {
+        var cards = Array.prototype.slice.call(podium.querySelectorAll('[data-entity-type="player"]'));
+        cards.sort(function (a, b) {
+          return getMetricVal(b, metric) - getMetricVal(a, metric);
+        });
+        var ranks = ['podium-rank-1', 'podium-rank-2', 'podium-rank-3'];
+        cards.forEach(function (card, i) {
+          ranks.forEach(function (cls) { card.classList.remove(cls); });
+          if (ranks[i]) card.classList.add(ranks[i]);
+          podium.appendChild(card);
+        });
+      }
+    }
+
+    btns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var metric = btn.getAttribute('data-metric');
+        btns.forEach(function (b) { b.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        sortByMetric(metric);
+      });
+    });
+  }
+
+  // ── Deck sort switching ──────────────────────────────────────────
+  function initDeckSort() {
+    var grid = document.getElementById('decks-in-form-grid');
+    if (!grid) return;
+
+    var sortBtns = document.querySelectorAll('[data-deck-sort]');
+
+    function sortDecks(metric) {
+      var tiles = Array.prototype.slice.call(grid.querySelectorAll('[data-entity-type="deck"]'));
+      tiles.sort(function (a, b) {
+        return parseFloat(b.getAttribute('data-' + metric) || '0') -
+               parseFloat(a.getAttribute('data-' + metric) || '0');
+      });
+      tiles.forEach(function (tile) { grid.appendChild(tile); });
+    }
+
+    sortBtns.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var metric = btn.getAttribute('data-deck-sort');
+        sortBtns.forEach(function (b) {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-outline-light');
+        });
+        btn.classList.remove('btn-outline-light');
+        btn.classList.add('btn-primary');
+        sortDecks(metric);
+      });
+    });
+  }
+
+  // ── Connected entity selection / highlighting ────────────────────
+  function initEntityHighlighting() {
+    var ALL_ENTITY_TYPES = ['player', 'deck', 'game'];
+
+    function getEntityEls(type, id) {
+      return document.querySelectorAll('[data-entity-type="' + type + '"][data-entity-id="' + id + '"]');
+    }
+
+    function getAllEntities() {
+      return document.querySelectorAll('[data-entity-type]');
+    }
+
+    function clearHighlights() {
+      getAllEntities().forEach(function (el) {
+        el.classList.remove('is-selected', 'is-related', 'is-dimmed');
+      });
+    }
+
+    // When a player element is selected, dim unrelated decks in recent games
+    function highlightPlayer(playerId) {
+      var allEntities = getAllEntities();
+
+      // Dim everything first
+      allEntities.forEach(function (el) {
+        el.classList.add('is-dimmed');
+      });
+
+      // Mark selected player rows/cards
+      getEntityEls('player', playerId).forEach(function (el) {
+        el.classList.remove('is-dimmed');
+        el.classList.add('is-selected');
+      });
+
+      // Mark player's own deck tiles as related using leaderboard rows data-wins
+      // (we can't directly map player->deck here without server data, so we
+      //  highlight game rows where the player appears)
+      document.querySelectorAll('.player-pill[data-entity-id="' + playerId + '"]').forEach(function (pill) {
+        var gameTile = pill.closest('[data-entity-type="game"]');
+        if (gameTile) {
+          gameTile.classList.remove('is-dimmed');
+          gameTile.classList.add('is-related');
+        }
+      });
+    }
+
+    function handleEntityClick(e) {
+      var target = e.target.closest('[data-entity-type]');
+      if (!target) {
+        clearHighlights();
+        return;
+      }
+
+      // If already selected, deselect
+      if (target.classList.contains('is-selected')) {
+        clearHighlights();
+        return;
+      }
+
+      var type = target.getAttribute('data-entity-type');
+      var id = target.getAttribute('data-entity-id');
+
+      clearHighlights();
+
+      if (type === 'player') {
+        highlightPlayer(id);
+        e.preventDefault();
+      } else {
+        // For deck and game entities, just highlight the group
+        getAllEntities().forEach(function (el) {
+          el.classList.add('is-dimmed');
+        });
+        getEntityEls(type, id).forEach(function (el) {
+          el.classList.remove('is-dimmed');
+          el.classList.add('is-selected');
+        });
+        // Don't preventDefault on deck/game — let the link navigate
+      }
+    }
+
+    // Only intercept clicks that are on entity containers, not their child links
+    document.addEventListener('click', function (e) {
+      var entityEl = e.target.closest('[data-entity-type]');
+      if (!entityEl) {
+        // Click outside any entity — clear
+        if (document.querySelector('.is-selected')) clearHighlights();
+        return;
+      }
+      // Only intercept player entities for selection; deck/game navigate normally
+      var type = entityEl.getAttribute('data-entity-type');
+      if (type === 'player') {
+        // Only if the click was on the container itself, not a child link going to player detail
+        var link = e.target.closest('a');
+        if (!link || link === entityEl) {
+          handleEntityClick(e);
+        }
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') clearHighlights();
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
   UI.init = function () {
     initMobileMenu();
     initPodSwitcher();
     initFlashToasts();
+    initLeaderboardMetrics();
+    initDeckSort();
+    initEntityHighlighting();
   };
 
   global.CommandersohnUI = UI;
