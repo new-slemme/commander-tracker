@@ -6,7 +6,17 @@
       "Bash(cp /home/slemme/mine/css-design/img/mana/*.svg /home/slemme/mine/commander-tracker-test/static/img/mana/)",
       "Bash(docker compose *)",
       "Bash(sed -i 's/\\\\xe2\\\\x80\\\\x9c/\"/g; s/\\\\xe2\\\\x80\\\\x9d/\"/g; s/\\\\xe2\\\\x80\\\\x98/'\"'\"'/g; s/\\\\xe2\\\\x80\\\\x99/'\"'\"'/g' ~/mine/commander-tracker/templates/play_game.html)",
-      "Bash(sed -i 's/class=\"btn btn-success btn-lg app-btn\" id=\"startGameBtn\"/class=\"btn btn-primary btn-lg app-btn\" id=\"startGameBtn\"/' ~/mine/commander-tracker/templates/play_game.html)"
+      "Bash(sed -i 's/class=\"btn btn-success btn-lg app-btn\" id=\"startGameBtn\"/class=\"btn btn-primary btn-lg app-btn\" id=\"startGameBtn\"/' ~/mine/commander-tracker/templates/play_game.html)",
+      "Bash(awk 'NR==1 {print $2}')",
+      "Bash(python3.11 -m venv /tmp/claude-1000/-home-slemme-mine-commander-tracker/581aac09-bd26-4652-aee3-480f58e4c523/scratchpad/venv)",
+      "Bash(/tmp/claude-1000/-home-slemme-mine-commander-tracker/581aac09-bd26-4652-aee3-480f58e4c523/scratchpad/venv/bin/pip install *)",
+      "Bash(awk -F: '$1>=8742 && $1<=8837')",
+      "Bash(python3.11 -m pytest tests/)",
+      "Bash(python3.11 -m pytest tests/ -q)",
+      "Bash(pip show *)",
+      "Bash(python3.11 -m pip install --user pytest -q)",
+      "Bash(python3.11 -m unittest discover -s tests -v)",
+      "Bash(pip index *)"
     ]
   }
 }

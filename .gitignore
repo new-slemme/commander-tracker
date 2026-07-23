@@ -3,3 +3,7 @@ data/commander.db
 __pycache__/
 *.pyc
 .env
+# Recovered Android offline cache — contains real player names/stats, keep out of git
+edh_offline.xml
+# Personal incident report for Anthropic support — not project code
+incident-report-2026-07-02-db-wipe.md

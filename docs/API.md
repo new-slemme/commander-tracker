@@ -4,6 +4,15 @@ This document describes the HTTP API exposed by Commander Tracker for standalone
 
 > Current implementation reference: `app.py` (Flask app). Responses are JSON unless noted otherwise.
 
+> **Historical stat baseline:** `wins`, `played`/`uses`, and `winrate` on player and deck
+> objects include a recovered pre-wipe baseline (games lost in an April data loss that
+> survive only as aggregate tallies). These fields therefore reflect true all-time totals,
+> not just rows currently in the DB. The baseline is attributed to the default pod, so it is
+> included in unscoped/default-pod and lifetime views but omitted from other-pod or
+> date-filtered stats. Distinct game **counts** (e.g. `total_games`) count real game rows plus
+> the recovered games; per-player `played` is a participation count and can exceed
+> `total_games`. Seat/starting-player and matchup breakdowns are not baseline-adjusted.
+
 ## 1) Base URL and transport
 
 - **Base URL (local/dev):** `http://localhost:5000`
