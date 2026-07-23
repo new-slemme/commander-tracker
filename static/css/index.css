@@ -1,3 +1,36 @@
+  /* ===== Batch 07 homepage integration ===== */
+  .home-roster {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color-subtle);
+  }
+
+  .home-roster-specs {
+    margin-left: auto;
+  }
+
+  .app-hero .roster-btn {
+    align-self: flex-start;
+    text-decoration: none;
+  }
+
+  @media (max-width: 576px) {
+    .home-roster {
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .home-roster-specs {
+      width: 100%;
+      margin-left: 0;
+    }
+
+    .app-hero .roster-btn {
+      width: 100%;
+      text-align: center;
+    }
+  }
+
   /* ===== Player Stats (index) ===== */
   .stats-card {
     border-radius: var(--radius-xl);

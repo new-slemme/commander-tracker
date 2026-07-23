@@ -56,7 +56,20 @@ if not _flask_secret:
         stacklevel=2,
     )
 app.secret_key = _flask_secret
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:////data/commander.db"
+
+
+def _resolve_database_uri() -> str:
+    """Keep stable and test deployments on separate databases by default."""
+    configured_uri = os.getenv("COMMANDER_DB_URI", "").strip()
+    if configured_uri:
+        return configured_uri
+
+    app_channel = os.getenv("APP_CHANNEL", "stable").lower().strip()
+    database_name = "commander-test.db" if app_channel == "test" else "commander.db"
+    return f"sqlite:////data/{database_name}"
+
+
+app.config["SQLALCHEMY_DATABASE_URI"] = _resolve_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB — enough for animated GIF commander art
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
@@ -3144,6 +3157,47 @@ def deny_user_from_registration_request(registration_request, reviewer_user_id):
     return "denied", u
 
 
+PLAYER_ACCENT_PALETTE = [
+    "var(--orange)",
+    "var(--blue)",
+    "var(--purple)",
+    "var(--green)",
+    "var(--red)",
+    "var(--yellow)",
+]
+
+PLAYER_ACCENT_PALETTE_TRANS = [
+    "var(--orange-trans)",
+    "var(--blue-trans)",
+    "var(--purple-trans)",
+    "var(--green-trans)",
+    "var(--red-trans)",
+    "var(--yellow-trans)",
+]
+
+
+def player_id_to_accent(player_id: int) -> str:
+    return PLAYER_ACCENT_PALETTE[int(player_id) % len(PLAYER_ACCENT_PALETTE)]
+
+
+def player_id_to_accent_trans(player_id: int) -> str:
+    return PLAYER_ACCENT_PALETTE_TRANS[int(player_id) % len(PLAYER_ACCENT_PALETTE_TRANS)]
+
+
+app.jinja_env.globals["player_accent"] = player_id_to_accent
+app.jinja_env.globals["player_accent_trans"] = player_id_to_accent_trans
+
+
+def _resolve_nav_scope() -> str:
+    """Return the active scope for the current request, persisting to session."""
+    raw = request.args.get("scope", "").strip().lower()
+    if raw in ("pod", "all"):
+        session["nav_scope"] = raw
+        session.modified = True
+        return raw
+    return session.get("nav_scope", "pod")
+
+
 @app.context_processor
 def inject_pod_context():
     user = get_current_user()
@@ -3152,6 +3206,7 @@ def inject_pod_context():
         return {
             "nav_active_pod": None,
             "nav_available_pods": [],
+            "nav_scope": "pod",
             "use_sigtaara": False,
             "use_light_theme": False,
             **_channel,
@@ -3160,6 +3215,7 @@ def inject_pod_context():
     return {
         "nav_active_pod": get_active_pod(),
         "nav_available_pods": get_accessible_pods(user),
+        "nav_scope": _resolve_nav_scope(),
         "use_sigtaara": bool(user.use_sigtaara),
         "use_light_theme": bool(user.use_light_theme),
         "can_access_registration_requests": can_access_registration_request_queue(user),
@@ -3168,7 +3224,7 @@ def inject_pod_context():
 
 
 def game_query_for_scope():
-    scope = (request.args.get("scope") or "pod").strip().lower()
+    scope = _resolve_nav_scope()
     q = Game.query
     active_pod = get_active_pod()
     if scope != "all" and active_pod:
@@ -4139,7 +4195,7 @@ def index():
     top_decks = deck_stats[:6]
 
     # Recent games
-    recent_games = game_q.order_by(Game.date.desc()).limit(10).all()
+    recent_games = game_q.order_by(Game.date.desc(), Game.id.desc()).limit(10).all()
     _recent_ids = [g.id for g in recent_games]
     _all_parts = GameParticipant.query.filter(GameParticipant.game_id.in_(_recent_ids)).all() if _recent_ids else []
     game_parts: dict[int, list] = {}
@@ -7761,7 +7817,7 @@ def api_stats():
         player_stats.append({"player_id": p.id, "name": p.name, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
 
-    recent_games_list = game_q.order_by(Game.date.desc()).limit(10).all()
+    recent_games_list = game_q.order_by(Game.date.desc(), Game.id.desc()).limit(10).all()
     recent_game_ids = [g.id for g in recent_games_list]
     parts = GameParticipant.query.filter(
         GameParticipant.game_id.in_(recent_game_ids if recent_game_ids else [-1])

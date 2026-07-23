@@ -54,7 +54,20 @@ docker compose up --build -d commander-tracker-test
 
 Stable container runs on port **5000**; test container on port **5001**.
 
-The app binds to `0.0.0.0` and uses port 5000 by default. The SQLite database is at `/data/commander.db` (Docker volume: `./data:/data`).
+The app binds to `0.0.0.0` and uses port 5000 by default. The stable channel uses
+`/data/commander.db`; the test channel uses `/data/commander-test.db`. Both files
+live in the Docker volume mounted from `./data`, but writes are isolated by file.
+
+Refresh the test database from a consistent production snapshot with:
+
+```bash
+./scripts/mirror-production-db.sh
+```
+
+The mirror script uses SQLite's online backup command, so committed WAL data is
+included even when the stable app is running. Refreshing the mirror replaces the
+test database and should only be done when discarding current test-only changes is
+intentional.
 
 ## Running Tests
 
@@ -73,6 +86,7 @@ Tests use temporary SQLite databases for isolation — no external setup needed.
 | Variable | Required | Description |
 |---|---|---|
 | `FLASK_SECRET_KEY` | Recommended | Session encryption key |
+| `COMMANDER_DB_URI` | Optional | Explicit SQLAlchemy database URI; overrides channel-based database selection |
 | `CCAUTO_BASE_URL` | Optional | Custom MTG card gallery endpoint (e.g. `http://custom-mtg-gallery:3000`) |
 | `BOOTSTRAP_ADMIN_USERNAME` | Optional | Username to auto-promote to admin on first login |
 | `APP_PASSWORD` | Optional | Global app password gate |
@@ -83,7 +97,8 @@ Tests use temporary SQLite databases for isolation — no external setup needed.
 
 ## Database Models
 
-All models are defined in `app.py` and use Flask-SQLAlchemy. The database is SQLite at `/data/commander.db`.
+All models are defined in `app.py` and use Flask-SQLAlchemy. Stable uses
+`/data/commander.db`; test uses its mirror at `/data/commander-test.db`.
 
 - **User** — Authentication accounts (username, password hash, active/admin flags, preferences)
 - **Player** — Game participants (1:1 optional link to User; players can exist without accounts)

@@ -47,12 +47,14 @@
   --border-color-subtle: rgba(88, 72, 49, 0.12);
   --border-color-strong: rgba(88, 72, 49, 0.30);
 
+  /* ── Background gradient surfaces ────────────────────────── */
   --surface-gradient-border: rgba(115,81,143,0.24);
   --surface-gradient-bg:
     radial-gradient(circle at 12% 8%, rgba(255,255,255,0.88), transparent 14rem),
     radial-gradient(circle at 88% 18%, rgba(115,81,143,0.13), transparent 18rem),
     linear-gradient(180deg, rgba(255,255,255,0.70), rgba(255,250,241,0.88));
 
+  /* Commander Tracker semantic stat-panel surfaces */
   --stats-panel-chip-bg: rgba(255,255,255,0.56);
   --stats-panel-label-color: var(--font-base-trans);
   --stats-panel-value-color: var(--font-base);
@@ -371,3 +373,88 @@ code { color: var(--font-accent); }
 }
 .svc-name { color: var(--font-base); }
 .svc-icon-wrap { background: color-mix(in srgb, var(--cat) 10%, #fffaf1); }
+
+/* ── New components (batch 06) ──────────────────────────────── */
+
+/* Segmented tabs */
+.seg-tabs { background: rgba(255,250,241,0.62); border-color: var(--border-color); }
+.seg-tabs .seg-tab.active { background: #2f3857; color: #fffaf1; box-shadow: 0 6px 16px rgba(64,48,28,0.14); }
+.seg-panel { background: rgba(255,255,255,0.50); color: var(--font-base); }
+
+/* Toggle switch */
+.switch { background: rgba(88,72,49,0.10); border-color: var(--border-color-strong); }
+.switch .switch-knob { background: var(--font-base); box-shadow: 0 1px 4px rgba(64,48,28,0.28); }
+.switch.on { background: rgba(47,107,79,0.20); border-color: rgba(47,107,79,0.55); }
+.switch.on .switch-knob { background: #fffaf1; }
+.switch-row .switch-label { color: var(--font-base); }
+
+/* Player avatar & chip */
+.avatar { background: var(--base); color: #fffaf1; }
+.avatar.silver { border-color: var(--font-accent); box-shadow: 0 0 14px rgba(82,99,163,0.22); }
+.player-chip { background: rgba(255,255,255,0.52); }
+.player-chip .player-name { color: var(--font-base); }
+.player-chip .player-rate.high { color: var(--font-highlight); }
+.player-chip .player-rate.mid  { color: var(--font-base); }
+
+/* Win-rate ring */
+.stat-ring { background: conic-gradient(var(--ring, var(--green)) 0% var(--pct, 50%), rgba(88,72,49,0.12) var(--pct, 50%) 100%); box-shadow: var(--shadow-sm); }
+.stat-ring .stat-ring-core { background: rgba(255,250,241,0.92); }
+.stat-ring .stat-ring-value { color: var(--font-base); }
+
+/* Mana curve */
+.mana-curve .curve-count { color: var(--font-base); }
+.mana-curve .curve-bar { background: linear-gradient(180deg, var(--font-accent), var(--base)); border-color: var(--border-color); }
+
+/* Match timeline */
+.match-timeline::before { background: var(--border-color); }
+.match-timeline .match-dot { border-color: var(--darkest); }
+.match-timeline .match-title { color: var(--font-base); }
+.match-tag.win  { color: #214d39; border-color: rgba(47,107,79,0.42); background: rgba(47,107,79,0.14); }
+.match-tag.loss { color: #87312d; border-color: rgba(178,58,52,0.42); background: rgba(178,58,52,0.13); }
+
+/* Command palette */
+.cmd-palette { background: var(--darker); border-color: var(--border-color); box-shadow: var(--shadow-md); }
+.cmd-palette .cmd-search input { color: var(--font-base); }
+.cmd-palette .cmd-item:hover,
+.cmd-palette .cmd-item.active { background: rgba(88,72,49,0.06); }
+.cmd-palette .cmd-name { color: var(--font-base); }
+.kbd { color: var(--font-base-trans); border-color: var(--border-color); }
+
+/* Pagination & stepper */
+.pagination .page-btn:hover { background: rgba(88,72,49,0.06); color: #1c2750; }
+.pagination .page-btn.active { background: #2f3857; color: #fffaf1; }
+.stepper { background: rgba(255,255,255,0.50); border-color: var(--border-color); }
+.stepper .step-btn:hover { background: rgba(88,72,49,0.10); color: var(--font-base); }
+.stepper .step-value { color: var(--font-base); }
+
+/* Skeleton */
+.skeleton {
+  background: linear-gradient(90deg,
+    rgba(88,72,49,0.06) 25%,
+    rgba(88,72,49,0.14) 37%,
+    rgba(88,72,49,0.06) 63%);
+  background-size: 400% 100%;
+}
+
+/* Tooltip */
+.tooltip .tooltip-bubble { background: #2f3857; color: #fffaf1; border-color: rgba(64,48,28,0.3); }
+.tooltip .tooltip-bubble::after { border-top-color: #2f3857; }
+
+/* Rarity tags */
+.rarity-tag { background: rgba(255,255,255,0.50); color: #6b7280; border-color: rgba(107,114,128,0.4); }
+.rarity-tag.uncommon { color: #4b5563; border-color: rgba(75,85,99,0.4); }
+.rarity-tag.rare     { color: #a67c00; border-color: rgba(166,124,0,0.5); background: rgba(242,201,76,0.14); }
+.rarity-tag.mythic   { color: #b64b2d; border-color: rgba(182,75,45,0.5); background: linear-gradient(90deg, rgba(255,107,53,0.16), rgba(211,32,42,0.12)); }
+
+/* ── Nixxia studio components (batch 07) ────────────────────── */
+:root {
+  --ink: #1c2333;                    /* strong text on light surfaces */
+  --hl: rgba(185,133,29,0.22);       /* search match highlight */
+}
+.roster-stack .persona-avatar { box-shadow: 0 0 0 3px var(--darkest); }
+.chat-bubble, .chat-typing { background: rgba(255,255,255,0.55); }
+.modal-overlay  { background: rgba(64,48,28,0.35); }
+.drawer-overlay { background: rgba(64,48,28,0.3); }
+.mission-stepper .m-step-dot { background: var(--darker); }
+.mission-stepper .m-step.current .m-step-dot { background: var(--darker); }
+.toast { box-shadow: 0 8px 24px rgba(64,48,28,0.18); }

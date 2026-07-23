@@ -1,23 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
-    <link href="{{ url_for('static', filename='css/index.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/index.css', v='batch07') }}" rel="stylesheet">
 
 <div class="app-hero mb-4">
-  <h1 class="card-head-title title-font">{{ active_pod.name if active_pod else "Der Keller" }}</h1>
-  <div class="app-hero__pill mb-2">
-    <span class="app-hero__dot"></span>
-    Active Pod
+  <div class="app-hero__head">
+    <div>
+      <span class="prov-chip canon mb-2">Active pod</span>
+      <h1 class="card-head-title title-font">{{ active_pod.name if active_pod else "Der Keller" }}</h1>
+      <div class="app-hero__sub">Pod standings, recent games, and the decks shaping the table.</div>
+    </div>
+    <a class="roster-btn on" href="{{ url_for('play_game') }}"
+       style="--agent: var(--orange); --agent-trans: var(--orange-trans);">Start a Game</a>
   </div>
 
-</div>
-
-<div class="scope-indicator d-flex align-items-center justify-content-between gap-3 mb-4">
-  <div class="scope-indicator__label">Scope: <strong>{{ "This Pod" if scope == "pod" else "All Pods" }}</strong></div>
-  <div class="d-flex gap-2 scope-toggle">
-    <a class="btn btn-sm {% if scope == 'pod' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='pod') }}">This Pod</a>
-    <a class="btn btn-sm {% if scope == 'all' %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('index', scope='all') }}">All Pods</a>
+  <div class="roster home-roster" aria-label="Current pod roster">
+    <div class="roster-stack" aria-hidden="true">
+      {% for s in top_players[:3] %}
+        <span class="persona-avatar"
+              title="{{ s.player.name }}"
+              style="--agent: {{ loop.cycle('var(--orange)', 'var(--blue)', 'var(--purple)') }}; --agent-trans: {{ loop.cycle('var(--orange-trans)', 'var(--blue-trans)', 'var(--purple-trans)') }};">
+          {{ s.player.name[:1]|upper }}
+        </span>
+      {% endfor %}
+    </div>
+    <span class="roster-count">{{ player_stats|length }} ranked players</span>
+    <div class="persona-specs home-roster-specs">
+      <span class="spec">{{ deck_stats|length }} decks</span>
+      <span class="spec">{{ recent_games|length }} recent games</span>
+    </div>
   </div>
 </div>
+
 
   <!-- =========================
       TOP PLAYERS (PYRAMID)
