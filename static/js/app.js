@@ -333,6 +333,300 @@
     });
   }
 
+  // ── Entity detail drawer ─────────────────────────────────────────
+  function initEntityDrawer() {
+    var drawer = document.getElementById('entity-drawer');
+    var backdrop = document.getElementById('entity-drawer-backdrop');
+    var closeBtn = document.getElementById('entity-drawer-close');
+    var title = document.getElementById('entity-drawer-title');
+    var fullLink = document.getElementById('entity-drawer-full-link');
+    var loading = document.getElementById('entity-drawer-loading');
+    var errorEl = document.getElementById('entity-drawer-error');
+    var body = document.getElementById('entity-drawer-body');
+    if (!drawer || !closeBtn || !body) return;
+
+    var _previousFocus = null;
+    var _currentFetch = null;
+
+    var API_PATHS = {
+      player: '/api/players/',
+      deck: '/api/decks/',
+      game: '/api/games/',
+    };
+
+    function openDrawer() {
+      _previousFocus = document.activeElement;
+      drawer.setAttribute('aria-hidden', 'false');
+      drawer.classList.add('is-open');
+      document.body.style.overflow = 'hidden';
+      closeBtn.focus();
+    }
+
+    function closeDrawer() {
+      drawer.setAttribute('aria-hidden', 'true');
+      drawer.classList.remove('is-open');
+      document.body.style.overflow = '';
+      if (_currentFetch) { _currentFetch = null; }
+      if (_previousFocus) { _previousFocus.focus(); _previousFocus = null; }
+      if (window.history && window.history.state && window.history.state.__drawerOpen) {
+        window.history.back();
+      }
+    }
+
+    function setLoading(on) {
+      loading.setAttribute('aria-hidden', on ? 'false' : 'true');
+      body.setAttribute('aria-hidden', on ? 'true' : 'false');
+      errorEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function setError(msg) {
+      loading.setAttribute('aria-hidden', 'true');
+      body.setAttribute('aria-hidden', 'true');
+      errorEl.setAttribute('aria-hidden', 'false');
+      errorEl.textContent = msg || 'Could not load details.';
+    }
+
+    function esc(str) {
+      var d = document.createElement('div');
+      d.textContent = str != null ? String(str) : '';
+      return d.innerHTML;
+    }
+
+    function renderPlayer(data) {
+      title.textContent = data.name || 'Player';
+      if (fullLink) {
+        fullLink.href = data.full_page_url || ('#');
+      }
+
+      var winrateClass = data.winrate >= 60 ? 'good' : (data.winrate >= 45 ? 'mid' : 'bad');
+      var html = '';
+
+      html += '<div class="drawer-hero" style="--player-accent:' + esc(data.accent) + '">';
+      html += '<div class="drawer-avatar">' + esc((data.name || '?')[0].toUpperCase()) + '</div>';
+      html += '<div><div class="drawer-name">' + esc(data.name) + '</div>';
+      html += '<div class="drawer-stats">';
+      html += '<span><b>' + esc(data.games_won) + '</b> wins</span>';
+      html += '<span><b>' + esc(data.games_played) + '</b> games</span>';
+      html += '<span class="win-badge ' + winrateClass + '">' + esc(data.winrate) + '%</span>';
+      html += '</div></div></div>';
+
+      if (data.decks && data.decks.length) {
+        html += '<div class="drawer-section-label">Decks</div>';
+        html += '<div class="drawer-list">';
+        data.decks.forEach(function (d) {
+          if (d.retired || d.planned) return;
+          var wr = d.winrate >= 60 ? 'good' : (d.winrate >= 45 ? 'mid' : 'bad');
+          html += '<a class="drawer-row" href="/deck/' + esc(d.id) + '" data-entity-type="deck" data-entity-id="' + esc(d.id) + '">';
+          if (d.art_url) {
+            html += '<div class="drawer-row-art" style="background-image:url(\'' + esc(d.art_url) + '\')"></div>';
+          }
+          html += '<div class="drawer-row-body"><div class="drawer-row-name">' + esc(d.name) + '</div>';
+          html += '<div class="drawer-row-meta">' + esc(d.commander) + '</div></div>';
+          html += '<span class="win-badge ' + wr + '">' + esc(d.winrate) + '%</span>';
+          html += '</a>';
+        });
+        html += '</div>';
+      }
+
+      if (data.recent_games && data.recent_games.length) {
+        html += '<div class="drawer-section-label">Recent Games</div>';
+        html += '<div class="drawer-list">';
+        data.recent_games.slice(0, 5).forEach(function (g) {
+          html += '<a class="drawer-row" href="/games/' + esc(g.game_id) + '" data-entity-type="game" data-entity-id="' + esc(g.game_id) + '">';
+          html += '<div class="drawer-row-body">';
+          html += '<div class="drawer-row-name">' + esc(g.deck_name) + '</div>';
+          html += '<div class="drawer-row-meta">' + esc((g.date || '').substring(0, 10)) + '</div>';
+          html += '</div>';
+          if (g.won) {
+            html += '<span class="win-badge good">W</span>';
+          } else {
+            html += '<span class="win-badge bad">L</span>';
+          }
+          html += '</a>';
+        });
+        html += '</div>';
+      }
+
+      setBodyHtml(html);
+    }
+
+    function renderDeck(data) {
+      title.textContent = data.name || 'Deck';
+      if (fullLink) fullLink.href = data.full_page_url || '#';
+
+      var winrateClass = data.winrate >= 60 ? 'good' : (data.winrate >= 45 ? 'mid' : 'bad');
+      var html = '';
+
+      html += '<div class="drawer-hero" style="--player-accent:' + esc(data.owner_accent) + '">';
+      if (data.art_url) {
+        html += '<div class="drawer-deck-art" style="background-image:url(\'' + esc(data.art_url) + '\')"></div>';
+      }
+      html += '<div><div class="drawer-name">' + esc(data.name) + '</div>';
+      html += '<div class="drawer-row-meta">' + esc(data.commander) + '</div>';
+      html += '<div class="drawer-stats">';
+      html += '<span><b>' + esc(data.wins) + '</b> wins</span>';
+      html += '<span><b>' + esc(data.uses) + '</b> games</span>';
+      html += '<span class="win-badge ' + winrateClass + '">' + esc(data.winrate) + '%</span>';
+      html += '<span><b>' + esc(data.mmr) + '</b> MMR</span>';
+      html += '</div>';
+      html += '<div class="drawer-row-meta">Owner: <a href="/player/' + esc(data.player_id) + '">' + esc(data.player_name) + '</a></div>';
+      html += '</div></div>';
+
+      if (data.recent_games && data.recent_games.length) {
+        html += '<div class="drawer-section-label">Recent Games</div>';
+        html += '<div class="drawer-list">';
+        data.recent_games.slice(0, 5).forEach(function (g) {
+          html += '<a class="drawer-row" href="/games/' + esc(g.game_id) + '" data-entity-type="game" data-entity-id="' + esc(g.game_id) + '">';
+          html += '<div class="drawer-row-body">';
+          html += '<div class="drawer-row-name">' + esc((g.date || '').substring(0, 10)) + '</div>';
+          html += '</div>';
+          if (g.won) {
+            html += '<span class="win-badge good">W</span>';
+          } else {
+            html += '<span class="win-badge bad">L</span>';
+          }
+          html += '</a>';
+        });
+        html += '</div>';
+      }
+
+      setBodyHtml(html);
+    }
+
+    function renderGame(data) {
+      var dateStr = (data.date || '').substring(0, 10);
+      title.textContent = 'Game · ' + dateStr;
+      if (fullLink) fullLink.href = data.full_page_url || '#';
+
+      var html = '';
+      html += '<div class="drawer-section-label">Winner</div>';
+      html += '<div class="drawer-hero">';
+      html += '<a href="/player/' + esc(data.winner.id) + '" class="drawer-name">' + esc(data.winner.name) + '</a>';
+      html += '<span class="win-badge good ms-2">W</span>';
+      if (data.ending_turn != null) {
+        html += '<span class="drawer-row-meta ms-2">Turn ' + esc(data.ending_turn) + '</span>';
+      }
+      html += '</div>';
+
+      if (data.participants && data.participants.length) {
+        html += '<div class="drawer-section-label">Participants</div>';
+        html += '<div class="drawer-list">';
+        data.participants.forEach(function (gp) {
+          var isWinner = gp.won;
+          html += '<div class="drawer-row" data-entity-type="player" data-entity-id="' + esc(gp.player_id) + '"';
+          html += ' style="--player-accent:' + esc(gp.player_accent) + '">';
+          html += '<div class="drawer-avatar drawer-avatar--sm">' + esc((gp.player_name || '?')[0]) + '</div>';
+          html += '<div class="drawer-row-body">';
+          html += '<div class="drawer-row-name"><a href="' + esc(gp.player_url) + '">' + esc(gp.player_name) + '</a></div>';
+          if (gp.art_url) {
+            html += '<div class="drawer-row-meta"><a href="' + esc(gp.deck_url || '#') + '">' + esc(gp.deck_name) + '</a></div>';
+          } else {
+            html += '<div class="drawer-row-meta"><a href="' + esc(gp.deck_url || '#') + '">' + esc(gp.deck_name) + '</a></div>';
+          }
+          html += '</div>';
+          if (gp.mmr_delta != null && gp.mmr_delta !== 0) {
+            var sign = gp.mmr_delta > 0 ? '+' : '';
+            var dClass = gp.mmr_delta > 0 ? 'good' : 'bad';
+            html += '<span class="win-badge ' + dClass + '">' + sign + esc(gp.mmr_delta) + '</span>';
+          }
+          if (isWinner) {
+            html += '<span class="win-badge good">W</span>';
+          }
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      setBodyHtml(html);
+    }
+
+    function setBodyHtml(html) {
+      body.innerHTML = html;
+      loading.setAttribute('aria-hidden', 'true');
+      body.setAttribute('aria-hidden', 'false');
+      errorEl.setAttribute('aria-hidden', 'true');
+    }
+
+    function fetchAndRender(type, id) {
+      var apiBase = API_PATHS[type];
+      if (!apiBase) return;
+      setLoading(true);
+      openDrawer();
+
+      var token = _currentFetch = {};
+      fetch(apiBase + id, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+      }).then(function (resp) {
+        if (token !== _currentFetch) return;
+        if (!resp.ok) {
+          setError('Could not load ' + type + ' details (HTTP ' + resp.status + ').');
+          return;
+        }
+        return resp.json().then(function (data) {
+          if (token !== _currentFetch) return;
+          if (type === 'player') renderPlayer(data);
+          else if (type === 'deck') renderDeck(data);
+          else if (type === 'game') renderGame(data);
+          if (window.history && window.history.pushState) {
+            window.history.pushState({ __drawerOpen: true, type: type, id: id }, '');
+          }
+        });
+      }).catch(function () {
+        if (token !== _currentFetch) return;
+        setError('Network error loading details.');
+      });
+    }
+
+    // Intercept entity link clicks — open drawer for primary clicks,
+    // allow Ctrl/Cmd/middle/shift to pass through to the full page.
+    document.addEventListener('click', function (e) {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+      var trigger = e.target.closest('[data-entity-type][data-entity-id][href]');
+      if (!trigger) return;
+      var type = trigger.getAttribute('data-entity-type');
+      var id = trigger.getAttribute('data-entity-id');
+      if (!API_PATHS[type] || !id) return;
+      // Only intercept if it's a real navigation link (not a table row or non-anchor)
+      if (trigger.tagName !== 'A') return;
+      e.preventDefault();
+      fetchAndRender(type, id);
+    }, true);
+
+    closeBtn.addEventListener('click', closeDrawer);
+    if (backdrop) backdrop.addEventListener('click', closeDrawer);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && drawer.classList.contains('is-open')) {
+        e.preventDefault();
+        closeDrawer();
+      }
+      // Basic focus trap inside open drawer
+      if (!drawer.classList.contains('is-open')) return;
+      if (e.key !== 'Tab') return;
+      var focusable = Array.prototype.slice.call(
+        drawer.querySelectorAll('a[href], button:not([disabled]), [tabindex="0"]')
+      );
+      if (!focusable.length) return;
+      var first = focusable[0];
+      var last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+
+    window.addEventListener('popstate', function (e) {
+      if (drawer.classList.contains('is-open')) {
+        drawer.setAttribute('aria-hidden', 'true');
+        drawer.classList.remove('is-open');
+        document.body.style.overflow = '';
+        if (_previousFocus) { _previousFocus.focus(); _previousFocus = null; }
+      }
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
   UI.init = function () {
     initMobileMenu();
@@ -341,6 +635,7 @@
     initLeaderboardMetrics();
     initDeckSort();
     initEntityHighlighting();
+    initEntityDrawer();
   };
 
   global.CommandersohnUI = UI;

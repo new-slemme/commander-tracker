@@ -187,8 +187,42 @@
   {% block content %}{% endblock %}
 </div>
 
+<!-- Entity detail drawer shell -->
+<div id="entity-drawer"
+     class="entity-drawer"
+     role="dialog"
+     aria-modal="true"
+     aria-label="Entity detail"
+     aria-hidden="true">
+  <div id="entity-drawer-backdrop" class="entity-drawer__backdrop"></div>
+  <div class="entity-drawer__panel">
+    <div class="entity-drawer__header">
+      <div class="entity-drawer__title" id="entity-drawer-title">Details</div>
+      <div class="entity-drawer__header-actions">
+        <a id="entity-drawer-full-link"
+           href="#"
+           class="entity-drawer__full-link"
+           target="_self">View full page</a>
+        <button id="entity-drawer-close"
+                class="entity-drawer__close"
+                type="button"
+                aria-label="Close detail drawer">✕</button>
+      </div>
+    </div>
+    <div id="entity-drawer-content" class="entity-drawer__content" aria-live="polite">
+      <div id="entity-drawer-loading" class="entity-drawer__loading" aria-hidden="true">
+        <div class="drawer-skeleton"></div>
+        <div class="drawer-skeleton" style="width:70%;"></div>
+        <div class="drawer-skeleton" style="width:55%;"></div>
+      </div>
+      <div id="entity-drawer-error" class="entity-drawer__error" aria-hidden="true"></div>
+      <div id="entity-drawer-body" class="entity-drawer__body" aria-hidden="true"></div>
+    </div>
+  </div>
+</div>
+
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js', v='p1') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js', v='p2') }}" defer></script>
 
 <script>
   if ('serviceWorker' in navigator) {

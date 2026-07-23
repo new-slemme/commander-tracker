@@ -7463,6 +7463,8 @@ def _serialize_deck_detail(deck: Deck) -> dict:
     payload["decklist_text"] = deck.decklist_text or ""
     payload["card_print_prefs"] = json.loads(deck.card_print_prefs_json) if deck.card_print_prefs_json else {}
     payload["custom_commander_art_url"] = deck.custom_commander_art_url or ""
+    payload["owner_accent"] = player_id_to_accent(deck.player_id)
+    payload["full_page_url"] = f"/deck/{deck.id}"
     return payload
 
 
@@ -8808,7 +8810,9 @@ def api_player_detail(player_id):
         "games_won": games_won,
         "winrate": winrate,
         "decks": deck_list,
-        "recent_games": recent_games,
+        "recent_games": recent_games[:10],
+        "accent": player_id_to_accent(player.id),
+        "full_page_url": f"/player/{player.id}",
     })
 
 
@@ -9056,6 +9060,7 @@ def api_game_detail(game_id):
         "ending_turn": game.ending_turn,
         "note": game.note,
         "starting_player": {"id": game.starting_player_id, "name": game.starting_player.name} if game.starting_player else None,
+        "full_page_url": f"/games/{game.id}",
         "participants": [
             {
                 "player_id": gp.player_id,
@@ -9070,6 +9075,9 @@ def api_game_detail(game_id):
                 "mana_fucked": gp.mana_fucked,
                 "misplayed": gp.misplayed,
                 "commander_damage": commander_damage_for(gp),
+                "player_accent": player_id_to_accent(gp.player_id),
+                "player_url": f"/player/{gp.player_id}",
+                "deck_url": f"/deck/{gp.deck_id}",
             }
             for gp in parts
         ],
