@@ -442,7 +442,9 @@
                     {% if g.salt_rating is not none and g.salt_rating > 0 %}
                       <span class="game-meta-chip game-meta-chip--salt">Salt {{ g.salt_rating }}/5</span>
                     {% endif %}
-                    <a class="game-rematch-link" href="{{ url_for('play_game') }}">Rematch</a>
+                    {% set ns2 = namespace(rp='') %}
+                    {% for gp in game_parts[g.id] %}{% set ns2.rp = ns2.rp + ('&' if ns2.rp else '') + 'p' + loop.index|string + '=' + gp.player_id|string %}{% endfor %}
+                    <a class="game-rematch-link" href="{{ url_for('play_game') }}?{{ ns2.rp }}">Rematch</a>
                   </div>
                 </div>
               </div>

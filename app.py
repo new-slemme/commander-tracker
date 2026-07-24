@@ -6806,7 +6806,14 @@ def play_game():
             for d in active_decks
         ]
 
-    return render_template("play_game.html", players=players, decks_by_player=decks_by_player)
+    prefill_player_ids: list[int] = []
+    for slot in range(1, 7):
+        raw = request.args.get(f"p{slot}", "").strip()
+        if raw.isdigit():
+            prefill_player_ids.append(int(raw))
+
+    return render_template("play_game.html", players=players, decks_by_player=decks_by_player,
+                           prefill_player_ids=prefill_player_ids)
 
 
 @app.route("/start_game", methods=["POST"])

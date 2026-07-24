@@ -41,7 +41,7 @@
             <select name="player{{ i }}" id="player{{ i }}" class="form-select mb-3">
               <option value="">- None -</option>
               {% for p in players %}
-                <option value="{{ p.id }}">{{ p.name }}</option>
+                <option value="{{ p.id }}" {% if i <= prefill_player_ids|length and prefill_player_ids[i-1] == p.id %}selected{% endif %}>{{ p.name }}</option>
               {% endfor %}
             </select>
 
@@ -155,6 +155,7 @@
 
 <script>
   const decksData = {{ decks_by_player | tojson }};
+  const prefillPlayerIds = {{ prefill_player_ids | tojson }};
   let playerCount = 2;
   const borrowModeSlots = new Set();
 
@@ -515,7 +516,8 @@
     setupDeckListeners(i);
     refreshDeckSelect(i);
   }
-  applyPlayerCount(2);
+  const initCount = prefillPlayerIds.length >= 2 ? Math.min(prefillPlayerIds.length, 6) : 2;
+  applyPlayerCount(initCount);
   refreshStartingPlayerOptions();
   updatePlayerOptionDisabling();
   refreshLifeLayoutHints();
