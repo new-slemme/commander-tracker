@@ -578,17 +578,10 @@
 
   .podium-stat b { color: #fff; }
 
-  @media (max-width: 576px) {
-    .leaderboard-podium {
-      grid-template-columns: 1fr;
-      grid-template-areas: "top" "left" "right";
-    }
-
-    .podium-rank-1 { width: 100%; }
-
-    .podium-card {
-      min-height: 100px;
-    }
+  @media (max-width: 480px) {
+    /* On very narrow screens shrink card height but keep 2-col pyramid shape */
+    .podium-card { min-height: 100px; }
+    .podium-rank-1 { min-height: 160px; }
   }
 
   /* ===== Deck grid ===== */
@@ -599,6 +592,7 @@
   }
 
   .deck-tile {
+    grid-column: auto; /* override base.css span-6/span-12 — those apply to the old 12-col grid */
     position: relative;
     border-radius: var(--radius-xl);
     border: 1px solid var(--border-color);
@@ -753,7 +747,7 @@
     border-radius: var(--radius-xl);
     border: 1px solid var(--border-color);
     overflow: hidden;
-    min-height: 200px;
+    min-height: 260px;
     display: flex;
     flex-direction: column;
   }
@@ -778,13 +772,6 @@
     position: relative;
     z-index: 1;
     padding: 24px;
-    max-width: 420px; /* mobile: usually constrained by container, not this value */
-  }
-
-  @media (min-width: 768px) {
-    .deck-featured__body {
-      max-width: clamp(420px, 50%, 600px); /* scales proportionally with card width */
-    }
   }
 
   /* ===== Entity state: is-selected / is-related / is-dimmed ===== */
