@@ -399,11 +399,15 @@
                       <div class="game-detail-avatar">{{ gp.player.name[:1]|upper }}</div>
                       <div class="game-detail-body">
                         <div class="game-detail-player">
-                          <a href="{{ url_for('player_detail', player_id=gp.player_id) }}">{{ gp.player.name }}</a>
+                          <a href="{{ url_for('player_detail', player_id=gp.player_id) }}"
+                             data-entity-type="player"
+                             data-entity-id="{{ gp.player_id }}">{{ gp.player.name }}</a>
                           {% if gp.player_id == g.winner_id %}<span class="win-badge good ms-1">W</span>{% endif %}
                         </div>
                         <div class="game-detail-deck">
-                          <a href="{{ url_for('deck_detail', deck_id=gp.deck_id) }}">{{ gp.deck.name }}</a>
+                          <a href="{{ url_for('deck_detail', deck_id=gp.deck_id) }}"
+                             data-entity-type="deck"
+                             data-entity-id="{{ gp.deck_id }}">{{ gp.deck.name }}</a>
                           {% if gp.deck.commander %}
                             <span class="game-detail-cmdr">{{ gp.deck.commander }}</span>
                           {% endif %}

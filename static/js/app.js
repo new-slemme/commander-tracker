@@ -818,7 +818,9 @@
     function renderResults(data) {
       var html = '';
       html += renderSection('Players', data.players, function (p) {
-        return '<a class="palette-row" role="option" href="' + esc(p.url) + '" style="--player-accent:' + esc(p.accent) + '">'
+        return '<a class="palette-row" role="option" href="' + esc(p.url) + '"'
+             + ' data-entity-type="player" data-entity-id="' + esc(p.id) + '"'
+             + ' style="--player-accent:' + esc(p.accent) + '">'
              + '<span class="palette-row__avatar" aria-hidden="true">' + esc(p.name[0] || '?') + '</span>'
              + '<span class="palette-row__name">' + esc(p.name) + '</span>'
              + '</a>';
@@ -828,7 +830,8 @@
         var cmdrLabel = d.commander_match
           ? '<span class="palette-row__cmdr-match">Cmdr: ' + esc(d.commander) + '</span>'
           : '<span class="palette-row__meta">' + esc(d.commander || '') + '</span>';
-        return '<a class="palette-row" role="option" href="' + esc(d.url) + '">'
+        return '<a class="palette-row" role="option" href="' + esc(d.url) + '"'
+             + ' data-entity-type="deck" data-entity-id="' + esc(d.id) + '">'
              + '<span class="palette-row__name">' + esc(d.name) + badge + '</span>'
              + cmdrLabel
              + '</a>';
