@@ -219,12 +219,8 @@
     sortBtns.forEach(function (btn) {
       btn.addEventListener('click', function () {
         var metric = btn.getAttribute('data-deck-sort');
-        sortBtns.forEach(function (b) {
-          b.classList.remove('btn-primary');
-          b.classList.add('btn-outline-light');
-        });
-        btn.classList.remove('btn-outline-light');
-        btn.classList.add('btn-primary');
+        sortBtns.forEach(function (b) { b.classList.remove('is-active'); });
+        btn.classList.add('is-active');
         sortDecks(metric);
       });
     });

@@ -451,12 +451,39 @@
     border: 1px solid var(--blue);
   }
 
-  /* ===== Leaderboard podium ===== */
+  /* ===== Sticky section controls bar ===== */
+  .section-sticky-bar {
+    position: sticky;
+    top: calc(var(--topbar-h) + 8px);
+    z-index: 99;
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 16px;
+  }
+
+  /* Give the metric-selector a solid backdrop when floating over scrolled content */
+  .section-sticky-bar .metric-selector {
+    background: var(--darker);
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-md);
+  }
+
+  /* ===== Leaderboard podium — pyramid layout ===== */
   .leaderboard-podium {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "top top" "left right";
     gap: 12px;
   }
+
+  .podium-rank-1 {
+    grid-area: top;
+    justify-self: center;
+    width: min(520px, 100%);
+  }
+
+  .podium-rank-2 { grid-area: left; }
+  .podium-rank-3 { grid-area: right; }
 
   .podium-card {
     position: relative;
@@ -478,7 +505,7 @@
     color: #fff;
   }
 
-  .podium-rank-1 { border-color: var(--player-accent, var(--orange)); }
+  .podium-rank-1 { border-color: var(--player-accent, var(--orange)); min-height: 220px; }
 
   .podium-bg {
     position: absolute;
@@ -554,7 +581,10 @@
   @media (max-width: 576px) {
     .leaderboard-podium {
       grid-template-columns: 1fr;
+      grid-template-areas: "top" "left" "right";
     }
+
+    .podium-rank-1 { width: 100%; }
 
     .podium-card {
       min-height: 100px;
@@ -580,6 +610,7 @@
     color: #fff;
     display: flex;
     flex-direction: column;
+    min-width: 0;
     transition: border-color var(--motion-micro) var(--ease-out),
                 box-shadow var(--motion-micro) var(--ease-out);
   }
@@ -747,7 +778,13 @@
     position: relative;
     z-index: 1;
     padding: 24px;
-    max-width: 420px;
+    max-width: 420px; /* mobile: usually constrained by container, not this value */
+  }
+
+  @media (min-width: 768px) {
+    .deck-featured__body {
+      max-width: clamp(420px, 50%, 600px); /* scales proportionally with card width */
+    }
   }
 
   /* ===== Entity state: is-selected / is-related / is-dimmed ===== */
@@ -864,21 +901,27 @@
   .game-full-link {
     font-size: 0.8rem;
     font-weight: 700;
-    color: var(--font-base);
+    color: rgba(255,255,255,0.85);
     text-decoration: none;
     padding: 3px 8px;
     border-radius: 999px;
-    border: 1px solid var(--border-color-subtle);
+    border: 1px solid rgba(255,255,255,0.3);
     white-space: nowrap;
+    transition: background var(--motion-micro) var(--ease-out),
+                border-color var(--motion-micro) var(--ease-out);
   }
-  .game-full-link:hover { color: #fff; border-color: var(--border-color); }
+  .game-full-link:hover {
+    color: #fff;
+    border-color: rgba(255,255,255,0.6);
+    background: rgba(255,255,255,0.08);
+  }
 
   .game-expand-btn {
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--font-base);
-    background: var(--base-trans);
-    border: 1px solid var(--border-color-subtle);
+    background: var(--base);
+    border: 1px solid var(--border-color);
     border-radius: 999px;
     padding: 3px 10px;
     cursor: pointer;
@@ -993,8 +1036,20 @@
   }
   html[data-bs-theme="light"] .game-detail-player a,
   html[data-bs-theme="light"] .game-detail-player { color: var(--font-base); }
-  html[data-bs-theme="light"] .game-full-link,
+  html[data-bs-theme="light"] .game-full-link {
+    color: var(--font-base);
+    border-color: var(--border-color);
+  }
+  html[data-bs-theme="light"] .game-full-link:hover {
+    background: rgba(0,0,0,0.06);
+    border-color: var(--border-color-strong);
+    color: var(--font-base);
+  }
   html[data-bs-theme="light"] .game-expand-btn { color: var(--font-base); }
+
+  html[data-bs-theme="light"] .section-sticky-bar .metric-selector {
+    background: rgba(248,243,234,0.98);
+  }
 
   /* ===== Phase 6: game detail narrative ===== */
   .game-detail-region.is-open { max-height: 1400px; }
