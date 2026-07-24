@@ -1087,10 +1087,11 @@
   .game-mechanic-chip  { max-width: 100%; }
 
   @media (max-width: 576px) {
-    /* Winner pill: cap width so long player names can't overflow the topline flex row */
+    /* Winner pill: cap at 60vw so long names can't overflow; ellipsis for clean clip */
     .winner-pill {
-      max-width: calc(100% - 120px);
+      max-width: 60vw;
       overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 
