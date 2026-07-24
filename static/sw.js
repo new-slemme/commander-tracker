@@ -1,5 +1,5 @@
 // EDH Son PWA Service Worker
-const CACHE_NAME = "edh-son-v5";
+const CACHE_NAME = "edh-son-v6";
 
 // Immutable vendored and icon assets — cache-first, long-lived.
 const STATIC_ASSETS = [

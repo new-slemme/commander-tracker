@@ -1079,3 +1079,30 @@
     border-color: var(--border-color-subtle);
   }
   html[data-bs-theme="light"] .game-detail-cmdr { color: var(--font-accent); }
+
+  /* ===== Mobile layout fixes ===== */
+
+  /* Defensive overflow guard — chips wrapper can shrink, individual chips never escape */
+  .game-mechanic-chips { min-width: 0; }
+  .game-mechanic-chip  { max-width: 100%; }
+
+  @media (max-width: 576px) {
+    /* Winner pill: cap width so long player names can't overflow the topline flex row */
+    .winner-pill {
+      max-width: calc(100% - 120px);
+      overflow: hidden;
+    }
+  }
+
+  @media (max-width: 480px) {
+    /* Rematch link: own row, right-aligned — avoids stranding on a blank right-justified line
+       when preceding meta chips happen to fill the previous row without it */
+    .game-rematch-link {
+      flex-basis: 100%;
+      margin-left: 0;
+      text-align: right;
+    }
+
+    /* Player name cell: clip at column boundary already established by flex parent */
+    .game-detail-player { overflow: hidden; }
+  }

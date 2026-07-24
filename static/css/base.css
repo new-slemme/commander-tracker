@@ -2538,6 +2538,10 @@ html[data-bs-theme="light"] .compare-chip {
     from { transform: translateY(100%); opacity: 0.4; }
     to   { transform: translateY(0);    opacity: 1; }
   }
+
+  /* Hide the text link in the header to prevent overflow at 320px;
+     the full page is still reachable from links inside the drawer body */
+  .entity-drawer__full-link { display: none; }
 }
 
 .entity-drawer__header {
@@ -2961,6 +2965,61 @@ html[data-bs-theme="light"] .command-palette__panel {
 html[data-bs-theme="light"] .command-palette__input { color: var(--font-base); }
 html[data-bs-theme="light"] .palette-row:hover,
 html[data-bs-theme="light"] .palette-row.is-active { background: #ede7d9; }
+
+/* ── Mobile palette trigger ──────────────────────────────────── */
+.palette-trigger-mobile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color-subtle);
+  background: transparent;
+  color: var(--font-base);
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background var(--motion-micro) var(--ease-out),
+              border-color var(--motion-micro) var(--ease-out);
+}
+.palette-trigger-mobile:hover {
+  background: var(--base);
+  border-color: var(--border-color);
+}
+html[data-bs-theme="light"] .palette-trigger-mobile {
+  border-color: var(--border-color);
+  color: var(--font-base);
+}
+html[data-bs-theme="light"] .palette-trigger-mobile:hover { background: #e8e1d4; }
+
+/* ── Command palette — mobile top-sheet ──────────────────────── */
+@media (max-width: 576px) {
+  .command-palette {
+    padding-top: 0;
+    align-items: flex-start;
+  }
+  .command-palette__panel {
+    width: 100%;
+    border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    padding-top: env(safe-area-inset-top, 0);
+    animation: palette-sheet-in var(--motion-base) ease;
+  }
+  @keyframes palette-sheet-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .command-palette__results { max-height: 55vh; }
+}
+
+/* ── Compare tray: hide when virtual keyboard is open ─────────── */
+body.is-keyboard-active .compare-tray {
+  transform: translateX(-50%) translateY(100%);
+  pointer-events: none;
+  transition: transform var(--motion-base) var(--ease-out);
+}
 
 /* ── Reduced motion ─────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

@@ -28,12 +28,20 @@
            alt="Commandersohn">
     </a>
 
-    <!-- Mobile burger -->
-    <button id="menuBtn" class="menu-btn d-lg-none" type="button" aria-label="Open menu" aria-controls="menuDrawer" aria-expanded="false">
-      <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="28" height="28">
-    </button>
+    <!-- Mobile: search + burger cluster -->
+    <div class="d-flex d-lg-none align-items-center gap-2">
+      {% if session.get("user_id") %}
+      <button id="palette-trigger-mobile" class="palette-trigger-mobile" type="button"
+              aria-label="Search" aria-haspopup="dialog">
+        <span aria-hidden="true">⌕</span>
+      </button>
+      {% endif %}
+      <button id="menuBtn" class="menu-btn" type="button" aria-label="Open menu" aria-controls="menuDrawer" aria-expanded="false">
+        <img src="{{ url_for('static', filename='hamburger.svg') }}" alt="Menu" width="28" height="28">
+      </button>
+    </div>
 
-    <!-- Search / command palette trigger -->
+    <!-- Desktop: command palette trigger -->
     {% if session.get("user_id") %}
     <button id="palette-trigger" class="palette-trigger d-none d-lg-flex" type="button"
             aria-label="Search (Ctrl+K)" aria-haspopup="dialog">
@@ -276,11 +284,11 @@
 {% endif %}
 
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js', v='p3') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js', v='p4') }}" defer></script>
 
 <script>
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js?v=5', { scope: '/' })
+    navigator.serviceWorker.register('/sw.js?v=6', { scope: '/' })
       .catch(function () {});
   }
 </script>

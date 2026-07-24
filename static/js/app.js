@@ -467,6 +467,21 @@
       if (goLink.getAttribute('aria-disabled') === 'true') e.preventDefault();
     });
 
+    // Hide tray when virtual keyboard opens so it doesn't overlap the active field
+    document.addEventListener('focusin', function (e) {
+      if (e.target.matches('input, textarea, [contenteditable]')) {
+        document.body.classList.add('is-keyboard-active');
+      }
+    });
+    document.addEventListener('focusout', function () {
+      setTimeout(function () {
+        if (!document.activeElement ||
+            !document.activeElement.matches('input, textarea, [contenteditable]')) {
+          document.body.classList.remove('is-keyboard-active');
+        }
+      }, 0);
+    });
+
     render();
   }
 
@@ -772,7 +787,8 @@
     var input     = document.getElementById('palette-input');
     var results   = document.getElementById('palette-results');
     var backdrop  = document.getElementById('palette-backdrop');
-    var trigger   = document.getElementById('palette-trigger');
+    var trigger       = document.getElementById('palette-trigger');
+    var mobileTrigger = document.getElementById('palette-trigger-mobile');
 
     var _open        = false;
     var _debounce    = null;
@@ -800,7 +816,10 @@
       document.body.style.overflow = '';
       if (_debounce) { clearTimeout(_debounce); _debounce = null; }
       if (_activeXhr) { _activeXhr.abort(); _activeXhr = null; }
-      if (trigger) trigger.focus();
+      var focusTarget = (trigger && trigger.offsetParent !== null)
+        ? trigger
+        : (mobileTrigger || null);
+      if (focusTarget) focusTarget.focus();
     }
 
     function esc(s) {
@@ -879,9 +898,8 @@
       }
     }
 
-    if (trigger) {
-      trigger.addEventListener('click', openPalette);
-    }
+    if (trigger) trigger.addEventListener('click', openPalette);
+    if (mobileTrigger) mobileTrigger.addEventListener('click', openPalette);
 
     if (backdrop) {
       backdrop.addEventListener('click', closePalette);
