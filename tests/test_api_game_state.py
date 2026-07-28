@@ -230,6 +230,89 @@ class ApiGameStateCardStateTests(unittest.TestCase):
             updated = response.get_json()
             self.assertEqual(updated["active_player_id"], p2_id)
 
+    def test_life_update_appends_life_history_sample(self):
+        with app.app.app_context():
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
+                session[f"game_join_{token}"] = p1_id
+
+            response = client.post(
+                f"/api/game/{token}/state",
+                json={"player_id": p1_id, "life": 35},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            updated = response.get_json()
+            history = updated["life_history"][str(p1_id)]
+            self.assertEqual(len(history), 1)
+            timestamp, life = history[-1]
+            self.assertEqual(life, 35)
+            self.assertIsInstance(timestamp, int)
+
+    def test_life_delta_appends_life_history_sample(self):
+        with app.app.app_context():
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
+                session[f"game_join_{token}"] = p1_id
+
+            response = client.post(
+                f"/api/game/{token}/state",
+                json={"player_id": p1_id, "life_delta": -5},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            updated = response.get_json()
+            history = updated["life_history"][str(p1_id)]
+            self.assertEqual(history[-1][1], 35)
+
+    def test_unchanged_life_does_not_append_history_sample(self):
+        with app.app.app_context():
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
+                session[f"game_join_{token}"] = p1_id
+
+            client.post(f"/api/game/{token}/state", json={"player_id": p1_id, "life": 35})
+            response = client.post(
+                f"/api/game/{token}/state",
+                json={"player_id": p1_id, "life": 35},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            updated = response.get_json()
+            self.assertEqual(len(updated["life_history"][str(p1_id)]), 1)
+
+    def test_life_history_is_capped(self):
+        with app.app.app_context():
+            token, p1_id, p2_id, non_host_user_id = self._create_active_game()
+            active_game = app.ActiveGame.query.filter_by(token=token).first()
+            state = json.loads(active_game.state_json)
+            state["life_history"] = {
+                str(p1_id): [[i, 40] for i in range(app.MAX_LIFE_HISTORY_SAMPLES)]
+            }
+            active_game.state_json = json.dumps(state)
+            app.db.session.commit()
+
+            client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = non_host_user_id
+                session[f"game_join_{token}"] = p1_id
+
+            response = client.post(
+                f"/api/game/{token}/state",
+                json={"player_id": p1_id, "life": 12},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            history = response.get_json()["life_history"][str(p1_id)]
+            self.assertEqual(len(history), app.MAX_LIFE_HISTORY_SAMPLES)
+            self.assertEqual(history[-1][1], 12)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -405,3 +405,22 @@
     font-weight: 700;
     font-size: 0.9rem;
   }
+
+  /* =========================
+     Deck Detail: MMR sparkline
+     ========================= */
+
+  .mmr-sparkline {
+    display: block;
+    margin: 0.25rem auto 0;
+    overflow: visible;
+  }
+  .mmr-sparkline polyline {
+    stroke: var(--yellow);
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .mmr-sparkline circle {
+    fill: var(--yellow);
+  }

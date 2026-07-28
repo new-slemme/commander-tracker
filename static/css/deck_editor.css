@@ -237,6 +237,21 @@
 .editor-count-badge.count-low   { color: #d8b14a; border-color: rgba(216,177,74,0.5); }
 .editor-count-badge.count-high  { color: #e05a6a; border-color: rgba(224,90,106,0.5); }
 
+.editor-bracket-badge {
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 99px;
+  border: 1px solid currentColor;
+}
+
+.editor-bracket-badge.bracket-1 { color: #8f99c5; border-color: rgba(143,153,197,0.5); }
+.editor-bracket-badge.bracket-2 { color: #35c26b; border-color: rgba(53,194,107,0.5); }
+.editor-bracket-badge.bracket-3 { color: #4f9fe0; border-color: rgba(79,159,224,0.5); }
+.editor-bracket-badge.bracket-4 { color: #d8b14a; border-color: rgba(216,177,74,0.5); }
+.editor-bracket-badge.bracket-5 { color: #e05a6a; border-color: rgba(224,90,106,0.5); }
+.editor-bracket-badge.bracket-stale { opacity: 0.55; }
+
 .editor-unsaved-dot {
   color: #d8b14a;
   font-size: 0.75rem;

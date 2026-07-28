@@ -260,6 +260,10 @@ ALLOWED_PARTICIPANT_FLAG_KEYS = {
 
 MAX_PER_PLAYER_TURN_STATS = 500
 
+# Life-history sampling for the in-game life graph: one [timestamp, life]
+# sample per actual life change, capped per player so state_json stays bounded.
+MAX_LIFE_HISTORY_SAMPLES = 120
+
 DECK_TAGS_VERSION = 2
 KNOWN_DECK_TAG_KEYS = (
     "monarch",
@@ -277,6 +281,9 @@ TRUST_LEGACY_DECK_TAGS = False
 STARTING_MMR = 1000
 K_FACTOR = 48
 MMR_FLOOR = 100
+MMR_SPARKLINE_WIDTH = 120
+MMR_SPARKLINE_HEIGHT = 32
+MMR_SPARKLINE_MAX_POINTS = 60
 
 CCAUTO_BASE_URL = os.getenv("CCAUTO_BASE_URL", "").rstrip("/")
 APP_CHANNEL = os.getenv("APP_CHANNEL", "stable").lower().strip()
@@ -690,6 +697,28 @@ def mmr_tier(mmr: int) -> str:
     return "D"
 
 
+def build_sparkline_points(values: list[int], width: float, height: float) -> str:
+    """Return an SVG polyline `points` string for a single-series sparkline.
+
+    Values are scaled to fill the given box, y-inverted for SVG coordinates.
+    Fewer than two values cannot form a line, so the result is empty.
+    """
+    if len(values) < 2:
+        return ""
+    lo = min(values)
+    hi = max(values)
+    span = hi - lo
+    step = width / (len(values) - 1)
+    points = []
+    for i, value in enumerate(values):
+        if span == 0:
+            y = height / 2
+        else:
+            y = height - ((value - lo) / span) * height
+        points.append(f"{round(i * step, 1)},{round(y, 1)}")
+    return " ".join(points)
+
+
 def calculate_expected_wins(deck_mmrs: list[int]) -> list[float]:
     total = sum(deck_mmrs)
     return [mmr / total for mmr in deck_mmrs]
@@ -939,6 +968,7 @@ class GameParticipant(db.Model):
     misplayed = db.Column(db.Boolean, nullable=False, default=False)
     life_delta_total = db.Column(db.Integer, nullable=True, default=0)
     mmr_delta = db.Column(db.Integer, nullable=True)
+    life_history_json = db.Column(db.Text, nullable=True)
 
     player = db.relationship("Player", foreign_keys=[player_id], backref="participations", lazy=True)
     deck = db.relationship("Deck", backref="deck_participations", lazy=True)
@@ -1755,6 +1785,23 @@ with app.app_context():
                 )
             db.session.execute(
                 text("INSERT INTO schema_migrations(version) VALUES ('025_historical_stats')")
+            )
+
+        if "026_participant_life_history" not in applied:
+            participant_cols = {
+                row[1]
+                for row in db.session.execute(
+                    text("PRAGMA table_info(game_participant)")
+                ).fetchall()
+            }
+            if "life_history_json" not in participant_cols:
+                db.session.execute(
+                    text("ALTER TABLE game_participant ADD COLUMN life_history_json TEXT")
+                )
+            db.session.execute(
+                text(
+                    "INSERT INTO schema_migrations(version) VALUES ('026_participant_life_history')"
+                )
             )
 
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
@@ -5387,7 +5434,23 @@ def game_detail(game_id):
     # Nice for display: show winner first (optional)
     parts_sorted = sorted(parts, key=lambda p: (0 if p.player_id == g.winner_id else 1, p.player.name.lower()))
 
-    return render_template("game_detail.html", game=g, parts=parts_sorted)
+    # Life-over-time chart series, in seat order so colors stay stable per seat
+    life_chart_series = []
+    for gp in sorted(parts, key=lambda p: (p.seat_position or 99, p.player.name.lower())):
+        if not gp.life_history_json:
+            continue
+        try:
+            samples = json.loads(gp.life_history_json)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(samples, list) and len(samples) >= 2:
+            life_chart_series.append(
+                {"player_id": gp.player_id, "name": gp.player.name, "samples": samples}
+            )
+
+    return render_template(
+        "game_detail.html", game=g, parts=parts_sorted, life_chart_series=life_chart_series
+    )
 
 @app.route("/games/<int:game_id>/delete", methods=["POST"])
 @admin_required
@@ -6051,6 +6114,19 @@ def deck_detail(deck_id):
 
     card_print_prefs = json.loads(deck.card_print_prefs_json or "{}")
 
+    try:
+        mmr_history_entries = json.loads(deck.mmr_history_json or "[]")
+    except json.JSONDecodeError:
+        mmr_history_entries = []
+    mmr_values = ([STARTING_MMR] + [
+        int(entry["mmr_after"])
+        for entry in mmr_history_entries
+        if isinstance(entry, dict) and isinstance(entry.get("mmr_after"), (int, float))
+    ])[-MMR_SPARKLINE_MAX_POINTS:]
+    mmr_sparkline_points = build_sparkline_points(
+        mmr_values, MMR_SPARKLINE_WIDTH, MMR_SPARKLINE_HEIGHT
+    )
+
     return render_template(
         "deck_detail.html",
         deck=deck,
@@ -6068,6 +6144,9 @@ def deck_detail(deck_id):
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
         card_print_prefs=card_print_prefs,
         deck_mmr_tier=mmr_tier(deck.mmr),
+        mmr_sparkline_points=mmr_sparkline_points,
+        mmr_sparkline_width=MMR_SPARKLINE_WIDTH,
+        mmr_sparkline_height=MMR_SPARKLINE_HEIGHT,
     )
 
 
@@ -6960,6 +7039,10 @@ def start_game():
         initial_state = {
             "version": 0,
             "life": {str(p["player_id"]): 40 for p in participants},
+            "life_history": {
+                str(p["player_id"]): [[int(datetime.utcnow().timestamp()), 40]]
+                for p in participants
+            },
             "flags": {
                 str(p["player_id"]): {"mana_fucked": False, "misplayed": False, "salt_count": 0}
                 for p in participants
@@ -7098,6 +7181,10 @@ def api_start_game():
         initial_state = {
             "version": 0,
             "life": {str(p["player_id"]): 40 for p in participants},
+            "life_history": {
+                str(p["player_id"]): [[int(datetime.utcnow().timestamp()), 40]]
+                for p in participants
+            },
             "flags": {
                 str(p["player_id"]): {"mana_fucked": False, "misplayed": False, "salt_count": 0}
                 for p in participants
@@ -7204,12 +7291,12 @@ def life_counter():
         "statuses": [
             {"id": "monarch", "label": "Monarch", "icon": "👑", "kind": "exclusive"},
             {"id": "initiative", "label": "Initiative", "icon": "⚔️", "kind": "exclusive"},
-            {"id": "citys_blessing", "label": "City's Blessing", "icon": "🏙️", "kind": "toggle"},
+            {"id": "citys_blessing", "label": "City's Blessing", "icon": "\ue94a", "kind": "toggle"},
         ],
         "counters": [
-            {"id": "energy", "label": "Energy", "icon": "⚡", "step": 1, "min": 0},
+            {"id": "energy", "label": "Energy", "icon": "\ue907", "step": 1, "min": 0},
             {"id": "experience", "label": "Experience", "icon": "✨", "step": 1, "min": 0},
-            {"id": "poison", "label": "Poison", "icon": "☠️", "step": 1, "min": 0, "max": 10},
+            {"id": "poison", "label": "Poison", "icon": "\ue618", "step": 1, "min": 0, "max": 10},
         ],
         "commander_damage_threshold": 21,
     }
@@ -7232,6 +7319,41 @@ def life_counter():
         debug_ui_enabled=debug_ui_enabled,
         game_token=game_token,
     )
+
+
+def load_active_game_life_history(token: str | None) -> dict:
+    """Return {player_id_str: [[timestamp, life], ...]} from an active game.
+
+    Only per-player histories with at least two well-formed samples are kept —
+    a single seeded sample means the player's life never changed, which is not
+    worth persisting or charting.
+    """
+    if not token:
+        return {}
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return {}
+    try:
+        state = json.loads(active_game_rec.state_json)
+    except json.JSONDecodeError:
+        return {}
+    history = state.get("life_history")
+    if not isinstance(history, dict):
+        return {}
+    result = {}
+    for pid, samples in history.items():
+        if not isinstance(samples, list) or len(samples) < 2:
+            continue
+        cleaned = [
+            [int(sample[0]), int(sample[1])]
+            for sample in samples
+            if isinstance(sample, list)
+            and len(sample) == 2
+            and all(isinstance(v, (int, float)) for v in sample)
+        ]
+        if len(cleaned) >= 2:
+            result[pid] = cleaned
+    return result
 
 
 @app.route("/end_game", methods=["POST"])
@@ -7444,6 +7566,8 @@ def end_game():
     if not active_pod:
         return "No active pod available", 400
 
+    life_history_by_player = load_active_game_life_history(session.get("game_token"))
+
     game = Game(
         winner_id=winner_id,
         starting_player_id=starting_player_id,
@@ -7462,6 +7586,7 @@ def end_game():
     for p in participants:
         participant_flags_json = participant_flags_by_player.get(p["player_id"])
         participant_hot_fields = participant_hot_fields_from_flags(participant_flags_json)
+        player_life_history = life_history_by_player.get(str(p["player_id"]))
         row = GameParticipant(
             game_id=game.id,
             player_id=p["player_id"],
@@ -7473,6 +7598,7 @@ def end_game():
             mana_fucked=bool(participant_hot_fields["mana_fucked"]),
             misplayed=bool(participant_hot_fields["misplayed"]),
             life_delta_total=int(participant_hot_fields["life_delta_total"]),
+            life_history_json=json.dumps(player_life_history) if player_life_history else None,
         )
         db.session.add(row)
         participant_rows.append(row)
@@ -7579,6 +7705,7 @@ def api_game_state(token):
                 state["version"] = 0
 
             pid = str(player_id)
+            previous_life = state["life"].get(pid)
 
             # Life: prefer absolute value from host, delta from phone
             life_abs = data.get("life")
@@ -7599,6 +7726,18 @@ def api_game_state(token):
                     return jsonify({"error": "life_delta out of range"}), 400
                 current_life = int(state["life"].get(pid, 40))
                 state["life"][pid] = max(0, current_life + life_delta)
+
+            # Life-history: one [timestamp, life] sample per actual life change,
+            # capped at MAX_LIFE_HISTORY_SAMPLES per player (oldest dropped).
+            updated_life = state["life"].get(pid)
+            if (life_abs is not None or life_delta is not None) and updated_life != previous_life:
+                if not isinstance(state.get("life_history"), dict):
+                    state["life_history"] = {}
+                player_history = state["life_history"].get(pid)
+                if not isinstance(player_history, list):
+                    player_history = []
+                player_history.append([int(datetime.utcnow().timestamp()), updated_life])
+                state["life_history"][pid] = player_history[-MAX_LIFE_HISTORY_SAMPLES:]
 
             # Flags
             flags_update = data.get("flags")

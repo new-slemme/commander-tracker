@@ -60,6 +60,7 @@
            placeholder="{{ 'New deck name' if create_mode else '' }}">
   </div>
   <div class="editor-topbar-actions">
+    <span id="editorBracketBadge" class="editor-bracket-badge" hidden></span>
     <span id="editorCountBadge" class="editor-count-badge count-low">0 cards</span>
     <span id="editorUnsavedDot" class="editor-unsaved-dot" title="Unsaved changes">● Unsaved</span>
     <button id="toggleSettingsBtn" class="editor-sidebar-toggle" title="Toggle Settings panel">
@@ -439,6 +440,48 @@
     countBadge.className = 'editor-count-badge ' +
       (n === 100 ? 'count-ok' : n > 100 ? 'count-high' : 'count-low');
     if (tabDeckCount) tabDeckCount.textContent = `(${n})`;
+    scheduleBracketPreview();
+  }
+
+  /* ── Live commander-bracket preview ── */
+  const bracketBadge = document.getElementById('editorBracketBadge');
+  const BRACKET_PREVIEW_DEBOUNCE_MS = 700;
+  let bracketPreviewTimer = null;
+  let bracketRequestId = 0;
+
+  function scheduleBracketPreview() {
+    if (!bracketBadge) return;
+    clearTimeout(bracketPreviewTimer);
+    bracketPreviewTimer = setTimeout(refreshBracketPreview, BRACKET_PREVIEW_DEBOUNCE_MS);
+  }
+
+  async function refreshBracketPreview() {
+    const requestId = ++bracketRequestId;
+    try {
+      const res = await fetch('/api/commander-bracket', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decklist_text: toPlaintext() }),
+      });
+      if (requestId !== bracketRequestId) return; // superseded by a newer edit
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+      if (!Number.isInteger(data.bracket)) throw new Error('malformed bracket response');
+      const s = data.signals || {};
+      bracketBadge.textContent = `Bracket ${data.bracket}`;
+      bracketBadge.className = `editor-bracket-badge bracket-${data.bracket}`;
+      bracketBadge.title =
+        `Score ${data.score} — fast mana ${s.fast_mana_count || 0}, ` +
+        `tutors ${s.tutor_count || 0}, combo pieces ${s.combo_piece_count || 0}`;
+      bracketBadge.hidden = false;
+    } catch (err) {
+      if (requestId !== bracketRequestId) return;
+      console.debug('bracket preview failed', err);
+      if (!bracketBadge.hidden) {
+        bracketBadge.classList.add('bracket-stale');
+        bracketBadge.title = 'Bracket preview unavailable — showing last known value';
+      }
+    }
   }
 
   /* ── Serialise to plaintext ── */

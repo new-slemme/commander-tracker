@@ -140,11 +140,26 @@ body.sigtaara-ui .h4 {
     .life-card{
       --card-rotation:0deg;
       --salt-icon-rotation:0deg;
+      /* Seat identity: --seat-color is set per card from the route's palette. */
+      --seat-accent:var(--seat-color, #fff);
       position:relative;
       overflow:hidden;
       background:#000;
       /* needed for the active frame layer */
       isolation:isolate;
+    }
+
+    /* Four of the six seat accents are dark, so they are lifted toward white to
+       read as chrome over art. Gated on @supports rather than the usual
+       two-declaration fallback: a custom property accepts any token sequence, so
+       an unsupported browser would happily store an unparseable color-mix() and
+       then invalidate every declaration consuming it — including the black
+       contrast-floor layers in .life-display's text-shadow and the active-turn
+       frame. Gating keeps --seat-accent a plain color everywhere else. */
+    @supports (color: color-mix(in srgb, red, red)){
+      .life-card{
+        --seat-accent:color-mix(in srgb, var(--seat-color, #fff) 60%, #ffffff);
+      }
     }
 
     .life-card[data-orientation="top"]{
@@ -234,6 +249,10 @@ body.sigtaara-ui .h4 {
 }
 
 
+/* On-art overlay chrome (status strip, salt dispenser, life display/pending,
+   active-turn frame, player name, turn pills, timers, center pass button) sits
+   directly over unpredictable commander art, so its white/black rgba values are
+   intentionally NOT tokenized — guaranteed contrast beats theme fidelity here. */
 .status-strip-btn{
   position:relative;
   width:36px;
@@ -361,10 +380,17 @@ body.sigtaara-ui .h4 {
 
     .life-display{
       position:relative;
+      font-family:'Beleren', Arial, sans-serif;
       font-size:clamp(3.25rem, 18vh, 11rem);
       font-weight:900;
+      letter-spacing:0.02em;
       color:#fff;
-      text-shadow:0 0 10px rgba(0,0,0,.9), 0 0 28px rgba(0,0,0,.7);
+      /* Black layers first are the contrast floor over art; the seat tint is
+         an additive halo and never the only thing separating text from art. */
+      text-shadow:
+        0 0 10px rgba(0,0,0,.9),
+        0 0 28px rgba(0,0,0,.7),
+        0 0 42px var(--seat-accent, transparent);
       user-select:none;
     }
     .life-pending{
@@ -410,12 +436,12 @@ body.sigtaara-ui .h4 {
       content:"";
       position:absolute;
       inset:8px;
-      border-radius:18px;
-      border:2px solid rgba(255,255,255,0.34);
+      border-radius:var(--radius-lg);
+      border:2px solid var(--seat-accent, rgba(255,255,255,0.34));
       box-shadow:
         0 0 0 5px rgba(255,255,255,0.1),
-        0 0 34px rgba(255,255,255,0.26),
-        0 0 72px rgba(255,235,59,0.2) inset;
+        0 0 34px var(--seat-accent, rgba(255,255,255,0.26)),
+        0 0 72px var(--seat-accent, rgba(255,235,59,0.2)) inset;
       pointer-events:none;
       z-index:8;
     }
@@ -428,8 +454,8 @@ body.sigtaara-ui .h4 {
       height:12px;
       border-radius:999px;
       border:1px solid rgba(255,255,255,0.9);
-      background:rgba(255,255,255,0.96);
-      box-shadow:0 0 0 3px rgba(0,0,0,0.34), 0 0 14px rgba(255,255,255,0.55);
+      background:var(--seat-accent, rgba(255,255,255,0.96));
+      box-shadow:0 0 0 3px rgba(0,0,0,0.34), 0 0 14px var(--seat-accent, rgba(255,255,255,0.55));
       opacity:0;
       transform:scale(0.8);
       transition:opacity .16s ease, transform .16s ease;
@@ -451,7 +477,7 @@ body.sigtaara-ui .h4 {
       text-shadow:
         0 0 12px rgba(0,0,0,.95),
         0 0 34px rgba(0,0,0,.75),
-        0 0 22px rgba(255,255,255,.22);
+        0 0 26px var(--seat-accent, rgba(255,255,255,.22));
     }
     /* ===== END ACTIVE PLAYER ===== */
 
@@ -529,13 +555,13 @@ body.sigtaara-ui .h4 {
   z-index:230;
   max-width:min(88vw, 420px);
   padding:10px 14px;
-  border-radius:12px;
-  background:rgba(8, 10, 15, 0.92);
-  border:1px solid rgba(255,255,255,0.2);
-  color:#fff;
+  border-radius:var(--radius-sm);
+  background:var(--darkest-trans);
+  border:1px solid var(--border-color);
+  color:var(--font-base);
   font-weight:700;
   text-align:center;
-  box-shadow:0 10px 24px rgba(0,0,0,0.45);
+  box-shadow:var(--shadow-md);
   opacity:0;
   pointer-events:none;
   transition:opacity .18s ease, transform .18s ease;
@@ -566,16 +592,23 @@ body.sigtaara-ui .h4 {
       bottom:auto;
       left:auto;
       transform:none;
-      display:block;
-      width:100%;
+      display:inline-block;
+      width:auto;
       max-width:100%;
-      padding:4px 10px;
-      border-radius:10px;
+      padding:5px 14px;
+      border-radius:var(--radius-sm);
       color:#fff;
+      font-family:'Beleren', Arial, sans-serif;
       font-weight:800;
+      letter-spacing:0.05em;
+      text-transform:uppercase;
       text-align:center;
       text-shadow:0 0 10px rgba(0,0,0,.9);
-      background:linear-gradient(180deg, rgba(4,7,12,0.14), rgba(4,7,12,0.36));
+      /* Opaque-enough plate so the name never fights the art behind it; the
+         seat accent identifies the seat without carrying the contrast. */
+      background:linear-gradient(180deg, rgba(4,7,12,0.55), rgba(4,7,12,0.78));
+      border:1px solid var(--seat-accent, rgba(255,255,255,0.22));
+      box-shadow:0 0 18px -6px var(--seat-accent, transparent);
       user-select:none;
       line-height:1.2;
       white-space:nowrap;
@@ -595,6 +628,7 @@ body.sigtaara-ui .h4 {
       background:rgba(0,0,0,.55);
       border-radius:999px;
       color:#fff;
+      font-family:'Beleren', Arial, sans-serif;
       font-weight:900;
       z-index:120;
       border:1px solid rgba(255,255,255,0.18);
@@ -655,7 +689,7 @@ body.sigtaara-ui .h4 {
       padding-bottom:max(12px, var(--safe-bottom));
     }
     .players-3 .life-card[data-orientation="right"] .player-name{
-      width:100%;
+      width:auto;
       max-width:calc(100% - 18px);
       margin-inline:auto;
       text-align:center;
@@ -695,12 +729,10 @@ body.sigtaara-ui .h4 {
       pointer-events:none;
       z-index:140;
       margin:10px;
-      border-radius:18px;
-      border:1px solid rgba(255,255,255,0.26);
-      background:linear-gradient(160deg, rgba(13,18,27,0.82), rgba(6,9,14,0.66));
-      box-shadow:
-        inset 0 0 0 1px rgba(255,255,255,0.05),
-        0 12px 28px rgba(0,0,0,0.44);
+      border-radius:var(--radius-lg);
+      border:1px solid var(--border-color-strong);
+      background:var(--darker-trans);
+      box-shadow:var(--shadow-md);
       backdrop-filter:blur(8px);
       -webkit-backdrop-filter:blur(8px);
     }
@@ -721,8 +753,7 @@ body.sigtaara-ui .h4 {
       pointer-events:none;
       text-align:center;
       font-weight:800;
-      color:rgba(255,255,255,.9);
-      text-shadow:0 0 10px rgba(0,0,0,.8);
+      color:var(--font-base);
       line-height:1.15;
     }
 
@@ -757,10 +788,10 @@ body.sigtaara-ui .h4 {
 
     .players-5 .life-card .player-name{
       font-size:clamp(.76rem, 1.55vw, .98rem);
-      width:100%;
+      width:auto;
       max-width:100%;
       text-align:center;
-      padding:3px 8px;
+      padding:3px 10px;
     }
 
     .players-5 .life-card .salt-dispenser-btn{
@@ -894,15 +925,15 @@ body.sigtaara-ui .h4 {
   font-weight:920;
   font-size:clamp(.86rem,2.25vw,1.12rem);
   background:linear-gradient(180deg, rgba(22,30,49,0.96), rgba(7,12,22,0.9));
-  border-color:rgba(236,243,255,0.76);
-  box-shadow:0 0 18px rgba(147,186,255,.3), 0 0 0 1px rgba(255,255,255,.18) inset;
+  border-color:var(--seat-accent, rgba(236,243,255,0.76));
+  box-shadow:0 0 18px var(--seat-accent, rgba(147,186,255,.3)), 0 0 0 1px rgba(255,255,255,.18) inset;
   animation:timer-active-breath 2.2s ease-in-out infinite;
 }
 .player-timer.low-time{ color:#ff8e8e; border-color:rgba(255,114,114,.7); }
 
 @keyframes timer-active-breath{
-  0%, 100%{ box-shadow:0 0 14px rgba(147,186,255,.24), 0 0 0 1px rgba(255,255,255,.16) inset; }
-  50%{ box-shadow:0 0 24px rgba(147,186,255,.42), 0 0 0 1px rgba(255,255,255,.24) inset; }
+  0%, 100%{ box-shadow:0 0 14px var(--seat-accent, rgba(147,186,255,.24)), 0 0 0 1px rgba(255,255,255,.16) inset; }
+  50%{ box-shadow:0 0 26px var(--seat-accent, rgba(147,186,255,.42)), 0 0 0 1px rgba(255,255,255,.24) inset; }
 }
 
 .turn-timer-pill{
@@ -954,10 +985,10 @@ body.sigtaara-ui .h4 {
   overflow-y:auto;
   overscroll-behavior:contain;
   padding:12px;
-  border-radius:18px;
-  border:2px solid rgba(173,189,224,0.42);
+  border-radius:var(--radius-lg);
+  border:2px solid var(--border-color-strong);
   background:var(--base-trans);
-  box-shadow:0 30px 84px rgba(0,0,0,0.68), 0 0 0 1px rgba(255,255,255,0.05);
+  box-shadow:var(--shadow-lg);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
   opacity:0;
@@ -983,14 +1014,14 @@ body.sigtaara-ui .h4 {
 .player-action-section + .player-action-section{
   margin-top:8px;
   padding-top:10px;
-  border-top:1px solid rgba(255,255,255,0.12);
+  border-top:1px solid var(--border-color-subtle);
 }
 
 .player-action-section__title{
   font-size:.78rem;
   letter-spacing:.03em;
   text-transform:uppercase;
-  color:rgba(234,240,255,0.82);
+  color:var(--font-base);
   font-weight:700;
 }
 
@@ -998,7 +1029,7 @@ body.sigtaara-ui .h4 {
   text-transform:none;
   letter-spacing:0;
   font-weight:500;
-  color:rgba(234,240,255,0.7);
+  color:var(--font-base-trans);
 }
 .player-salt-actions{
   display:flex;
@@ -1015,11 +1046,11 @@ body.sigtaara-ui .h4 {
 
 .life-card.flag-menu-open .salt-dispenser-btn{
   background:rgba(33,52,91,0.92);
-  border-color:rgba(255,255,255,0.78);
+  border-color:var(--seat-accent, rgba(255,255,255,0.78));
 }
 
 .player-salt-flyout__header{
-  color:rgba(255,255,255,0.18);
+  color:var(--font-base-trans);
   text-align:center;
   font-size:clamp(1.15rem,2.4vw,1.5rem);
   font-weight:900;
@@ -1028,7 +1059,7 @@ body.sigtaara-ui .h4 {
 }
 
 .player-salt-flyout__subtitle{
-  color:rgba(228,234,246,0.9);
+  color:var(--font-base);
   font-size:clamp(.88rem,1.6vw,1rem);
   line-height:1.24;
   text-align:center;
@@ -1045,10 +1076,10 @@ body.sigtaara-ui .h4 {
 }
 
 #quickMenuModal .modal-content.quick-menu-sheet{
-  border:1px solid rgba(255,255,255,0.18);
-  border-radius:18px 18px 0 0;
-  background:rgba(17,22,34,0.84) !important;
-  box-shadow:0 -10px 30px rgba(0,0,0,0.38);
+  border:1px solid var(--border-color);
+  border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  background:var(--darker-trans) !important;
+  box-shadow:var(--shadow-md);
   backdrop-filter:blur(10px);
   -webkit-backdrop-filter:blur(10px);
   max-height:min(78vh, 560px);
@@ -1062,8 +1093,42 @@ body.sigtaara-ui .h4 {
 .quick-menu-btn{
   font-size:1rem;
   padding:.65rem .9rem;
-  border-radius:.7rem;
+  border-radius:var(--radius-sm);
   font-weight:700;
+}
+
+/* Neutral outline buttons in the game modals have no design-system styling in
+   base.css (only -danger/-warning variants are ported), so token equivalents
+   are scoped here. */
+#quickMenuModal .btn-outline-secondary,
+#quickMenuModal .btn-outline-light,
+#menuModal .btn-outline-light,
+#qrModal .btn-outline-light{
+  background-color:var(--darkest-trans);
+  border-color:var(--border-color);
+  color:var(--font-base);
+}
+
+#quickMenuModal .btn-outline-secondary:hover,
+#quickMenuModal .btn-outline-secondary:focus-visible,
+#quickMenuModal .btn-outline-light:hover,
+#quickMenuModal .btn-outline-light:focus-visible,
+#menuModal .btn-outline-light:hover,
+#menuModal .btn-outline-light:focus-visible,
+#qrModal .btn-outline-light:hover,
+#qrModal .btn-outline-light:focus-visible{
+  background-color:var(--light);
+  border-color:transparent;
+  color:#fff;
+}
+
+/* MTG symbol glyphs (MTGSymbols PUA code points); emoji icons without a font
+   equivalent fall through to the system emoji font. */
+.mtg-glyph,
+.status-chip-icon,
+.poison-icon,
+.card-logic-counters .counter-chip-label{
+  font-family:'MTGSymbols', Arial, sans-serif;
 }
 
 .quick-menu-btn--icon{
@@ -1092,7 +1157,7 @@ body.sigtaara-ui .h4 {
   font-weight:800;
   border:0;
   box-shadow:none;
-  color:#eaf0ff;
+  color:var(--font-base);
   background:var(--darker);
   display:flex;
   align-items:center;
@@ -1114,7 +1179,7 @@ body.sigtaara-ui .h4 {
 }
 
 .player-salt-action-btn:focus-visible{
-  outline:3px solid rgba(255,255,255,0.85);
+  outline:3px solid var(--font-base);
   outline-offset:2px;
 }
 
@@ -1155,7 +1220,7 @@ body.sigtaara-ui .h4 {
   .player-salt-flyout{
     width:min(340px, calc(100vw - 18px));
     max-height:min(80vh, 480px);
-    border-radius:16px;
+    border-radius:var(--radius-md);
   }
 
   .player-salt-action-btn{
@@ -1229,7 +1294,7 @@ body.sigtaara-ui .h4 {
 }
 
 .player-salt-card-logic{
-  border-top:1px solid rgba(255,255,255,.16);
+  border-top:1px solid var(--border-color-subtle);
   padding-top:.55rem;
 }
 
@@ -1261,9 +1326,9 @@ body.sigtaara-ui .h4 {
   font-weight:700;
   letter-spacing:.03em;
   text-transform:uppercase;
-  color:rgba(234,240,255,.75);
+  color:var(--font-base);
   padding-top:.5rem;
-  border-top:1px solid rgba(255,255,255,.16);
+  border-top:1px solid var(--border-color-subtle);
   text-align:center;
 }
 
@@ -1286,9 +1351,9 @@ body.sigtaara-ui .h4 {
   align-items:center;
   gap:.3rem;
   padding:.3rem .5rem;
-  border-radius:10px;
-  background:rgba(0,0,0,.3);
-  border:1px solid rgba(255,255,255,.15);
+  border-radius:var(--radius-sm);
+  background:var(--darker-trans);
+  border:1px solid var(--border-color);
   min-height:2.2rem;
 }
 
@@ -1328,9 +1393,9 @@ body.sigtaara-ui .h4 {
 
 .card-logic-chip,
 .counter-chip{
-  border:1px solid rgba(255,255,255,.22);
-  background:rgba(0,0,0,.45);
-  color:#fff;
+  border:1px solid var(--border-color);
+  background:var(--darkest-trans);
+  color:var(--font-base);
   border-radius:999px;
   min-height:1.55rem;
   font-size:.76rem;
@@ -1362,7 +1427,7 @@ body.sigtaara-ui .h4 {
 .player-salt-card-logic-legend{
   width:100%;
   text-align:center;
-  color:rgba(255,255,255,.86);
+  color:var(--font-base);
   font-size:.72rem;
   letter-spacing:.01em;
   margin:0 0 .35rem;
@@ -1370,13 +1435,15 @@ body.sigtaara-ui .h4 {
 
 .card-logic-chip.is-active,
 .counter-chip.is-active{
-  background:rgba(106, 193, 255, .28);
-  border-color:rgba(138, 214, 255, .85);
+  background:var(--blue);
+  border-color:var(--light);
+  color:#fff;
 }
 
 .card-logic-chip.is-danger{
-  background:rgba(220, 53, 69, .3);
-  border-color:rgba(255, 120, 138, .95);
+  background:var(--red);
+  border-color:var(--red);
+  color:#fff;
 }
 
 .counter-chip{
@@ -1390,7 +1457,7 @@ body.sigtaara-ui .h4 {
   border:0;
   border-radius:999px;
   background:transparent;
-  color:#fff;
+  color:inherit;
   width:1.2rem;
   height:1.2rem;
   line-height:1;
@@ -1430,3 +1497,33 @@ body.sigtaara-ui .h4 {
     display:none;
   }
 }
+
+    /* =========================
+       Life-history sparkline
+       ========================= */
+
+    .life-card .card-lane-middle{
+      position:relative;
+    }
+    .life-spark{
+      display:none;
+      position:absolute;
+      left:50%;
+      bottom:2px;
+      transform:translateX(-50%);
+      width:56%;
+      height:18px;
+      opacity:0.5;
+      pointer-events:none;
+    }
+    .life-spark.has-data{
+      display:block;
+    }
+    .life-spark polyline{
+      stroke:currentColor;
+      stroke-width:2;
+      stroke-linejoin:round;
+      stroke-linecap:round;
+      vector-effect:non-scaling-stroke;
+      color:var(--font-base);
+    }

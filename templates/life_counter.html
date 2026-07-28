@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="{{ 'light' if use_light_theme else 'dark' }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
@@ -7,6 +7,9 @@
   <link href="/static/bootstrap.min.css" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/base.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/life_counter.css') }}" rel="stylesheet">
+  {% if use_light_theme %}
+  <link href="{{ url_for('static', filename='css/light_theme.css', v='p1') }}" rel="stylesheet">
+  {% endif %}
 </head>
 
 <body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 3 %}mode-3p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}{% if debug_ui_enabled %} debug-ui{% endif %}">
@@ -46,6 +49,7 @@
         data-player="{{ p.player_id }}"
         data-orientation="{{ orientation_token }}"
         style="
+          --seat-color:var({{ p.color }});
           {% if p.commander_art %}
             --bg-image:url('{{ p.commander_art }}');
             --bg-layer:
@@ -96,7 +100,7 @@
                 aria-pressed="false"
                 aria-label="Adjust poison for {{ p.player_name }}"
                 title="Adjust poison"
-              ><span class="poison-icon" aria-hidden="true">☠️</span><span class="poison-value" data-player="{{ p.player_id }}">0</span></button>
+              ><span class="poison-icon" aria-hidden="true">&#xE618;</span><span class="poison-value" data-player="{{ p.player_id }}">0</span></button>
               {% endif %}
             </div>
             {% endif %}
@@ -107,6 +111,8 @@
           <div class="card-lane card-lane-middle">
             <div class="life-display" id="life-{{ p.player_id }}">40</div>
             <div class="life-pending" id="pending-{{ p.player_id }}">+0</div>
+            <svg class="life-spark" id="lifeSpark-{{ p.player_id }}" viewBox="0 0 100 24"
+                 preserveAspectRatio="none" aria-hidden="true"><polyline points="" fill="none"/></svg>
           </div>
 
           <div class="card-lane card-lane-bottom">
@@ -156,7 +162,7 @@
               data-logic-group="commander-damage"
               aria-label="Add 1 commander damage to {{ p.player_name }} from next source"
               title="Commander damage"
-            >⚔️ <span class="commander-damage-value" id="commander-damage-total-{{ p.player_id }}">0</span></button>
+            ><span class="mtg-glyph" aria-hidden="true">&#xE9C6;</span> <span class="commander-damage-value" id="commander-damage-total-{{ p.player_id }}">0</span></button>
             <div class="commander-damage-sources" data-player="{{ p.player_id }}" role="group" aria-label="Commander damage sources for {{ p.player_name }}"></div>
             <button
               type="button"
@@ -205,11 +211,11 @@
   <!-- Modal -->
   <div class="modal fade" id="quickMenuModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog quick-menu-sheet-dialog modal-dialog-scrollable">
-      <div class="modal-content quick-menu-sheet bg-dark text-light">
+      <div class="modal-content quick-menu-sheet bg-dark">
         <div class="modal-body px-3 pt-3 pb-4 d-flex flex-column gap-2">
           <div class="text-center mb-2">
             <h2 class="h4 mb-1">Game Actions</h2>
-            <div class="text-secondary">Choose what you want to do next.</div>
+            <div class="text-muted">Choose what you want to do next.</div>
           </div>
 
           <div class="form-check form-switch mx-auto">
@@ -263,7 +269,7 @@
       <div class="player-action-section" aria-label="Tag Actions section">
         <div class="player-action-section__title">Tag Actions <span class="player-action-section__hint">(deck tag based in-game actions)</span></div>
         <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls">
-          <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · 🏙️ City’s Blessing</div>
+          <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · <span class="mtg-glyph" aria-hidden="true">&#xE94A;</span> City’s Blessing</div>
         </div>
       </div>
     </div>
@@ -272,7 +278,7 @@
   <!-- End game modal -->
   <div class="modal fade" id="menuModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
-      <div class="modal-content bg-dark text-light">
+      <div class="modal-content bg-dark">
         <div class="modal-body text-center p-4 d-flex flex-column gap-3">
           <form method="post" action="/end_game" id="endGameForm">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -322,11 +328,11 @@
   <!-- QR join modal -->
   <div class="modal fade" id="qrModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content bg-dark text-light text-center">
+      <div class="modal-content bg-dark text-center">
         <div class="modal-body p-4">
           <h5 class="mb-3">Scan to Join</h5>
           <div id="qrCodeContainer" style="display:inline-block;background:#fff;padding:12px;border-radius:8px;"></div>
-          <div class="mt-3 text-secondary" style="font-size:.8rem;word-break:break-all;" id="joinUrlDisplay"></div>
+          <div class="mt-3 text-muted" style="font-size:.8rem;word-break:break-all;" id="joinUrlDisplay"></div>
           <button class="btn btn-outline-light mt-3 w-100" data-bs-dismiss="modal" type="button">Close</button>
         </div>
       </div>
@@ -2120,9 +2126,39 @@ if(JOIN_TOKEN){
     } catch(e){}
   }
 
+  // Life-history sparklines: redraw each player's life trace from the
+  // server-sampled history whenever a newer state version arrives.
+  const LIFE_SPARK_VIEW_W = 100;
+  const LIFE_SPARK_VIEW_H = 24;
+  const LIFE_SPARK_PAD = 2;
+  function renderLifeSparks(lifeHistory){
+    if(!lifeHistory || typeof lifeHistory !== "object") return;
+    Object.entries(lifeHistory).forEach(([pid, samples])=>{
+      const svg = document.getElementById(`lifeSpark-${pid}`);
+      if(!svg || !Array.isArray(samples)) return;
+      const values = samples
+        .map((s) => (Array.isArray(s) ? Number(s[1]) : NaN))
+        .filter((v) => Number.isFinite(v));
+      if(values.length < 2) return;
+      const lo = Math.min(...values);
+      const hi = Math.max(...values);
+      const span = hi - lo;
+      const plotW = LIFE_SPARK_VIEW_W - 2 * LIFE_SPARK_PAD;
+      const plotH = LIFE_SPARK_VIEW_H - 2 * LIFE_SPARK_PAD;
+      const stepX = plotW / (values.length - 1);
+      const points = values.map((v, i)=>{
+        const y = span === 0 ? plotH / 2 : plotH - ((v - lo) / span) * plotH;
+        return `${(LIFE_SPARK_PAD + i * stepX).toFixed(1)},${(LIFE_SPARK_PAD + y).toFixed(1)}`;
+      }).join(" ");
+      svg.querySelector("polyline").setAttribute("points", points);
+      svg.classList.add("has-data");
+    });
+  }
+
   function applyRemoteGameState(state, localPlayerId){
     if(typeof state.version !== "number" || state.version <= syncLastVersion) return;
     syncLastVersion = state.version;
+    renderLifeSparks(state.life_history);
 
     // Update life for remote players (skip the player we just updated locally)
     const localPid = localPlayerId ? String(localPlayerId) : null;

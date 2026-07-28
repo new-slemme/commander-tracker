@@ -67,7 +67,10 @@
     </div>
 
     <div class="starting-card">
-      <label class="form-label mb-1">Starting Position</label>
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <label class="form-label mb-0">Starting Position</label>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="randomStartingBtn">🎲 Roll for it</button>
+      </div>
       <select name="starting_player" id="startingPlayer" class="form-select d-none">
         <option value="" disabled selected>Select starting player</option>
       </select>
@@ -249,6 +252,43 @@
       });
       pills.appendChild(btn);
     }
+  }
+
+  const ROLL_ANIMATION_STEPS = 8;
+  const ROLL_ANIMATION_STEP_MS = 70;
+
+  const randomStartingBtn = document.getElementById("randomStartingBtn");
+
+  function rollRandomStartingPlayer() {
+    const pills = document.getElementById("startingPlayerPills");
+    if (!pills) return;
+    const pillButtons = Array.from(pills.querySelectorAll(".start-pill"));
+    if (!pillButtons.length) return;
+
+    const finalPick = pillButtons[Math.floor(Math.random() * pillButtons.length)];
+    if (pillButtons.length === 1) {
+      finalPick.click();
+      return;
+    }
+
+    if (randomStartingBtn) randomStartingBtn.disabled = true;
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      pillButtons.forEach((b) => b.classList.remove("active"));
+      if (step >= ROLL_ANIMATION_STEPS) {
+        clearInterval(timer);
+        finalPick.click();
+        if (randomStartingBtn) randomStartingBtn.disabled = false;
+        return;
+      }
+      const flash = pillButtons[Math.floor(Math.random() * pillButtons.length)];
+      flash.classList.add("active");
+    }, ROLL_ANIMATION_STEP_MS);
+  }
+
+  if (randomStartingBtn) {
+    randomStartingBtn.addEventListener("click", rollRandomStartingPlayer);
   }
 
   function setPlayerCardBackground(i) {

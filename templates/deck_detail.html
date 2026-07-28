@@ -196,6 +196,15 @@
             {% else %}bg-danger{% endif %}"
             style="font-size:0.6em; vertical-align:middle;">{{ deck_mmr_tier }}</span>
         </h2>
+        {% if mmr_sparkline_points %}
+          {% set mmr_spark_last = mmr_sparkline_points.rsplit(' ', 1)[-1].split(',') %}
+          <svg class="mmr-sparkline" viewBox="-3 -3 {{ mmr_sparkline_width + 6 }} {{ mmr_sparkline_height + 6 }}"
+               width="{{ mmr_sparkline_width + 6 }}" height="{{ mmr_sparkline_height + 6 }}"
+               role="img" aria-label="MMR trend across rated games, currently {{ deck.mmr }}">
+            <polyline points="{{ mmr_sparkline_points }}" fill="none" />
+            <circle cx="{{ mmr_spark_last[0] }}" cy="{{ mmr_spark_last[1] }}" r="2.5" />
+          </svg>
+        {% endif %}
         <small>MMR</small>
       </div>
     </div>
