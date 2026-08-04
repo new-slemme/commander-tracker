@@ -55,7 +55,9 @@
             --bg-layer:
               linear-gradient(rgba(0,0,0,.65),rgba(0,0,0,.85)),
               var(--bg-image);
-            --bg-layer-active:var(--bg-image);
+            --bg-layer-active:
+              linear-gradient(rgba(0,0,0,.20),rgba(0,0,0,.40)),
+              var(--bg-image);
             --bg-size:{{ p.commander_art_scale or 'cover' }};
           {% else %}
             --bg-image:none;
@@ -116,7 +118,15 @@
           </div>
 
           <div class="card-lane card-lane-bottom">
-            <div class="player-name" title="{{ p.player_name }}">{{ p.player_name }}</div>
+            <div class="player-identity">
+              <div class="player-name" title="{{ p.player_name }}">{{ p.player_name }}</div>
+              {% if p.deck_name %}
+              <div class="player-deck" title="{{ p.deck_name }}">{{ p.deck_name }}</div>
+              {% endif %}
+              <div class="life-meter" aria-label="Life remaining">
+                <span class="life-meter-fill is-healthy" id="lifeMeter-{{ p.player_id }}"></span>
+              </div>
+            </div>
           </div>
 
           <div class="card-logic-panel" data-player="{{ p.player_id }}" aria-label="Card state controls for {{ p.player_name }}">
@@ -208,69 +218,136 @@
     {% endif %}
   </div>
 
-  <!-- Modal -->
+  <!-- Game menu: the root stays deliberately short for phone landscape. -->
   <div class="modal fade" id="quickMenuModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog quick-menu-sheet-dialog modal-dialog-scrollable">
+    <div class="modal-dialog quick-menu-sheet-dialog">
       <div class="modal-content quick-menu-sheet bg-dark">
-        <div class="modal-body px-3 pt-3 pb-4 d-flex flex-column gap-2">
-          <div class="text-center mb-2">
-            <h2 class="h4 mb-1">Game Actions</h2>
-            <div class="text-muted">Choose what you want to do next.</div>
+        <div class="quick-menu-sheet__handle" aria-hidden="true"></div>
+        <header class="quick-menu-sheet__header">
+          <div>
+            <div class="quick-menu-sheet__eyebrow">Life Counter</div>
+            <h2 class="h4 mb-0" id="quickMenuTitle">Game Menu</h2>
           </div>
+          <button class="quick-menu-close" data-bs-dismiss="modal" type="button" aria-label="Continue game">×</button>
+        </header>
 
-          <div class="form-check form-switch mx-auto">
-            <input class="form-check-input" type="checkbox" role="switch" id="activeTurnBadgeToggle">
-            <label class="form-check-label" for="activeTurnBadgeToggle">Show active player corner badge</label>
-          </div>
+        <div class="quick-menu-sheet__body">
+          <section class="quick-menu-panel is-active" data-game-menu-panel="root" aria-labelledby="quickMenuTitle">
+            <div class="quick-menu-action-grid">
+              <button class="quick-menu-action quick-menu-action--secondary" type="button" data-game-menu-open="display">
+                <span class="quick-menu-action__icon" aria-hidden="true">◉</span>
+                <span>Display</span>
+              </button>
+              {% if game_token %}
+              <button class="quick-menu-action quick-menu-action--secondary" id="showQrBtn" type="button">
+                <span class="quick-menu-action__icon" aria-hidden="true">⌁</span>
+                <span>Share Game</span>
+              </button>
+              {% endif %}
+              <button class="quick-menu-action quick-menu-action--primary" id="openEndGameBtn" type="button">
+                <span class="quick-menu-action__icon" aria-hidden="true">✓</span>
+                <span>Finish Game</span>
+              </button>
+              <button class="quick-menu-action quick-menu-action--danger" type="button" data-game-menu-open="leave">
+                <span class="quick-menu-action__icon" aria-hidden="true">↪</span>
+                <span>Leave Game</span>
+              </button>
+            </div>
+            <button class="quick-menu-continue" data-bs-dismiss="modal" type="button">Continue Game</button>
+          </section>
 
-          <button class="btn btn-success quick-menu-btn w-100" id="openEndGameBtn" type="button">
-            End &amp; Record Game
-          </button>
+          <section class="quick-menu-panel" data-game-menu-panel="display" hidden aria-label="Display settings">
+            <button class="sheet-back-btn" type="button" data-game-menu-back>‹ Game Menu</button>
+            <div class="quick-menu-panel__heading">
+              <h3>Display</h3>
+              <p>Choose the in-game turn indicator.</p>
+            </div>
+            <label class="quick-menu-setting" for="activeTurnBadgeToggle">
+              <span>
+                <strong>Active player badge</strong>
+                <small>Show the small corner marker.</small>
+              </span>
+              <input class="form-check-input" type="checkbox" role="switch" id="activeTurnBadgeToggle">
+            </label>
+          </section>
 
-          {% if game_token %}
-          <button class="btn btn-outline-secondary quick-menu-btn w-100" id="showQrBtn" type="button">
-            Share Join QR Code
-          </button>
-          {% endif %}
-
-          <button class="btn btn-outline-danger quick-menu-btn w-100" id="quickQuitBtn" type="button">
-            Quit without Saving
-          </button>
-
-          <button class="btn btn-outline-light quick-menu-btn quick-menu-btn--icon" data-bs-dismiss="modal" type="button" aria-label="Back to game">
-            <img src="/static/icons/back.png" alt="Back to game" />
-          </button>
+          <section class="quick-menu-panel" data-game-menu-panel="leave" hidden aria-label="Leave game">
+            <button class="sheet-back-btn" type="button" data-game-menu-back>‹ Game Menu</button>
+            <div class="quick-menu-panel__heading">
+              <h3>Leave this game?</h3>
+              <p>This discards the current game without recording it.</p>
+            </div>
+            <button class="quick-menu-action quick-menu-action--danger w-100" id="quickQuitBtn" type="button">
+              Quit without Saving
+            </button>
+          </section>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Player flag fly-out -->
+  <!-- Player actions stay top-level for docking, then match the selected card's rotation. -->
   <div id="playerFlagBackdrop" class="player-flag-backdrop" aria-hidden="true"></div>
-  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Player salt actions" tabindex="-1">
-    <div class="player-salt-flyout__content">
-      <div class="player-action-section" aria-label="Salt Actions section">
-        <div class="player-action-section__title">Salt Actions <span class="player-action-section__hint">(not deck tag dependent)</span></div>
-        <div class="player-salt-actions" role="group" aria-label="Player salt actions">
-          <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
-            <img src="/static/icons/mana-fucked.png" alt="Mana-fucked status" />
-          </button>
+  <div id="playerSaltFlyout" class="player-salt-flyout" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="playerSaltFlyoutTitle" tabindex="-1">
+    <div class="player-salt-flyout__surface">
+      <div class="player-salt-flyout__handle" aria-hidden="true"></div>
+      <header class="player-salt-flyout__header">
+        <div>
+          <div class="player-salt-flyout__eyebrow">Player Actions</div>
+          <h2 id="playerSaltFlyoutTitle">Player</h2>
+        </div>
+        <button class="player-salt-close" id="playerFlagCloseBtn" type="button" aria-label="Back to game">×</button>
+      </header>
 
-          <button class="player-salt-action-btn" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
-            <img src="/static/icons/misplayed.png" alt="Misplayed status" />
+      <div class="player-salt-flyout__content">
+      <section class="player-salt-panel is-active" data-player-salt-panel="root">
+        <div class="player-salt-panel__actions">
+          <button class="player-menu-row player-menu-row--primary" id="playerSaltAddBtn" type="button">
+            <span class="player-menu-row__icon" aria-hidden="true">🧂</span>
+            <span><strong>Add Salt</strong><small>Give this player +1 salt.</small></span>
+            <span class="player-menu-row__chevron" aria-hidden="true">+1</span>
           </button>
-
-          <button class="player-salt-action-btn" id="playerFlagCloseBtn" type="button" aria-label="Back to game">
-            <img src="/static/icons/back.png" alt="Back to game" />
+          <button class="player-menu-row" id="playerSaltOpenFlagsBtn" type="button" data-player-salt-open="flags">
+            <span class="player-menu-row__icon" aria-hidden="true">⚑</span>
+            <span><strong>Salt Flags</strong><small>Mana-fucked and misplayed.</small></span>
+            <span class="player-menu-row__chevron" aria-hidden="true">›</span>
+          </button>
+          <button class="player-menu-row" type="button" data-player-salt-open="game-state">
+            <span class="player-menu-row__icon" aria-hidden="true">⌘</span>
+            <span><strong>Game State</strong><small>Statuses, counters, and commander damage.</small></span>
+            <span class="player-menu-row__chevron" aria-hidden="true">›</span>
           </button>
         </div>
-      </div>
+      </section>
 
-      <div class="player-action-section" aria-label="Tag Actions section">
-        <div class="player-action-section__title">Tag Actions <span class="player-action-section__hint">(deck tag based in-game actions)</span></div>
+      <section class="player-salt-panel" data-player-salt-panel="flags" hidden>
+        <button class="sheet-back-btn" type="button" data-player-salt-back>‹ Player Actions</button>
+        <div class="player-salt-panel__heading">
+          <h3>Salt Flags</h3>
+          <p>These actions add the configured salt value.</p>
+        </div>
+        <div class="player-salt-flag-grid" role="group" aria-label="Player salt flags">
+          <button class="player-salt-action-btn" id="playerFlagManaBtn" type="button" aria-pressed="false" aria-label="Mark player as mana-fucked and add salt">
+            <img src="/static/icons/mana-fucked.png" alt="" />
+            <span>Mana-Fucked</span>
+          </button>
+          <button class="player-salt-action-btn" id="playerFlagMisplayedBtn" type="button" aria-pressed="false" aria-label="Mark player as misplayed and add salt">
+            <img src="/static/icons/misplayed.png" alt="" />
+            <span>Misplayed</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="player-salt-panel player-salt-panel--state" data-player-salt-panel="game-state" hidden>
+        <button class="sheet-back-btn" type="button" data-player-salt-back>‹ Player Actions</button>
+        <div class="player-salt-panel__heading">
+          <h3>Game State</h3>
+          <p>Only this detailed panel may scroll when a game has many controls.</p>
+        </div>
         <div class="player-salt-card-logic" id="playerSaltCardLogic" aria-label="Card state controls">
           <div class="player-salt-card-logic-legend" aria-label="Status legend">⚔️ Initiative · <span class="mtg-glyph" aria-hidden="true">&#xE94A;</span> City’s Blessing</div>
         </div>
+      </section>
       </div>
     </div>
   </div>
@@ -396,6 +473,41 @@ document.getElementById("quickQuitBtn")?.addEventListener("click", ()=>{
     return;
   }
   document.getElementById("quickQuitForm")?.submit();
+});
+
+function showGameMenuPanel(panelName = "root"){
+  const modalEl = document.getElementById("quickMenuModal");
+  if(!modalEl) return;
+
+  const panels = [...modalEl.querySelectorAll("[data-game-menu-panel]")];
+  const panel = panels.find((candidate)=>candidate.dataset.gameMenuPanel === panelName) || panels[0];
+  if(!panel) return;
+
+  panels.forEach((candidate)=>{
+    const isActive = candidate === panel;
+    candidate.hidden = !isActive;
+    candidate.classList.toggle("is-active", isActive);
+  });
+
+  const titles = {root: "Game Menu", display: "Display", leave: "Leave Game"};
+  const title = modalEl.querySelector("#quickMenuTitle");
+  if(title) title.textContent = titles[panel.dataset.gameMenuPanel] || "Game Menu";
+}
+
+document.querySelectorAll("[data-game-menu-open]").forEach((button)=>{
+  button.addEventListener("click", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    showGameMenuPanel(button.dataset.gameMenuOpen);
+  });
+});
+
+document.querySelectorAll("[data-game-menu-back]").forEach((button)=>{
+  button.addEventListener("click", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    showGameMenuPanel("root");
+  });
 });
 
 /* ---------- TURN SYSTEM ---------- */
@@ -1208,6 +1320,18 @@ function renderDisplayedLife(playerId){
 
   const displayed = Math.max(0, getCommittedLife(playerId) + (pendingLife[playerId] || 0));
   el.textContent = displayed;
+  renderLifeMeter(playerId, displayed);
+}
+
+function renderLifeMeter(playerId, life){
+  const meter = document.getElementById("lifeMeter-" + playerId);
+  if(!meter) return;
+
+  const ratio = Math.max(0, Math.min(1, Number(life) / 40));
+  meter.style.width = `${ratio * 100}%`;
+  meter.classList.toggle("is-healthy", ratio > 0.5);
+  meter.classList.toggle("is-warning", ratio <= 0.5 && ratio > 0.25);
+  meter.classList.toggle("is-critical", ratio <= 0.25);
 }
 
 function animatePendingIndicator(pendingEl, isGain){
@@ -1355,14 +1479,19 @@ function getLifeDeltaFromTap(playerCard, clientX, clientY){
   return logicalX < 0 ? -1 : 1;
 }
 
+function getPlayerCardOrientationToken(playerCard){
+  return playerCard?.dataset?.orientation || "bottom";
+}
+
 cards.forEach(card=>{
   const playerId = String(card.dataset.player);
   committedLife[playerId] = parseInt(document.getElementById("life-" + playerId)?.textContent || "40", 10);
+  renderLifeMeter(playerId, committedLife[playerId]);
   saltButtonPressState[playerId] = { timer: null, handled: false, pointerId: null };
 
   // Use pointerdown for reliable mobile taps + faster response than click
   card.addEventListener("pointerdown", (e) => {
-    if(e.target.closest(".player-name, .status-strip-btn, .salt-dispenser-btn, .center-pass-hit-area, .card-logic-panel")) return;
+    if(e.target.closest(".player-identity, .status-strip-btn, .salt-dispenser-btn, .center-pass-hit-area, .card-logic-panel")) return;
     e.preventDefault();
 
     const delta = getLifeDeltaFromTap(card, e.clientX, e.clientY);
@@ -1383,120 +1512,73 @@ cards.forEach(card=>{
 function openMenu(){
   const modalEl = document.getElementById("quickMenuModal");
   if(!modalEl) return;
+  showGameMenuPanel("root");
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
 }
 
-const CARD_ORIENTATION_ROTATION_MAP = {
-  top: "180deg",
-  left: "90deg",
-  right: "-90deg",
-  bottom: "0deg"
-};
+function getPlayerSaltMenuEdge(playerCard){
+  if(!playerCard) return "bottom";
 
-const QUARTER_TURN_ORIENTATION_TOKENS = new Set(["left", "right"]);
+  const rect = playerCard.getBoundingClientRect();
+  const viewportWidth = window.visualViewport?.width || window.innerWidth;
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  const centerX = rect.left + (rect.width / 2);
+  const centerY = rect.top + (rect.height / 2);
+  const edgeDistances = {
+    top: Math.max(0, centerY),
+    bottom: Math.max(0, viewportHeight - centerY),
+    left: Math.max(0, centerX),
+    right: Math.max(0, viewportWidth - centerX),
+  };
 
-function getPlayerCardOrientationToken(playerCard){
-  return playerCard?.dataset?.orientation || "bottom";
+  return Object.entries(edgeDistances)
+    .reduce((nearest, candidate)=>candidate[1] < nearest[1] ? candidate : nearest)[0];
 }
 
-function getPlayerCardOrientation(playerCard){
-  const orientationToken = getPlayerCardOrientationToken(playerCard);
-  return CARD_ORIENTATION_ROTATION_MAP[orientationToken] || CARD_ORIENTATION_ROTATION_MAP.bottom;
+function getPlayerSaltMenuRotation(playerCard){
+  if(!playerCard) return "0deg";
+  return getComputedStyle(playerCard)
+    .getPropertyValue("--card-rotation")
+    .trim() || "0deg";
 }
 
-function isQuarterTurnOrientation(orientationToken){
-  return QUARTER_TURN_ORIENTATION_TOKENS.has(orientationToken);
-}
-
-function positionPlayerSaltMenu(anchorButton, playerCard){
+function dockPlayerSaltMenuToPlayer(playerCard){
   const flyoutEl = document.getElementById("playerSaltFlyout");
-  if(!flyoutEl || !anchorButton || !playerCard) return;
+  if(!flyoutEl) return;
+  flyoutEl.dataset.edge = getPlayerSaltMenuEdge(playerCard);
+  flyoutEl.style.setProperty("--player-menu-rotation", getPlayerSaltMenuRotation(playerCard));
+  alignPlayerSaltMenuToEdge(flyoutEl);
+}
 
-  const rootStyles = getComputedStyle(document.documentElement);
-  const parseInsetValue = (rawValue)=>{
-    const parsed = Number.parseFloat(rawValue || "0");
-    return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
-  };
+function alignPlayerSaltMenuToEdge(flyoutEl){
+  const surface = flyoutEl?.querySelector(".player-salt-flyout__surface");
+  if(!surface) return;
 
-  const viewportPadding = {
-    top: 10 + parseInsetValue(rootStyles.getPropertyValue("--safe-top")),
-    right: 10 + parseInsetValue(rootStyles.getPropertyValue("--safe-right")),
-    bottom: 10 + parseInsetValue(rootStyles.getPropertyValue("--safe-bottom")),
-    left: 10 + parseInsetValue(rootStyles.getPropertyValue("--safe-left")),
-  };
-  const cardPadding = 8;
-  const anchorRect = anchorButton.getBoundingClientRect();
-  const cardRect = playerCard.getBoundingClientRect();
-  const orientationToken = getPlayerCardOrientationToken(playerCard);
-  const player3SideCard = orientationToken === "right";
+  const edge = flyoutEl.dataset.edge || "bottom";
+  const width = surface.offsetWidth;
+  const height = surface.offsetHeight;
+  const offsetX = edge === "left"
+    ? (height - width) / 2
+    : edge === "right"
+      ? (width - height) / 2
+      : 0;
 
-  const cardAvailableWidth = Math.max(220, cardRect.width - (cardPadding * 2));
-  const viewportAvailableWidth = Math.max(220, window.innerWidth - viewportPadding.left - viewportPadding.right);
-  const flyoutWidth = Math.max(220, Math.min(460, cardAvailableWidth, viewportAvailableWidth));
-  const cardAvailableHeight = Math.max(170, cardRect.height - (cardPadding * 2));
-  const viewportAvailableHeight = Math.max(170, window.innerHeight - viewportPadding.top - viewportPadding.bottom);
-  const flyoutMaxHeight = Math.max(170, Math.min(420, cardAvailableHeight, viewportAvailableHeight));
-
-  flyoutEl.style.width = `${flyoutWidth}px`;
-  flyoutEl.style.maxHeight = `${flyoutMaxHeight}px`;
-
-  const flyoutHeight = Math.max(170, Math.min(flyoutEl.scrollHeight || 0, flyoutMaxHeight));
-  const flyoutRotation = getPlayerCardOrientation(playerCard);
-  const quarterTurn = isQuarterTurnOrientation(orientationToken);
-  const halfFlyoutWidth = flyoutWidth / 2;
-  const halfFlyoutHeight = flyoutHeight / 2;
-  const halfBoundX = quarterTurn ? halfFlyoutHeight : halfFlyoutWidth;
-  const halfBoundY = quarterTurn ? halfFlyoutWidth : halfFlyoutHeight;
-
-  let centerX;
-  if(player3SideCard){
-    centerX = cardRect.left + (cardRect.width / 2);
-  } else {
-    const availableRightInCard = cardRect.right - anchorRect.right;
-    const openToRight = availableRightInCard >= flyoutWidth + cardPadding;
-    const candidateLeft = openToRight ? (anchorRect.right + 10) : (anchorRect.left - flyoutWidth - 10);
-    centerX = candidateLeft + halfFlyoutWidth;
-  }
-
-  const minCenterX = Math.max(viewportPadding.left + halfBoundX, cardRect.left + cardPadding + halfBoundX);
-  const maxCenterX = Math.min(window.innerWidth - viewportPadding.right - halfBoundX, cardRect.right - cardPadding - halfBoundX);
-  if(minCenterX <= maxCenterX){
-    centerX = Math.min(Math.max(centerX, minCenterX), maxCenterX);
-  } else {
-    const cardCenterX = cardRect.left + (cardRect.width / 2);
-    centerX = Math.min(
-      Math.max(cardCenterX, viewportPadding.left + halfBoundX),
-      window.innerWidth - viewportPadding.right - halfBoundX
-    );
-  }
-
-  const anchorCenterY = anchorRect.top + (anchorRect.height / 2);
-  const minCenterY = Math.max(viewportPadding.top + halfBoundY, cardRect.top + cardPadding + halfBoundY);
-  const maxCenterY = Math.min(window.innerHeight - viewportPadding.bottom - halfBoundY, cardRect.bottom - cardPadding - halfBoundY);
-  let centerY = Math.min(Math.max(anchorCenterY, minCenterY), maxCenterY);
-
-  if(minCenterY > maxCenterY){
-    const cardCenterY = cardRect.top + (cardRect.height / 2);
-    centerY = Math.min(
-      Math.max(cardCenterY, viewportPadding.top + halfBoundY),
-      window.innerHeight - viewportPadding.bottom - halfBoundY
-    );
-  }
-
-  flyoutEl.style.setProperty("--flyout-left", `${centerX}px`);
-  flyoutEl.style.setProperty("--flyout-top", `${centerY}px`);
-  flyoutEl.style.setProperty("--flyout-rotation", flyoutRotation);
+  flyoutEl.style.setProperty("--player-menu-dock-offset-x", `${offsetX}px`);
+  flyoutEl.style.setProperty("--player-menu-dock-offset-y", "0px");
 }
 
 function closePlayerSaltMenu(){
   const flyoutEl = document.getElementById("playerSaltFlyout");
+  const backdropEl = document.getElementById("playerFlagBackdrop");
   const activeCard = document.querySelector(".life-card.flag-menu-open");
   if(!flyoutEl || !playerSaltFlyoutOpen) return;
   playerSaltFlyoutOpen = false;
   playerFlagAnchorButton = null;
-  flyoutEl.classList.remove("is-open");
+  flyoutEl.classList.remove("is-open", "is-mobile-sheet");
   flyoutEl.setAttribute("aria-hidden", "true");
+  backdropEl?.classList.remove("is-open");
+  backdropEl?.setAttribute("aria-hidden", "true");
   activeCard?.classList.remove("flag-menu-open");
   unmountPlayerCardLogicPanel();
   if(HIDE_SALT_BUTTON_BY_DEFAULT && activeCard){
@@ -1504,6 +1586,46 @@ function closePlayerSaltMenu(){
   }
   lastFlyoutFocusedElement?.focus?.();
   resumeTimers("player-flag");
+  window.setTimeout(()=>{
+    if(!playerSaltFlyoutOpen){
+      delete flyoutEl.dataset.edge;
+      flyoutEl.style.removeProperty("--player-menu-rotation");
+      flyoutEl.style.removeProperty("--player-menu-dock-offset-x");
+      flyoutEl.style.removeProperty("--player-menu-dock-offset-y");
+    }
+  }, 180);
+}
+
+function showPlayerSaltPanel(panelName = "root"){
+  const flyoutEl = document.getElementById("playerSaltFlyout");
+  if(!flyoutEl) return;
+
+  const panels = [...flyoutEl.querySelectorAll("[data-player-salt-panel]")];
+  const panel = panels.find((candidate)=>candidate.dataset.playerSaltPanel === panelName) || panels[0];
+  if(!panel) return;
+
+  panels.forEach((candidate)=>{
+    const isActive = candidate === panel;
+    candidate.hidden = !isActive;
+    candidate.classList.toggle("is-active", isActive);
+  });
+
+  if(panel.dataset.playerSaltPanel === "game-state" && playerFlagTargetId){
+    mountPlayerCardLogicPanel(playerFlagTargetId);
+    renderCardStateForPlayer(playerFlagTargetId);
+  }else{
+    unmountPlayerCardLogicPanel();
+  }
+
+  const playerLabel = playerNames[playerFlagTargetId] || "Player";
+  const panelTitles = {root: "", flags: "Salt Flags", "game-state": "Game State"};
+  const panelTitle = panelTitles[panel.dataset.playerSaltPanel] || "";
+  const title = flyoutEl.querySelector("#playerSaltFlyoutTitle");
+  if(title) title.textContent = panelTitle ? `${playerLabel} · ${panelTitle}` : playerLabel;
+
+  const firstFocusable = getFlyoutFocusableElements()[0];
+  firstFocusable?.focus?.();
+  requestAnimationFrame(()=>alignPlayerSaltMenuToEdge(flyoutEl));
 }
 
 function openPlayerSaltMenu(playerId, anchorButton){
@@ -1544,20 +1666,18 @@ function openPlayerSaltMenu(playerId, anchorButton){
   document.querySelectorAll(".life-card.flag-menu-open").forEach((card)=>card.classList.remove("flag-menu-open"));
   playerCard?.classList.add("flag-menu-open");
   revealSaltButtonForCard(playerCard, 4000);
-
-  mountPlayerCardLogicPanel(playerFlagTargetId);
-  renderCardStateForPlayer(playerFlagTargetId);
-
-  positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
+  dockPlayerSaltMenuToPlayer(playerCard);
 
   pauseTimers("player-flag");
   lastFlyoutFocusedElement = document.activeElement;
-  flyoutEl.classList.add("is-open");
+  document.getElementById("playerSaltFlyoutTitle").textContent = playerLabel;
+  document.getElementById("playerFlagBackdrop")?.classList.add("is-open");
+  document.getElementById("playerFlagBackdrop")?.setAttribute("aria-hidden", "false");
+  flyoutEl.classList.add("is-open", "is-mobile-sheet");
   flyoutEl.setAttribute("aria-hidden", "false");
   playerSaltFlyoutOpen = true;
-
-  const focusable = getFlyoutFocusableElements();
-  (focusable[0] || flyoutEl).focus();
+  showPlayerSaltPanel("root");
+  requestAnimationFrame(()=>alignPlayerSaltMenuToEdge(flyoutEl));
 }
 
 function getFlyoutFocusableElements(){
@@ -1568,11 +1688,42 @@ function getFlyoutFocusableElements(){
 }
 
 
-document.getElementById("quickMenuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("quick-menu"));
-document.getElementById("quickMenuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("quick-menu"));
+document.getElementById("quickMenuModal")?.addEventListener("shown.bs.modal", ()=>{
+  closePlayerSaltMenu();
+  showGameMenuPanel("root");
+  pauseTimers("quick-menu");
+});
+document.getElementById("quickMenuModal")?.addEventListener("hidden.bs.modal", ()=>{
+  showGameMenuPanel("root");
+  resumeTimers("quick-menu");
+});
 document.getElementById("menuModal")?.addEventListener("shown.bs.modal", ()=>pauseTimers("end-menu"));
 document.getElementById("menuModal")?.addEventListener("hidden.bs.modal", ()=>resumeTimers("end-menu"));
 document.getElementById("playerFlagCloseBtn")?.addEventListener("click", closePlayerSaltMenu);
+document.getElementById("playerFlagBackdrop")?.addEventListener("click", closePlayerSaltMenu);
+
+document.querySelectorAll("[data-player-salt-open]").forEach((button)=>{
+  button.addEventListener("click", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    showPlayerSaltPanel(button.dataset.playerSaltOpen);
+  });
+});
+
+document.querySelectorAll("[data-player-salt-back]").forEach((button)=>{
+  button.addEventListener("click", (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    showPlayerSaltPanel("root");
+  });
+});
+
+document.getElementById("playerSaltAddBtn")?.addEventListener("click", (event)=>{
+  event.preventDefault();
+  event.stopPropagation();
+  if(playerFlagTargetId) incrementSaltForPlayer(playerFlagTargetId);
+  closePlayerSaltMenu();
+});
 
 document.addEventListener("pointerdown", (e)=>{
   if(!playerSaltFlyoutOpen) return;
@@ -1581,15 +1732,18 @@ document.addEventListener("pointerdown", (e)=>{
   closePlayerSaltMenu();
 });
 
-let _resizeTimer = null;
-window.addEventListener("resize", ()=>{
-  clearTimeout(_resizeTimer);
-  _resizeTimer = setTimeout(()=>{
+let playerSaltMenuDockTimer = null;
+function refreshPlayerSaltMenuDock(){
+  clearTimeout(playerSaltMenuDockTimer);
+  playerSaltMenuDockTimer = setTimeout(()=>{
     if(!playerSaltFlyoutOpen || !playerFlagTargetId) return;
     const playerCard = document.querySelector(`.life-card[data-player="${playerFlagTargetId}"]`);
-    positionPlayerSaltMenu(playerFlagAnchorButton || playerCard?.querySelector('.salt-dispenser-btn'), playerCard);
+    dockPlayerSaltMenuToPlayer(playerCard);
   }, 80);
-});
+}
+
+window.addEventListener("resize", refreshPlayerSaltMenuDock);
+window.visualViewport?.addEventListener("resize", refreshPlayerSaltMenuDock);
 
 function closeAnyOpenModal(){
   ["quickMenuModal", "menuModal"].forEach((id)=>{
@@ -1674,6 +1828,7 @@ document.getElementById("playerFlagManaBtn")?.addEventListener("click", ()=>{
   showTransientNotice(`${playerLabel} was flagged as mana fucked (+${manaFuckedSaltValue} salt).`);
   playSfx(manaFuckedAudio);
   openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
+  showPlayerSaltPanel("flags");
 });
 
 document.getElementById("playerFlagMisplayedBtn")?.addEventListener("click", ()=>{
@@ -1693,6 +1848,7 @@ document.getElementById("playerFlagMisplayedBtn")?.addEventListener("click", ()=
   const playerLabel = playerNames[playerFlagTargetId] || `Player ${playerFlagTargetId}`;
   showTransientNotice(`${playerLabel} misplayed (+${misplayedSaltValue} salt).`);
   openPlayerSaltMenu(playerFlagTargetId, playerFlagAnchorButton);
+  showPlayerSaltPanel("flags");
 });
 
 function incrementSaltForPlayer(playerId){

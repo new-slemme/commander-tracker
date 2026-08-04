@@ -437,11 +437,10 @@ body.sigtaara-ui .h4 {
       position:absolute;
       inset:8px;
       border-radius:var(--radius-lg);
-      border:2px solid var(--seat-accent, rgba(255,255,255,0.34));
+      border:2px solid rgba(255,255,255,0.34);
       box-shadow:
-        0 0 0 5px rgba(255,255,255,0.1),
-        0 0 34px var(--seat-accent, rgba(255,255,255,0.26)),
-        0 0 72px var(--seat-accent, rgba(255,235,59,0.2)) inset;
+        0 0 0 5px rgba(255,255,255,0.06),
+        0 0 26px rgba(255,255,255,0.16) inset;
       pointer-events:none;
       z-index:8;
     }
@@ -587,36 +586,79 @@ body.sigtaara-ui .h4 {
     /* ==================== END TURN BADGE ==================== */
 
 
-    .player-name{
+    /* Mirrors Android's identity strip: player, deck, then a compact life
+       bar in one readable surface above the bottom edge of the commander art. */
+    .player-identity{
       position:relative;
       bottom:auto;
       left:auto;
       transform:none;
-      display:inline-block;
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+      gap:2px;
       width:auto;
-      max-width:100%;
-      padding:5px 14px;
-      border-radius:var(--radius-sm);
+      min-width:min(220px, 100%);
+      max-width:min(360px, 100%);
+      padding:6px 10px 7px;
+      border-radius:10px;
+      color:#fff;
+      font-family:'Beleren', Arial, sans-serif;
+      text-align:center;
+      text-shadow:0 0 10px rgba(0,0,0,.9);
+      background:rgba(23,26,38,0.88);
+      border:1px solid rgba(255,255,255,0.14);
+      box-shadow:0 4px 14px rgba(0,0,0,0.28);
+      user-select:none;
+      line-height:1.2;
+      z-index:46;
+    }
+
+    .player-name{
+      width:100%;
       color:#fff;
       font-family:'Beleren', Arial, sans-serif;
       font-weight:800;
       letter-spacing:0.05em;
       text-transform:uppercase;
       text-align:center;
-      text-shadow:0 0 10px rgba(0,0,0,.9);
-      /* Opaque-enough plate so the name never fights the art behind it; the
-         seat accent identifies the seat without carrying the contrast. */
-      background:linear-gradient(180deg, rgba(4,7,12,0.55), rgba(4,7,12,0.78));
-      border:1px solid var(--seat-accent, rgba(255,255,255,0.22));
-      box-shadow:0 0 18px -6px var(--seat-accent, transparent);
-      user-select:none;
-      line-height:1.2;
       white-space:nowrap;
       overflow:hidden;
       text-overflow:ellipsis;
       overflow-wrap:anywhere;
-      z-index:46;
     }
+
+    .player-deck{
+      width:100%;
+      color:rgba(179,188,222,0.92);
+      font-family:Arial,sans-serif;
+      font-size:clamp(.64rem, 1.3vw, .78rem);
+      line-height:1.2;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    .life-meter{
+      width:100%;
+      height:3px;
+      margin-top:2px;
+      overflow:hidden;
+      border-radius:999px;
+      background:rgba(255,255,255,0.13);
+    }
+
+    .life-meter-fill{
+      display:block;
+      width:100%;
+      height:100%;
+      border-radius:inherit;
+      background:#ddd;
+      transition:width .16s ease, background-color .16s ease;
+    }
+
+    .life-meter-fill.is-warning{ background:var(--font-warning); }
+    .life-meter-fill.is-critical{ background:var(--font-danger); }
 
     /* Turn pill (top center) */
     .turn-pill{
@@ -971,77 +1013,266 @@ body.sigtaara-ui .h4 {
 }
 
 .player-flag-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:310;
+  background:rgba(0,0,0,.5);
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .16s ease;
+}
+
+.player-flag-backdrop.is-open{
+  opacity:1;
+  pointer-events:auto;
+}
+
+/* Player actions live in the viewport and dock to the selected card's physical
+   edge. Their surface rotates with that card so every player reads it from the
+   same direction as their life total. */
+.player-salt-flyout{
+  --player-menu-rotation:0deg;
+  --player-menu-dock-offset-x:0px;
+  --player-menu-dock-offset-y:0px;
+  position:fixed;
+  left:50%;
+  bottom:max(10px, var(--safe-bottom));
+  z-index:320;
+  width:min(440px, calc(100vw - 20px));
+  max-height:calc(100dvh - max(20px, var(--safe-top)) - max(10px, var(--safe-bottom)));
+  overflow:visible;
+  opacity:0;
+  transform:translate(-50%, calc(100% + 28px));
+  transform-origin:center;
+  pointer-events:none;
+  transition:opacity .16s ease, transform .18s var(--ease-out, ease);
+}
+
+.player-salt-flyout__surface{
+  box-sizing:border-box;
+  width:100%;
+  max-height:inherit;
+  overflow:hidden;
+  padding:8px 12px 12px;
+  border:1px solid var(--border-color-strong);
+  border-radius:var(--radius-lg);
+  background:var(--darker);
+  box-shadow:var(--shadow-lg);
+  transform:rotate(var(--player-menu-rotation));
+  transform-origin:center;
+}
+
+.player-salt-flyout[data-edge="bottom"]{
+  top:auto;
+  right:auto;
+  left:50%;
+  bottom:max(10px, var(--safe-bottom));
+  transform:translate(-50%, calc(100% + 28px));
+}
+
+.player-salt-flyout[data-edge="top"]{
+  top:max(10px, var(--safe-top));
+  bottom:auto;
+  transform:translate(-50%, calc(-100% - 28px));
+}
+
+.player-salt-flyout[data-edge="left"]{
+  top:50%;
+  right:auto;
+  bottom:auto;
+  left:max(10px, var(--safe-left));
+  width:min(360px, calc(100dvh - max(20px, var(--safe-top)) - max(20px, var(--safe-bottom))));
+  max-height:min(calc(100vw - max(20px, var(--safe-left)) - max(20px, var(--safe-right))), calc(100dvh - max(20px, var(--safe-top)) - max(20px, var(--safe-bottom))));
+  transform:translate(calc(-100% - 28px), -50%);
+}
+
+.player-salt-flyout[data-edge="right"]{
+  top:50%;
+  right:max(10px, var(--safe-right));
+  bottom:auto;
+  left:auto;
+  width:min(360px, calc(100dvh - max(20px, var(--safe-top)) - max(20px, var(--safe-bottom))));
+  max-height:min(calc(100vw - max(20px, var(--safe-left)) - max(20px, var(--safe-right))), calc(100dvh - max(20px, var(--safe-top)) - max(20px, var(--safe-bottom))));
+  transform:translate(calc(100% + 28px), -50%);
+}
+
+.player-salt-flyout.is-open,
+.player-salt-flyout.is-mobile-sheet{
+  opacity:1;
+  transform:translate(
+    calc(-50% + var(--player-menu-dock-offset-x)),
+    var(--player-menu-dock-offset-y)
+  );
+  pointer-events:auto;
+}
+
+.player-salt-flyout.is-open[data-edge="top"],
+.player-salt-flyout.is-mobile-sheet[data-edge="top"]{
+  transform:translate(
+    calc(-50% + var(--player-menu-dock-offset-x)),
+    var(--player-menu-dock-offset-y)
+  );
+}
+
+.player-salt-flyout.is-open[data-edge="left"],
+.player-salt-flyout.is-mobile-sheet[data-edge="left"],
+.player-salt-flyout.is-open[data-edge="right"],
+.player-salt-flyout.is-mobile-sheet[data-edge="right"]{
+  transform:translate(
+    var(--player-menu-dock-offset-x),
+    calc(-50% + var(--player-menu-dock-offset-y))
+  );
+}
+
+.player-salt-flyout[data-edge="left"] .player-salt-flyout__handle,
+.player-salt-flyout[data-edge="right"] .player-salt-flyout__handle{
   display:none;
 }
 
-.player-salt-flyout{
-  position:fixed;
-  top:var(--flyout-top, 50%);
-  left:var(--flyout-left, 50%);
-  z-index:320;
-  width:min(460px, calc(100vw - 32px));
-  min-height:0;
-  max-height:min(74vh, 420px);
-  overflow-y:auto;
-  overscroll-behavior:contain;
-  padding:12px;
-  border-radius:var(--radius-lg);
-  border:2px solid var(--border-color-strong);
-  background:var(--base-trans);
-  box-shadow:var(--shadow-lg);
-  backdrop-filter:blur(14px);
-  -webkit-backdrop-filter:blur(14px);
-  opacity:0;
-  --flyout-rotation:0deg;
-  transform:translate(-50%, -50%) rotate(var(--flyout-rotation)) scale(.985);
-  pointer-events:none;
-  transition:opacity .14s ease, transform .14s ease;
+.player-salt-flyout__handle,
+.quick-menu-sheet__handle{
+  width:38px;
+  height:4px;
+  margin:0 auto 6px;
+  border-radius:999px;
+  background:rgba(255,255,255,.3);
 }
 
-.player-salt-flyout__content{
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
-
-
-.player-action-section{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-.player-action-section + .player-action-section{
-  margin-top:8px;
-  padding-top:10px;
-  border-top:1px solid var(--border-color-subtle);
-}
-
-.player-action-section__title{
-  font-size:.78rem;
-  letter-spacing:.03em;
-  text-transform:uppercase;
-  color:var(--font-base);
-  font-weight:700;
-}
-
-.player-action-section__hint{
-  text-transform:none;
-  letter-spacing:0;
-  font-weight:500;
-  color:var(--font-base-trans);
-}
-.player-salt-actions{
+.player-salt-flyout__header,
+.quick-menu-sheet__header{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
+  gap:12px;
 }
 
-.player-salt-flyout.is-open{
-  opacity:1;
-  transform:translate(-50%, -50%) rotate(var(--flyout-rotation)) scale(1);
-  pointer-events:auto;
+.player-salt-flyout__eyebrow,
+.quick-menu-sheet__eyebrow{
+  color:var(--font-base-trans);
+  font-size:.68rem;
+  font-weight:800;
+  letter-spacing:.1em;
+  text-transform:uppercase;
+}
+
+.player-salt-flyout__header h2,
+.quick-menu-sheet__header h2{
+  margin:0;
+  color:#fff;
+  font-size:1.18rem;
+  line-height:1.15;
+}
+
+.player-salt-close,
+.quick-menu-close{
+  display:grid;
+  place-items:center;
+  width:42px;
+  height:42px;
+  padding:0;
+  border:1px solid var(--border-color);
+  border-radius:999px;
+  background:var(--darkest-trans);
+  color:#fff;
+  font-size:1.7rem;
+  line-height:1;
+}
+
+.player-salt-flyout__content{
+  margin-top:10px;
+}
+
+.player-salt-panel[hidden],
+.quick-menu-panel[hidden]{
+  display:none !important;
+}
+
+.player-salt-panel__actions{
+  display:grid;
+  gap:8px;
+}
+
+.player-menu-row{
+  display:grid;
+  grid-template-columns:34px minmax(0, 1fr) auto;
+  align-items:center;
+  gap:10px;
+  width:100%;
+  min-height:58px;
+  padding:8px 12px;
+  border:1px solid var(--border-color);
+  border-radius:var(--radius-sm);
+  background:var(--darkest-trans);
+  color:#fff;
+  text-align:left;
+}
+
+.player-menu-row--primary{
+  border-color:rgba(255,255,255,.32);
+  background:linear-gradient(135deg, rgba(58,107,84,.96), rgba(31,65,49,.96));
+}
+
+.player-menu-row__icon{
+  display:grid;
+  place-items:center;
+  width:34px;
+  height:34px;
+  border-radius:999px;
+  background:rgba(255,255,255,.13);
+  font-size:1.08rem;
+}
+
+.player-menu-row strong,
+.player-menu-row small{
+  display:block;
+}
+
+.player-menu-row strong{ font-size:.94rem; }
+.player-menu-row small{ margin-top:2px; color:var(--font-base); font-size:.72rem; line-height:1.15; }
+.player-menu-row--primary small{ color:rgba(255,255,255,.78); }
+.player-menu-row__chevron{ color:var(--font-base); font-size:1.2rem; font-weight:800; }
+
+.player-salt-panel__heading,
+.quick-menu-panel__heading{
+  margin:6px 0 12px;
+}
+
+.player-salt-panel__heading h3,
+.quick-menu-panel__heading h3{
+  margin:0;
+  color:#fff;
+  font-size:1rem;
+}
+
+.player-salt-panel__heading p,
+.quick-menu-panel__heading p{
+  margin:3px 0 0;
+  color:var(--font-base);
+  font-size:.78rem;
+  line-height:1.25;
+}
+
+.sheet-back-btn{
+  min-height:36px;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:var(--font-base);
+  font-size:.82rem;
+  font-weight:700;
+}
+
+.player-salt-flag-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
+}
+
+.player-salt-panel--state{
+  max-height:calc(100dvh - 160px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding-right:2px;
 }
 
 .life-card.flag-menu-open .salt-dispenser-btn{
@@ -1049,53 +1280,107 @@ body.sigtaara-ui .h4 {
   border-color:var(--seat-accent, rgba(255,255,255,0.78));
 }
 
-.player-salt-flyout__header{
-  color:var(--font-base-trans);
-  text-align:center;
-  font-size:clamp(1.15rem,2.4vw,1.5rem);
-  font-weight:900;
-  line-height:1.1;
-  letter-spacing:.01em;
-}
-
-.player-salt-flyout__subtitle{
-  color:var(--font-base);
-  font-size:clamp(.88rem,1.6vw,1rem);
-  line-height:1.24;
-  text-align:center;
-  margin-top:-4px;
-}
-
 .mode-2p .player-timer{ font-size:clamp(.78rem,1.7vw,.95rem); }
 
-
+/* The long-press menu is a short bottom sheet. Secondary configuration moves
+   into a separate panel, so the first surface never needs scrolling. */
 #quickMenuModal .modal-dialog.quick-menu-sheet-dialog{
+  display:flex;
   align-items:flex-end;
-  margin:.5rem;
-  min-height:calc(100% - 1rem);
+  width:100%;
+  max-width:none;
+  min-height:100%;
+  margin:0;
 }
 
 #quickMenuModal .modal-content.quick-menu-sheet{
-  border:1px solid var(--border-color);
-  border-radius:var(--radius-lg) var(--radius-lg) 0 0;
-  background:var(--darker-trans) !important;
-  box-shadow:var(--shadow-md);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  max-height:min(78vh, 560px);
+  width:min(460px, calc(100vw - 16px));
+  margin:0 auto max(8px, var(--safe-bottom));
+  padding:8px 12px 12px;
+  border:1px solid var(--border-color-strong);
+  border-radius:var(--radius-lg);
+  background:var(--darker) !important;
+  box-shadow:var(--shadow-lg);
   overflow:hidden;
 }
 
-#quickMenuModal .modal-body{
-  overflow-y:auto;
+.quick-menu-sheet__body{ margin-top:10px; }
+
+.quick-menu-action-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:8px;
 }
 
-.quick-menu-btn{
-  font-size:1rem;
-  padding:.65rem .9rem;
+.quick-menu-action{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  min-height:68px;
+  padding:8px;
+  border:1px solid var(--border-color);
   border-radius:var(--radius-sm);
-  font-weight:700;
+  background:var(--darkest-trans);
+  color:#fff;
+  font-size:.82rem;
+  font-weight:800;
+  line-height:1.1;
+  text-align:center;
 }
+
+.quick-menu-action__icon{
+  display:grid;
+  place-items:center;
+  width:24px;
+  height:24px;
+  border-radius:999px;
+  background:rgba(255,255,255,.12);
+  font-size:1rem;
+}
+
+.quick-menu-action--primary{
+  border-color:rgba(123,214,152,.52);
+  background:linear-gradient(135deg, rgba(58,107,84,.96), rgba(31,65,49,.96));
+}
+
+.quick-menu-action--danger{
+  border-color:rgba(229,54,54,.5);
+  background:rgba(166,50,50,.24);
+  color:#ffd5d5;
+}
+
+.quick-menu-continue{
+  width:100%;
+  min-height:38px;
+  margin-top:8px;
+  padding:6px 10px;
+  border:0;
+  border-radius:var(--radius-sm);
+  background:transparent;
+  color:var(--font-base);
+  font-size:.82rem;
+  font-weight:800;
+}
+
+.quick-menu-setting{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  min-height:62px;
+  padding:10px 12px;
+  border:1px solid var(--border-color);
+  border-radius:var(--radius-sm);
+  background:var(--darkest-trans);
+}
+
+.quick-menu-setting strong,
+.quick-menu-setting small{ display:block; }
+.quick-menu-setting strong{ color:#fff; font-size:.9rem; }
+.quick-menu-setting small{ margin-top:2px; color:var(--font-base); font-size:.73rem; }
+.quick-menu-setting .form-check-input{ flex:0 0 auto; width:2.4em; height:1.25em; margin:0; }
 
 /* Neutral outline buttons in the game modals have no design-system styling in
    base.css (only -danger/-warning variants are ported), so token equivalents
@@ -1131,69 +1416,45 @@ body.sigtaara-ui .h4 {
   font-family:'MTGSymbols', Arial, sans-serif;
 }
 
-.quick-menu-btn--icon{
-  width:56px;
-  height:56px;
-  padding:.4rem;
-  margin-inline:auto;
+.player-salt-flag-grid .player-salt-action-btn{
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-}
-
-.quick-menu-btn--icon img{
-  width:30px;
-  height:30px;
-  object-fit:contain;
-}
-
-.player-salt-action-btn{
-  width:72px;
-  height:72px;
-  flex:0 0 72px;
-  padding:.7rem;
-  border-radius:999px;
-  font-size:clamp(1rem,2vw,1.08rem);
+  gap:6px;
+  min-height:112px;
+  padding:10px;
+  border:1px solid var(--border-color);
+  border-radius:var(--radius-sm);
+  background:var(--darkest-trans);
+  color:#fff;
+  font-size:.78rem;
   font-weight:800;
-  border:0;
-  box-shadow:none;
-  color:var(--font-base);
-  background:var(--darker);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  transition:background-color .14s ease, color .14s ease, transform .14s ease;
 }
 
-.player-salt-action-btn img{
-  width:60px;
-  height:60px;
+.player-salt-flag-grid .player-salt-action-btn img{
+  width:48px;
+  height:48px;
   object-fit:contain;
   pointer-events:none;
 }
 
-.player-salt-action-btn:hover,
-.player-salt-action-btn:focus-visible{
-  transform:translateY(-1px);
-  filter:brightness(1.06);
+.player-salt-flag-grid .player-salt-action-btn[aria-pressed="true"]{
+  border-color:var(--font-warning);
+  background:rgba(242,201,76,.14);
 }
 
-.player-salt-action-btn:focus-visible{
-  outline:3px solid var(--font-base);
+.player-menu-row:hover,
+.player-menu-row:focus-visible,
+.quick-menu-action:hover,
+.quick-menu-action:focus-visible,
+.player-salt-flag-grid .player-salt-action-btn:hover,
+.player-salt-flag-grid .player-salt-action-btn:focus-visible,
+.sheet-back-btn:hover,
+.sheet-back-btn:focus-visible{
+  filter:brightness(1.1);
+  outline:2px solid rgba(255,255,255,.6);
   outline-offset:2px;
-}
-
-@media (max-height:500px),(max-width:768px) and (orientation:landscape){
-  .player-salt-action-btn{
-    width:60px;
-    height:60px;
-    flex-basis:60px;
-  }
-
-  .player-salt-action-btn img{
-    width:46px;
-    height:46px;
-  }
 }
 
 @media (max-width:576px){
@@ -1203,35 +1464,23 @@ body.sigtaara-ui .h4 {
     --ui-pad-bottom:max(16px, var(--safe-bottom));
   }
 
-  #quickMenuModal .modal-dialog.quick-menu-sheet-dialog{
-    margin:.35rem;
-    min-height:calc(100% - .7rem);
-  }
-
-  #quickMenuModal .modal-content.quick-menu-sheet{
-    max-height:72vh;
-  }
-
-  .quick-menu-btn{
-    font-size:.95rem;
-    padding:.58rem .8rem;
-  }
-
   .player-salt-flyout{
-    width:min(340px, calc(100vw - 18px));
-    max-height:min(80vh, 480px);
+    width:calc(100vw - 16px);
+    max-height:calc(100dvh - max(16px, var(--safe-top)) - max(8px, var(--safe-bottom)));
     border-radius:var(--radius-md);
   }
 
-  .player-salt-action-btn{
-    width:56px;
-    height:56px;
-    flex-basis:56px;
+  .player-salt-flyout[data-edge="left"],
+  .player-salt-flyout[data-edge="right"]{
+    width:min(360px, calc(100dvh - max(16px, var(--safe-top)) - max(8px, var(--safe-bottom))));
   }
 
-  .player-salt-action-btn img{
-    width:42px;
-    height:42px;
+  .player-salt-flyout[data-edge="left"]{
+    border-radius:0 var(--radius-md) var(--radius-md) 0;
+  }
+
+  .player-salt-flyout[data-edge="right"]{
+    border-radius:var(--radius-md) 0 0 var(--radius-md);
   }
 
   .salt-dispenser-btn{
