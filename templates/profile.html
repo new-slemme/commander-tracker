@@ -38,7 +38,7 @@
   <div class="profile-card">
     <div class="profile-card-head">
       <h2 class="profile-card-title">Account</h2>
-      <div class="help-text">Keep your display name unique.</div>
+      <div class="help-text">Your display name is scoped to your pods.</div>
     </div>
 
     <div class="profile-card-body">
@@ -48,6 +48,9 @@
 
         <div class="k">Display name</div>
         <div class="v">{{ user.display_name }}</div>
+
+        <div class="k">Email</div>
+        <div class="v">{{ user.email or 'Not set' }} {% if user.email_verified_at %}<span class="badge text-bg-success">Verified</span>{% else %}<span class="badge text-bg-warning">Unverified</span>{% endif %}</div>
 
         <div class="k">Status</div>
         <div class="v">
@@ -204,6 +207,20 @@
       {% else %}
         <div class="help-text">No peer channel configured for this instance.</div>
       {% endif %}
+    </div>
+  </div>
+
+  <div class="profile-card mt-3">
+    <div class="profile-card-head"><h2 class="profile-card-title">Privacy & sessions</h2><div class="help-text">Portable data and account controls.</div></div>
+    <div class="profile-card-body">
+      <div class="d-flex flex-wrap gap-2 mb-4">
+        <a class="btn btn-outline-light" href="{{ url_for('account_export') }}">Download my data</a>
+        <form method="post"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="revoke_sessions"><button class="btn btn-outline-warning">Sign out other devices</button></form>
+      </div>
+      <div class="divider"></div>
+      <h3 class="profile-card-title mb-2">Delete and anonymize account</h3>
+      <p class="help-text">Your login and personal identity are removed. Recorded games remain with anonymized player and deck labels so the rest of the pod's history stays consistent.</p>
+      <form method="post" class="d-flex gap-2 flex-wrap" onsubmit="return confirm('Permanently anonymize this account? This cannot be undone.');"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete_account"><input class="form-control" style="max-width:320px" name="current_password" type="password" placeholder="Current password" required><button class="btn btn-danger">Delete account</button></form>
     </div>
   </div>
 

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Privacy · Pod Chronicle{% endblock %}
+{% block content %}
+<main class="public-shell narrow"><p class="eyebrow">Privacy</p><h1>Your pod's data belongs to your pod.</h1>
+  <div class="card p-4 mt-4">
+    <h2 class="h4">What is stored</h2><p>Account identity, pod membership, decks, game records, live-game state, and first-party activation events. Passwords are stored as one-way hashes; invite and recap tokens are also stored only as hashes.</p>
+    <h2 class="h4 mt-4">Public recaps</h2><p>Recaps are private unless a member explicitly publishes one. Public pages omit usernames, decklists, private notes, and links to other games. A published link can be revoked.</p>
+    <h2 class="h4 mt-4">Your controls</h2><p>Account export and deletion/anonymization are available from your profile. Operational backups may retain encrypted copies for a limited restoration window.</p>
+    <h2 class="h4 mt-4">Contact and processors</h2><p class="mb-0">Before public production launch this notice must be completed with the operator's legal identity, contact address, hosting/email processors, retention windows, and lawful bases. This beta text is product disclosure, not a completed legal notice.</p>
+  </div>
+</main>
+{% endblock %}

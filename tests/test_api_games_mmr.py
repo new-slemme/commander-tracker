@@ -48,6 +48,11 @@ class ApiGamesMmrTests(unittest.TestCase):
         d1 = app.Deck(name="Deck 1", commander="Cmd 1", player_id=p1.id)
         d2 = app.Deck(name="Deck 2", commander="Cmd 2", player_id=p2.id)
         app.db.session.add_all([d1, d2])
+        app.db.session.flush()
+        app.db.session.add_all([
+            app.PodMembership(pod_id=pod.id, player_id=p1.id),
+            app.PodMembership(pod_id=pod.id, player_id=p2.id),
+        ])
         app.db.session.commit()
 
         return admin.id, p1.id, p2.id, d1.id, d2.id

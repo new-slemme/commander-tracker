@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Pod Chronicle · Remember every game night{% endblock %}
+{% block content %}
+<link href="{{ url_for('static', filename='css/public.css') }}" rel="stylesheet">
+<main class="public-shell">
+  <section class="public-hero">
+    <p class="eyebrow">Your pod has a story</p>
+    <h1>Remember the games, rivalries, and ridiculous turns.</h1>
+    <p class="public-lede">A fast shared life counter with a lasting memory for your Commander playgroup. Track the game together, then share the recap.</p>
+    <div class="d-flex flex-wrap gap-2 mt-4">
+      <a class="btn btn-primary btn-lg" href="{{ url_for('register') }}">Create your free pod</a>
+      <a class="btn btn-outline-light btn-lg" href="#sample-recap">See a sample recap</a>
+    </div>
+    <p class="small text-secondary mt-3">Core playgroup tracking stays free. No payment card required.</p>
+  </section>
+
+  <section class="public-grid" aria-label="Product highlights">
+    <article class="public-card"><span>01</span><h2>Play together</h2><p>Four-player life tracking, commander damage, turn flow, salt events, and shared state.</p></article>
+    <article class="public-card"><span>02</span><h2>Keep the memory</h2><p>Winner, decks, MMR movement, life highlights, and the table's defining moments in one recap.</p></article>
+    <article class="public-card"><span>03</span><h2>Build pod lore</h2><p>History that grows into rivalries, seasons, milestones, and annual stories—not just rows of stats.</p></article>
+  </section>
+
+  <section class="sample-recap" id="sample-recap">
+    <p class="eyebrow">Interactive sample</p>
+    <div class="d-flex justify-content-between align-items-end gap-3 flex-wrap">
+      <div><h2 class="mb-1">The comeback nobody believed</h2><p class="text-secondary mb-0">Turn 11 · 4 players · combat</p></div>
+      <span class="badge rounded-pill text-bg-warning">3 salt events</span>
+    </div>
+    <div class="sample-podium mt-4">
+      <div class="sample-winner"><small>Winner</small><strong>Alex · Pirates</strong><span>+24 MMR</span></div>
+      <div><small>Final swing</small><strong>38 damage</strong><span>from 3 life</span></div>
+      <div><small>Rivalry</small><strong>2–2</strong><span>season series tied</span></div>
+    </div>
+  </section>
+</main>
+{% endblock %}

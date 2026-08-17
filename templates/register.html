@@ -4,7 +4,7 @@
     <div class="auth-card-wrap">
         <div class="app-hero mb-3">
             <h1 class="card-head-title title-font">Register</h1>
-            <div class="app-hero__sub">Create your account for commander tracking.</div>
+            <div class="app-hero__sub">Create your account and your playgroup in one step.</div>
         </div>
         {% with messages = get_flashed_messages() %}
         {% if messages %}
@@ -20,19 +20,18 @@
                 <input type="text" name="username" id="username" class="form-control" required autofocus>
             </div>
             <div class="mb-3">
-              <label for="display_name" class="form-label">Display Name</label>
-              <input type="text" name="display_name" id="display_name" class="form-control" required>
-              <div class="form-text">This name will be used to track your games.</div>
+                <label for="email" class="form-label">Email</label>
+                <input type="email" name="email" id="email" class="form-control" value="{{ request.form.get('email', '') }}" required>
             </div>
             <div class="mb-3">
-                <label for="requested_pod_id" class="form-label">Requested Pod</label>
-                <select name="requested_pod_id" id="requested_pod_id" class="form-select" required>
-                    <option value="">Choose a pod...</option>
-                    {% for pod in requestable_pods %}
-                    <option value="{{ pod.id }}" {% if request.form.get('requested_pod_id') == (pod.id|string) %}selected{% endif %}>{{ pod.name }}</option>
-                    {% endfor %}
-                </select>
-                <div class="form-text">Pick the pod you want to join after approval.</div>
+              <label for="display_name" class="form-label">Display Name</label>
+              <input type="text" name="display_name" id="display_name" class="form-control" value="{{ request.form.get('display_name', '') }}" required>
+              <div class="form-text">Names only need to be unique inside your pod.</div>
+            </div>
+            <div class="mb-3">
+                <label for="pod_name" class="form-label">Playgroup name</label>
+                <input type="text" name="pod_name" id="pod_name" class="form-control" value="{{ request.form.get('pod_name', '') }}" placeholder="Friday Night Pod" required>
+                <div class="form-text">You become the podmaster and can invite everyone else.</div>
             </div>
             <div class="mb-3">
                 <label for="password" class="form-label">Password</label>

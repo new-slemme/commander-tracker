@@ -16,14 +16,19 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+import hashlib
 import hmac
 import json
+import logging
+import fcntl
+import mimetypes
 import os
 import re
 import random
 import requests
 import secrets
+import smtplib
 import sqlite3
 import sys
 import tempfile
@@ -33,7 +38,9 @@ import warnings
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
+from email.message import EmailMessage
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from sqlalchemy import func, text, case, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
@@ -64,11 +71,47 @@ app.secret_key = _flask_secret
 # Explicit session-cookie security flags: SameSite=Lax mitigates CSRF on /api/*
 # (intentionally exempt from a required CSRF header — see docs/API.md). Secure is
 # env-gated so local HTTP dev (e.g. the :5001 test container) still works.
-SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "0") == "1"
+IS_PRODUCTION = os.getenv("APP_ENV", "development").strip().lower() == "production"
+SESSION_COOKIE_SECURE = os.getenv(
+    "SESSION_COOKIE_SECURE", "1" if IS_PRODUCTION else "0"
+) == "1"
 app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=SESSION_COOKIE_SECURE,
+    SESSION_COOKIE_HTTPONLY=True,
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+    PREFERRED_URL_SCHEME="https" if IS_PRODUCTION else "http",
 )
+if os.getenv("TRUST_PROXY", "0") == "1":
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+
+class JsonLogFormatter(logging.Formatter):
+    def format(self, record):
+        return json.dumps(
+            {
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "level": record.levelname,
+                "logger": record.name,
+                "message": record.getMessage(),
+            },
+            separators=(",", ":"),
+        )
+
+
+if IS_PRODUCTION:
+    for handler in app.logger.handlers:
+        handler.setFormatter(JsonLogFormatter())
+
+if os.getenv("SENTRY_DSN"):
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=os.getenv("SENTRY_DSN"),
+        environment=os.getenv("APP_ENV", "production"),
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
+        send_default_pii=False,
+    )
 
 
 def _resolve_database_uri() -> str:
@@ -106,9 +149,10 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 # of racing. Kept generous — contention windows here are milliseconds.
 SQLITE_BUSY_TIMEOUT_SECONDS = 15
 SQLITE_BUSY_TIMEOUT_MS = SQLITE_BUSY_TIMEOUT_SECONDS * 1000
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "connect_args": {"timeout": SQLITE_BUSY_TIMEOUT_SECONDS}
-}
+if app.config["SQLALCHEMY_DATABASE_URI"].startswith("sqlite:"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {"timeout": SQLITE_BUSY_TIMEOUT_SECONDS}
+    }
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB — enough for animated GIF commander art
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 db = SQLAlchemy(app)
@@ -183,11 +227,13 @@ def get_game_state_rmw_engine():
             if _rmw_engine is None:
                 from sqlalchemy import create_engine
 
-                _rmw_engine = create_engine(
-                    db.engine.url,
-                    isolation_level="AUTOCOMMIT",
-                    connect_args={"timeout": SQLITE_BUSY_TIMEOUT_SECONDS},
-                )
+                engine_kwargs = {}
+                if db.engine.dialect.name == "sqlite":
+                    engine_kwargs.update(
+                        isolation_level="AUTOCOMMIT",
+                        connect_args={"timeout": SQLITE_BUSY_TIMEOUT_SECONDS},
+                    )
+                _rmw_engine = create_engine(db.engine.url, **engine_kwargs)
     return _rmw_engine
 limiter = Limiter(
     get_remote_address,
@@ -211,6 +257,51 @@ def handle_upload_too_large(_exc):
 
 DEFAULT_POD_NAME = "Der Keller – Die Salzmine"
 DEFAULT_POD_SLUG = "der-keller-die-salzmine"
+
+OBJECT_STORAGE_BUCKET = (os.getenv("OBJECT_STORAGE_BUCKET") or "").strip()
+OBJECT_STORAGE_ENDPOINT = (os.getenv("OBJECT_STORAGE_ENDPOINT") or "").strip() or None
+OBJECT_STORAGE_REGION = (os.getenv("OBJECT_STORAGE_REGION") or "eu-central-1").strip()
+_object_storage_client = None
+
+
+def get_object_storage_client():
+    global _object_storage_client
+    if not OBJECT_STORAGE_BUCKET:
+        return None
+    if _object_storage_client is None:
+        import boto3
+
+        _object_storage_client = boto3.client(
+            "s3", endpoint_url=OBJECT_STORAGE_ENDPOINT, region_name=OBJECT_STORAGE_REGION
+        )
+    return _object_storage_client
+
+
+def send_transactional_email(recipient: str, subject: str, body: str) -> bool:
+    """Send through a configured SMTP relay; fail closed without exposing tokens."""
+    host = (os.getenv("SMTP_HOST") or "").strip()
+    sender = (os.getenv("EMAIL_FROM") or "").strip()
+    if not host or not sender:
+        if app.config.get("TESTING") or app.debug:
+            app.logger.info("Development email to %s (%s): %s", recipient, subject, body)
+        else:
+            app.logger.error("Transactional email is not configured; message not sent")
+        return False
+    port = int(os.getenv("SMTP_PORT", "587"))
+    username = os.getenv("SMTP_USERNAME") or None
+    password = os.getenv("SMTP_PASSWORD") or None
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = recipient
+    message["Subject"] = subject
+    message.set_content(body)
+    with smtplib.SMTP(host, port, timeout=15) as smtp:
+        if os.getenv("SMTP_STARTTLS", "1") == "1":
+            smtp.starttls()
+        if username:
+            smtp.login(username, password or "")
+        smtp.send_message(message)
+    return True
 
 ART_DIR = Path("/data/art")
 ART_DIR.mkdir(parents=True, exist_ok=True)
@@ -788,7 +879,15 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     username = db.Column(db.String(100), unique=True, nullable=False)
-    display_name = db.Column(db.String(100), unique=True, nullable=False)
+    # Display names are intentionally not globally unique. Identity and access
+    # are scoped by account/pod, so unrelated pods may both have an "Alex".
+    display_name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(320), unique=True, nullable=True, index=True)
+    email_verified_at = db.Column(db.DateTime, nullable=True)
+    email_verification_token_hash = db.Column(db.String(64), nullable=True, index=True)
+    email_verification_expires_at = db.Column(db.DateTime, nullable=True)
+    password_reset_token_hash = db.Column(db.String(64), nullable=True, index=True)
+    password_reset_expires_at = db.Column(db.DateTime, nullable=True)
 
     password_hash = db.Column(db.String(128), nullable=False)
 
@@ -801,6 +900,10 @@ class User(db.Model):
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     approved_at = db.Column(db.DateTime, nullable=True)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    anonymized_at = db.Column(db.DateTime, nullable=True)
+    session_version = db.Column(db.Integer, nullable=False, default=0)
 
     player = db.relationship("Player", backref="user", uselist=False)
 
@@ -809,7 +912,7 @@ class Player(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Stats display name (mirrors user.display_name for accounts)
-    name = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False, index=True)
 
     # Nullable to allow guest/manual players
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=True)
@@ -919,10 +1022,20 @@ class Game(db.Model):
 
 class Pod(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False, unique=True)
+    name = db.Column(db.String(100), nullable=False)
     slug = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    owner_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    visibility = db.Column(db.String(20), nullable=False, default="private")
+    flavor_name = db.Column(db.String(100), nullable=False, default="Saltmine")
+    primary_color = db.Column(db.String(7), nullable=False, default="#ff7a00")
+    scoring_json = db.Column(db.Text, nullable=False, default="{}")
+    enabled_mechanics_json = db.Column(db.Text, nullable=False, default="{}")
+    recap_public_by_default = db.Column(db.Boolean, nullable=False, default=False)
+    timezone = db.Column(db.String(64), nullable=False, default="UTC")
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    owner = db.relationship("User", foreign_keys=[owner_user_id], lazy=True)
 
 
 class PodMembership(db.Model):
@@ -991,6 +1104,48 @@ class ActiveGame(db.Model):
     state_json = db.Column(db.Text, nullable=False, default="{}")
     created_at = db.Column(db.DateTime, nullable=False)
     updated_at = db.Column(db.DateTime, nullable=False)
+
+
+class PodInvite(db.Model):
+    __tablename__ = "pod_invite"
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=False, index=True)
+    role = db.Column(db.String(20), nullable=False, default="member")
+    expires_at = db.Column(db.DateTime, nullable=False)
+    usage_limit = db.Column(db.Integer, nullable=False, default=1)
+    use_count = db.Column(db.Integer, nullable=False, default=0)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    pod = db.relationship("Pod", lazy=True)
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id], lazy=True)
+
+
+class GameShare(db.Model):
+    __tablename__ = "game_share"
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    game_id = db.Column(db.Integer, db.ForeignKey("game.id"), nullable=False, index=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    show_player_names = db.Column(db.Boolean, nullable=False, default=True)
+    show_deck_names = db.Column(db.Boolean, nullable=False, default=True)
+    revoked_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    game = db.relationship("Game", backref="shares", lazy=True)
+    created_by = db.relationship("User", foreign_keys=[created_by_user_id], lazy=True)
+
+
+class FunnelEvent(db.Model):
+    __tablename__ = "funnel_event"
+    id = db.Column(db.Integer, primary_key=True)
+    event_name = db.Column(db.String(64), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True, index=True)
+    pod_id = db.Column(db.Integer, db.ForeignKey("pod.id"), nullable=True, index=True)
+    metadata_json = db.Column(db.Text, nullable=False, default="{}")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
 # -------------------------
@@ -1151,6 +1306,19 @@ with app.app_context():
     backup_database_on_startup()
 
     def run_schema_migrations():
+        # Managed PostgreSQL starts from the declarative schema. Existing
+        # production databases must use a reviewed Alembic migration before a
+        # deploy; the legacy numbered bootstrap below is SQLite-specific.
+        if db.engine.dialect.name != "sqlite":
+            db.create_all()
+            default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
+            if not default_pod:
+                db.session.add(
+                    Pod(name=DEFAULT_POD_NAME, slug=DEFAULT_POD_SLUG, is_active=True)
+                )
+                db.session.commit()
+            return
+
         existing_tables = {
             row[0]
             for row in db.session.execute(
@@ -1804,6 +1972,103 @@ with app.app_context():
                 )
             )
 
+        if "027_saas_foundation" not in applied:
+            user_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(user)")).fetchall()
+            }
+            user_column_sql = {
+                "email": "VARCHAR(320)",
+                "email_verified_at": "DATETIME",
+                "email_verification_token_hash": "VARCHAR(64)",
+                "email_verification_expires_at": "DATETIME",
+                "password_reset_token_hash": "VARCHAR(64)",
+                "password_reset_expires_at": "DATETIME",
+                "last_login_at": "DATETIME",
+                "deleted_at": "DATETIME",
+                "anonymized_at": "DATETIME",
+                "session_version": "INTEGER NOT NULL DEFAULT 0",
+            }
+            for column_name, column_type in user_column_sql.items():
+                if column_name not in user_cols:
+                    db.session.execute(
+                        text(f'ALTER TABLE user ADD COLUMN "{column_name}" {column_type}')
+                    )
+            db.session.execute(
+                text("CREATE UNIQUE INDEX IF NOT EXISTS ux_user_email ON user (email) WHERE email IS NOT NULL")
+            )
+
+            pod_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(pod)")).fetchall()
+            }
+            pod_column_sql = {
+                "owner_user_id": "INTEGER REFERENCES user(id)",
+                "visibility": "VARCHAR(20) NOT NULL DEFAULT 'private'",
+                "flavor_name": "VARCHAR(100) NOT NULL DEFAULT 'Saltmine'",
+                "primary_color": "VARCHAR(7) NOT NULL DEFAULT '#ff7a00'",
+                "scoring_json": "TEXT NOT NULL DEFAULT '{}'",
+                "enabled_mechanics_json": "TEXT NOT NULL DEFAULT '{}'",
+                "recap_public_by_default": "BOOLEAN NOT NULL DEFAULT 0",
+                "timezone": "VARCHAR(64) NOT NULL DEFAULT 'UTC'",
+            }
+            for column_name, column_type in pod_column_sql.items():
+                if column_name not in pod_cols:
+                    db.session.execute(
+                        text(f'ALTER TABLE pod ADD COLUMN "{column_name}" {column_type}')
+                    )
+
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS pod_invite (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    token_hash VARCHAR(64) NOT NULL UNIQUE,
+                    pod_id INTEGER NOT NULL,
+                    role VARCHAR(20) NOT NULL DEFAULT 'member',
+                    expires_at DATETIME NOT NULL,
+                    usage_limit INTEGER NOT NULL DEFAULT 1,
+                    use_count INTEGER NOT NULL DEFAULT 0,
+                    created_by_user_id INTEGER NOT NULL,
+                    revoked_at DATETIME,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(pod_id) REFERENCES pod(id),
+                    FOREIGN KEY(created_by_user_id) REFERENCES user(id)
+                )
+            """))
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_pod_invite_pod_id ON pod_invite (pod_id)"))
+            db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_pod_invite_token_hash ON pod_invite (token_hash)"))
+
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS game_share (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    token_hash VARCHAR(64) NOT NULL UNIQUE,
+                    game_id INTEGER NOT NULL,
+                    created_by_user_id INTEGER NOT NULL,
+                    show_player_names BOOLEAN NOT NULL DEFAULT 1,
+                    show_deck_names BOOLEAN NOT NULL DEFAULT 1,
+                    revoked_at DATETIME,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(game_id) REFERENCES game(id),
+                    FOREIGN KEY(created_by_user_id) REFERENCES user(id)
+                )
+            """))
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_game_share_game_id ON game_share (game_id)"))
+            db.session.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_game_share_token_hash ON game_share (token_hash)"))
+
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS funnel_event (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_name VARCHAR(64) NOT NULL,
+                    user_id INTEGER,
+                    pod_id INTEGER,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(user_id) REFERENCES user(id),
+                    FOREIGN KEY(pod_id) REFERENCES pod(id)
+                )
+            """))
+            db.session.execute(text("CREATE INDEX IF NOT EXISTS ix_funnel_event_name_created ON funnel_event (event_name, created_at)"))
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('027_saas_foundation')")
+            )
+
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
         if not default_pod:
             default_pod = Pod(name=DEFAULT_POD_NAME, slug=DEFAULT_POD_SLUG, is_active=True)
@@ -1826,7 +2091,20 @@ with app.app_context():
         )
         db.session.commit()
 
-    run_schema_migrations()
+    if db.engine.dialect.name == "sqlite":
+        # Gunicorn workers import this module concurrently. Serialise the
+        # legacy SQLite bootstrap so a brand-new database cannot race on
+        # CREATE TABLE/ALTER TABLE during multi-worker startup.
+        lock_key = hashlib.sha256(str(db.engine.url).encode("utf-8")).hexdigest()[:16]
+        lock_path = os.path.join(tempfile.gettempdir(), f"commander-schema-{lock_key}.lock")
+        with open(lock_path, "a+", encoding="utf-8") as migration_lock:
+            fcntl.flock(migration_lock.fileno(), fcntl.LOCK_EX)
+            try:
+                run_schema_migrations()
+            finally:
+                fcntl.flock(migration_lock.fileno(), fcntl.LOCK_UN)
+    else:
+        run_schema_migrations()
 
     def ensure_indexes():
         stmts = [
@@ -2085,6 +2363,18 @@ def _store_custom_art_upload(upload, field: str, deck_name: str) -> str | None:
 
     safe_deck = _safe_filename(deck_name) or "deck"
     out_filename = f"custom_{safe_deck}_{field}_{uuid4().hex[:8]}{ext}"
+    storage_client = get_object_storage_client()
+    if storage_client:
+        object_key = f"custom-art/{field}/{out_filename}"
+        storage_client.put_object(
+            Bucket=OBJECT_STORAGE_BUCKET,
+            Key=object_key,
+            Body=raw_bytes,
+            ContentType=mimetypes.guess_type(out_filename)[0] or "application/octet-stream",
+            CacheControl="public, max-age=31536000, immutable",
+        )
+        return f"/media/{object_key}"
+
     out_path = target_dir / out_filename
     out_path.write_bytes(raw_bytes)
     web_prefix = f"/art/{web_subdir}/" if web_subdir else "/art/"
@@ -2102,6 +2392,22 @@ def prune_custom_art_file(old_path: str | None) -> None:
     if not old_path:
         return
     old_path = old_path.strip()
+    if old_path.startswith("/media/") and get_object_storage_client():
+        still_referenced = (
+            db.session.query(Deck.id)
+            .filter(
+                db.or_(
+                    Deck.commander_local_art_custom == old_path,
+                    Deck.custom_card_art_local == old_path,
+                )
+            )
+            .first()
+        )
+        if not still_referenced:
+            get_object_storage_client().delete_object(
+                Bucket=OBJECT_STORAGE_BUCKET, Key=old_path[len("/media/"):]
+            )
+        return
     if not old_path.startswith("/art/"):
         return
 
@@ -3224,6 +3530,92 @@ def get_current_user():
         return None
     return db.session.get(User, uid)
 
+
+def normalize_email(value: str | None) -> str:
+    return (value or "").strip().casefold()
+
+
+def hash_public_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def issue_public_token() -> tuple[str, str]:
+    raw = secrets.token_urlsafe(32)
+    return raw, hash_public_token(raw)
+
+
+def unique_pod_slug(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-") or "pod"
+    candidate = base
+    suffix = 2
+    while Pod.query.filter_by(slug=candidate).first():
+        candidate = f"{base}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+def record_funnel_event(
+    event_name: str,
+    *,
+    user: User | None = None,
+    pod: Pod | None = None,
+    metadata: dict | None = None,
+) -> None:
+    """Queue a small first-party product event in the current DB transaction."""
+    db.session.add(
+        FunnelEvent(
+            event_name=event_name[:64],
+            user_id=user.id if user else None,
+            pod_id=pod.id if pod else None,
+            metadata_json=json.dumps(metadata or {}, separators=(",", ":"), sort_keys=True),
+        )
+    )
+
+
+def accessible_pod_ids(user: User | None) -> set[int]:
+    return {pod.id for pod in get_accessible_pods(user)} if user else set()
+
+
+def can_access_game(user: User | None, game: Game | None) -> bool:
+    return bool(user and game and (user.is_admin or game.pod_id in accessible_pod_ids(user)))
+
+
+def can_access_player(user: User | None, player: Player | None) -> bool:
+    if not user or not player:
+        return False
+    if user.is_admin or (user.player and user.player.id == player.id):
+        return True
+    return (
+        PodMembership.query.filter(
+            PodMembership.player_id == player.id,
+            PodMembership.pod_id.in_(accessible_pod_ids(user) or {-1}),
+        ).first()
+        is not None
+    )
+
+
+def can_access_deck(user: User | None, deck: Deck | None) -> bool:
+    return bool(deck and can_access_player(user, deck.owner))
+
+
+def scoped_player_query(user: User | None, pod: Pod | None = None):
+    if user and user.is_admin and pod is None:
+        return Player.query
+    allowed = {pod.id} if pod else accessible_pod_ids(user)
+    return (
+        Player.query.join(PodMembership, PodMembership.player_id == Player.id)
+        .filter(PodMembership.pod_id.in_(allowed or {-1}))
+        .distinct()
+    )
+
+
+def scoped_deck_query(user: User | None, pod: Pod | None = None):
+    return Deck.query.filter(
+        Deck.player_id.in_(
+            scoped_player_query(user, pod).with_entities(Player.id)
+        )
+    )
+
 def api_user_payload(user):
     return {
         "user_id": user.id,
@@ -3561,7 +3953,9 @@ def inject_pod_context():
 
 def game_query_for_scope():
     scope = _resolve_nav_scope()
-    q = Game.query
+    user = get_current_user()
+    allowed = accessible_pod_ids(user)
+    q = Game.query if (user and user.is_admin) else Game.query.filter(Game.pod_id.in_(allowed or {-1}))
     active_pod = get_active_pod()
     if scope != "all" and active_pod:
         q = q.filter(Game.pod_id == active_pod.id)
@@ -3627,6 +4021,8 @@ app.jinja_env.globals["csrf_token"] = get_csrf_token
 def require_login():
     # CSRF check for authenticated state-mutating requests on non-API routes
     if (
+        app.config.get("WTF_CSRF_ENABLED", True)
+        and
         request.method in ("POST", "PUT", "PATCH", "DELETE")
         and not request.path.startswith("/api/")
         and session.get("user_id")
@@ -3657,15 +4053,27 @@ def require_login():
                 session["is_admin"] = u.is_admin
                 session["use_sigtaara"] = u.use_sigtaara
                 session["use_light_theme"] = u.use_light_theme
+                session["session_version"] = u.session_version
                 get_active_pod()
                 return None
 
         # Allow auth routes + static assets + selected public API routes.
         public_endpoints = {
+            "index",
             "login",
             "register",
+            "pricing",
+            "privacy",
+            "support",
+            "verify_email",
+            "forgot_password",
+            "reset_password",
+            "accept_pod_invite",
+            "public_recap",
             "static",
             "art",
+            "object_media",
+            "healthz",
             "api_login",
             "api_logout",
             "api_me",
@@ -3684,6 +4092,19 @@ def require_login():
                 return jsonify({"error": "Unauthorized"}), 401
             return redirect(url_for("login") + "?next=" + quote(request.full_path))
 
+    if session.get("user_id"):
+        signed_in_user = get_current_user()
+        if not signed_in_user or signed_in_user.deleted_at:
+            session.clear()
+            return redirect(url_for("login"))
+        session_version = session.get("session_version")
+        if session_version is None:
+            session["session_version"] = signed_in_user.session_version
+        elif session_version != signed_in_user.session_version:
+            session.clear()
+            flash("That session was revoked. Please sign in again.")
+            return redirect(url_for("login"))
+
     get_active_pod()
 
 
@@ -3691,83 +4112,179 @@ def require_login():
 # Auth Routes
 # -------------------------
 @app.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per hour", methods=["POST"])
 def register():
-    requestable_pods = get_requestable_pods(None)
-
     if request.method == "POST":
-        username = request.form["username"].strip()
+        username = request.form.get("username", "").strip()
         display_name = request.form.get("display_name", "").strip()
-        password = request.form["password"]
-        confirm = request.form["confirm"]
-        requested_pod_raw = request.form.get("requested_pod_id", "").strip()
+        email = normalize_email(request.form.get("email"))
+        pod_name = request.form.get("pod_name", "").strip()
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
 
-        requested_pod = None
-        if not requested_pod_raw:
-            flash("Please choose a pod to request access to.")
-        else:
-            try:
-                requested_pod_id = int(requested_pod_raw)
-            except ValueError:
-                flash("Selected pod is invalid.")
-            else:
-                allowed_pod_ids = {pod.id for pod in requestable_pods}
-                if requested_pod_id not in allowed_pod_ids:
-                    flash("Selected pod is unavailable or retired.")
-                else:
-                    requested_pod = db.session.get(Pod, requested_pod_id)
-
-        if not requested_pod:
-            return render_template("register.html", requestable_pods=requestable_pods)
-
-        if not username or not display_name or not password:
-            flash("Username, display name, and password required")
+        if not username or not display_name or not email or not pod_name or not password:
+            flash("Username, email, display name, pod name, and password are required")
+        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+            flash("Enter a valid email address")
         elif password != confirm:
             flash("Passwords do not match")
         elif User.query.filter_by(username=username).first():
             flash("Username already taken")
-        elif User.query.filter_by(display_name=display_name).first() or Player.query.filter_by(name=display_name).first():
-            flash("Display name already taken")
+        elif User.query.filter_by(email=email).first():
+            flash("An account already uses that email address")
         else:
             password_error = validate_password_rules(password)
             if password_error:
                 flash(password_error)
-                return render_template("register.html", requestable_pods=requestable_pods)
+                return render_template("register.html")
 
-            hashed = generate_password_hash(password)
+            raw_verification_token, verification_hash = issue_public_token()
             user = User(
                 username=username,
                 display_name=display_name,
-                password_hash=hashed,
-                is_active=False,
-                is_admin=False
+                email=email,
+                password_hash=generate_password_hash(password),
+                is_active=True,
+                is_admin=False,
+                approved_at=datetime.utcnow(),
+                email_verification_token_hash=verification_hash,
+                email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
             )
-
             db.session.add(user)
             db.session.flush()
-            db.session.add(
-                RegistrationRequest(
-                    user_id=user.id,
-                    requested_pod_id=requested_pod.id,
-                    status="pending",
-                )
+            player = Player(name=display_name, user_id=user.id)
+            db.session.add(player)
+            db.session.flush()
+            pod = Pod(
+                name=pod_name,
+                slug=unique_pod_slug(pod_name),
+                owner_user_id=user.id,
+                is_active=True,
             )
+            db.session.add(pod)
+            db.session.flush()
+            ensure_membership(pod.id, player.id, role="podmaster")
+            record_funnel_event("account_created", user=user, pod=pod)
+            record_funnel_event("pod_created", user=user, pod=pod)
             db.session.commit()
 
-            flash(f"Registration submitted for {requested_pod.name}; pending approval.")
+            verification_url = url_for(
+                "verify_email", token=raw_verification_token, _external=True
+            )
+            send_transactional_email(
+                user.email,
+                "Verify your Pod Chronicle account",
+                f"Verify your email within 24 hours:\n\n{verification_url}",
+            )
+            if app.config.get("TESTING"):
+                session["test_email_verification_token"] = raw_verification_token
+            flash(
+                f"Your pod '{pod.name}' is ready. Check your email to verify your account."
+            )
             return redirect(url_for("login"))
 
-    return render_template("register.html", requestable_pods=requestable_pods)
+    return render_template("register.html")
+
+
+@app.route("/verify-email/<token>")
+def verify_email(token):
+    user = User.query.filter_by(email_verification_token_hash=hash_public_token(token)).first()
+    if (
+        not user
+        or not user.email_verification_expires_at
+        or user.email_verification_expires_at < datetime.utcnow()
+    ):
+        flash("That verification link is invalid or expired.")
+        return redirect(url_for("login"))
+    user.email_verified_at = datetime.utcnow()
+    user.email_verification_token_hash = None
+    user.email_verification_expires_at = None
+    db.session.commit()
+    flash("Email verified. You can now invite your playgroup.")
+    return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = normalize_email(request.form.get("email"))
+        user = User.query.filter_by(email=email, deleted_at=None).first() if email else None
+        if user:
+            raw_token, token_hash = issue_public_token()
+            user.password_reset_token_hash = token_hash
+            user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
+            db.session.commit()
+            reset_url = url_for("reset_password", token=raw_token, _external=True)
+            send_transactional_email(
+                user.email,
+                "Reset your Pod Chronicle password",
+                f"Reset your password within one hour:\n\n{reset_url}",
+            )
+            if app.config.get("TESTING"):
+                session["test_password_reset_token"] = raw_token
+        flash("If that email is registered, a reset link has been sent.")
+        return redirect(url_for("login"))
+    return render_template("forgot_password.html")
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+def reset_password(token):
+    user = User.query.filter_by(password_reset_token_hash=hash_public_token(token)).first()
+    if (
+        not user
+        or not user.password_reset_expires_at
+        or user.password_reset_expires_at < datetime.utcnow()
+    ):
+        flash("That reset link is invalid or expired.")
+        return redirect(url_for("forgot_password"))
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        confirm = request.form.get("confirm", "")
+        password_error = validate_password_rules(password)
+        if password != confirm:
+            flash("Passwords do not match")
+        elif password_error:
+            flash(password_error)
+        else:
+            user.password_hash = generate_password_hash(password)
+            user.password_reset_token_hash = None
+            user.password_reset_expires_at = None
+            db.session.commit()
+            session.clear()
+            flash("Password updated. Sign in with your new password.")
+            return redirect(url_for("login"))
+    return render_template("reset_password.html", token=token)
+
+
+@app.route("/pricing")
+def pricing():
+    return render_template("pricing.html")
+
+
+@app.route("/support")
+def support():
+    return render_template("support.html")
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute", methods=["POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"].strip()
-        password = request.form["password"]
-        user = User.query.filter_by(username=username).first()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        normalized_login = normalize_email(username)
+        user = User.query.filter(
+            db.or_(User.username == username, User.email == normalized_login)
+        ).first()
 
-        if user and check_password_hash(user.password_hash, password):
+        if user and not user.deleted_at and check_password_hash(user.password_hash, password):
             if not user.is_active:
                 flash("Account pending approval. Please contact an admin.")
                 return render_template("login.html")
@@ -3783,6 +4300,9 @@ def login():
             session["is_admin"] = user.is_admin
             session["use_sigtaara"] = user.use_sigtaara
             session["use_light_theme"] = user.use_light_theme
+            session["session_version"] = user.session_version
+            user.last_login_at = datetime.utcnow()
+            db.session.commit()
             get_active_pod()
 
             next_url = request.args.get("next", "")
@@ -3882,11 +4402,14 @@ def profile():
                 flash("Misplayed salt value must be between 0 and 50.")
                 return redirect(url_for("profile"))
 
-            existing_user = User.query.filter(User.display_name == new_display, User.id != u.id).first()
-            existing_player = Player.query.filter(Player.name == new_display).first()
-
-            if existing_user or (existing_player and (not u.player or existing_player.id != u.player.id)):
-                flash("That display name is already taken.")
+            duplicate_in_my_pods = (
+                scoped_player_query(u)
+                .filter(Player.name == new_display)
+                .filter(Player.id != (u.player.id if u.player else -1))
+                .first()
+            )
+            if duplicate_in_my_pods:
+                flash("That display name is already used in one of your pods.")
                 return redirect(url_for("profile"))
 
             u.display_name = new_display
@@ -3904,10 +4427,122 @@ def profile():
             flash("Profile updated.")
             return redirect(url_for("profile"))
 
+        if action == "revoke_sessions":
+            u.session_version += 1
+            db.session.commit()
+            session["session_version"] = u.session_version
+            flash("Other signed-in devices were revoked.")
+            return redirect(url_for("profile"))
+
+        if action == "delete_account":
+            password = request.form.get("current_password", "")
+            if not check_password_hash(u.password_hash, password):
+                flash("Current password is required to delete your account.")
+                return redirect(url_for("profile"))
+
+            if u.player:
+                for membership in list(u.player.pod_memberships):
+                    if membership.role != "podmaster":
+                        continue
+                    replacement = (
+                        PodMembership.query.join(Player)
+                        .filter(
+                            PodMembership.pod_id == membership.pod_id,
+                            PodMembership.player_id != u.player.id,
+                            Player.user_id.isnot(None),
+                        )
+                        .order_by(PodMembership.created_at.asc())
+                        .first()
+                    )
+                    membership.role = "member"
+                    if replacement:
+                        replacement.role = "podmaster"
+                u.player.user_id = None
+                u.player.name = f"Deleted player {u.player.id}"
+                for index, deck in enumerate(u.player.decks, start=1):
+                    deck.name = f"Archived deck {index}"
+
+            Pod.query.filter_by(owner_user_id=u.id).update({"owner_user_id": None})
+            PodInvite.query.filter_by(created_by_user_id=u.id, revoked_at=None).update(
+                {"revoked_at": datetime.utcnow()}
+            )
+            GameShare.query.filter_by(created_by_user_id=u.id, revoked_at=None).update(
+                {"revoked_at": datetime.utcnow()}
+            )
+            now = datetime.utcnow()
+            u.username = f"deleted-{u.id}-{secrets.token_hex(4)}"
+            u.display_name = "Deleted user"
+            u.email = None
+            u.password_hash = generate_password_hash(secrets.token_urlsafe(48))
+            u.is_active = False
+            u.deleted_at = now
+            u.anonymized_at = now
+            u.session_version += 1
+            db.session.commit()
+            session.clear()
+            flash("Your account was anonymized and signed out.")
+            return redirect(url_for("index"))
+
         flash("Unknown profile action.")
         return redirect(url_for("profile"))
 
     return render_template("profile.html", user=u)
+
+
+@app.route("/account/export")
+@login_required
+def account_export():
+    u = get_current_user()
+    player = u.player
+    pod_rows = get_accessible_pods(u)
+    decks = Deck.query.filter_by(player_id=player.id).all() if player else []
+    participations = (
+        GameParticipant.query.join(Game)
+        .filter(GameParticipant.player_id == player.id)
+        .order_by(Game.date.asc())
+        .all()
+        if player else []
+    )
+    payload = {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "account": {
+            "username": u.username,
+            "display_name": u.display_name,
+            "email": u.email,
+            "created_at": u.created_at.isoformat(),
+            "email_verified_at": u.email_verified_at.isoformat() if u.email_verified_at else None,
+        },
+        "pods": [
+            {"id": pod.id, "name": pod.name, "slug": pod.slug, "timezone": pod.timezone}
+            for pod in pod_rows
+        ],
+        "decks": [
+            {
+                "id": deck.id,
+                "name": deck.name,
+                "commander": deck.commander_name or deck.commander,
+                "decklist": deck.decklist_text or "",
+                "mmr": deck.mmr,
+            }
+            for deck in decks
+        ],
+        "games": [
+            {
+                "id": part.game.id,
+                "date": part.game.date.isoformat(),
+                "pod_id": part.game.pod_id,
+                "deck_id": part.deck_id,
+                "won": part.game.winner_id == player.id,
+                "mmr_delta": part.mmr_delta,
+            }
+            for part in participations
+        ],
+    }
+    return Response(
+        json.dumps(payload, indent=2),
+        mimetype="application/json",
+        headers={"Content-Disposition": "attachment; filename=pod-chronicle-account.json"},
+    )
 
 
 # -------------------------
@@ -3916,6 +4551,19 @@ def profile():
 @app.route("/art/<path:filename>")
 def art(filename):
     return send_from_directory(ART_DIR, filename)
+
+
+@app.route("/media/<path:object_key>")
+def object_media(object_key):
+    client = get_object_storage_client()
+    if not client or not object_key.startswith("custom-art/") or ".." in object_key:
+        abort(404)
+    signed_url = client.generate_presigned_url(
+        "get_object",
+        Params={"Bucket": OBJECT_STORAGE_BUCKET, "Key": object_key},
+        ExpiresIn=300,
+    )
+    return redirect(signed_url, code=302)
 
 
 @app.route("/apk/<path:filename>")
@@ -3929,6 +4577,16 @@ def service_worker():
     response.headers["Service-Worker-Allowed"] = "/"
     response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+@app.route("/healthz")
+def healthz():
+    try:
+        db.session.execute(text("SELECT 1"))
+    except Exception:
+        app.logger.exception("database health check failed")
+        return jsonify({"status": "unhealthy"}), 503
+    return jsonify({"status": "ok", "database": "reachable"})
 
 
 @app.route("/apk")
@@ -4544,6 +5202,15 @@ app.jinja_env.globals["deck_form_label_fn"] = deck_form_label
 
 @app.route("/")
 def index():
+    if not get_current_user():
+        # No cookies or third-party analytics are used for this first-party
+        # activation signal; it intentionally contains no IP/user-agent data.
+        if not session.get("landing_visit_recorded"):
+            record_funnel_event("landing_visit")
+            db.session.commit()
+            session["landing_visit_recorded"] = True
+        return render_template("landing.html")
+
     game_q, scope, active_pod = game_query_for_scope()
     game_ids_subquery = game_q.with_entities(Game.id)
     current_user = get_current_user()
@@ -4807,6 +5474,7 @@ def pods():
 
     memberships = []
     all_players = []
+    active_invites = []
     if selected_pod and can_manage_pod(me, selected_pod.id):
         memberships = (
             PodMembership.query
@@ -4815,7 +5483,12 @@ def pods():
             .order_by(text("CASE WHEN pod_membership.role = 'podmaster' THEN 0 ELSE 1 END"), Player.name.asc())
             .all()
         )
-        all_players = Player.query.order_by(Player.name.asc()).all()
+        all_players = scoped_player_query(me).order_by(Player.name.asc()).all()
+        active_invites = (
+            PodInvite.query.filter_by(pod_id=selected_pod.id, revoked_at=None)
+            .order_by(PodInvite.created_at.desc())
+            .all()
+        )
 
     return render_template(
         "pods.html",
@@ -4825,6 +5498,7 @@ def pods():
         selected_pod=selected_pod,
         memberships=memberships,
         all_players=all_players,
+        active_invites=active_invites,
         can_manage_selected=bool(selected_pod and can_manage_pod(me, selected_pod.id)),
         is_admin=bool(me and me.is_admin),
         can_access_registration_requests=can_access_registration_request_queue(me),
@@ -4833,11 +5507,12 @@ def pods():
 
 
 @app.route("/pods", methods=["POST"])
-@admin_required
+@login_required
 def create_pod():
+    me = get_current_user()
     name = (request.form.get("name") or "").strip()
     slug_input = (request.form.get("slug") or "").strip().lower()
-    slug = slug_input or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    slug = slug_input if (me and me.is_admin and slug_input) else unique_pod_slug(name)
 
     if not name:
         flash("Pod name is required.")
@@ -4847,20 +5522,189 @@ def create_pod():
         flash("Pod slug is required.")
         return redirect(url_for("pods"))
 
-    if Pod.query.filter((Pod.name == name) | (Pod.slug == slug)).first():
-        flash("Pod with same name or slug already exists.")
+    if Pod.query.filter_by(slug=slug).first():
+        flash("That pod URL is already in use.")
         return redirect(url_for("pods"))
 
-    pod = Pod(name=name, slug=slug, is_active=True)
+    pod = Pod(name=name, slug=slug, owner_user_id=me.id, is_active=True)
     db.session.add(pod)
     db.session.flush()
 
-    for player in Player.query.all():
-        ensure_membership(pod.id, player.id, role="member")
+    if not me.player:
+        me.player = Player(name=me.display_name)
+        db.session.flush()
+    ensure_membership(pod.id, me.player.id, role="podmaster")
+    record_funnel_event("pod_created", user=me, pod=pod)
 
     db.session.commit()
     flash(f"Created pod '{name}'.")
     return redirect(url_for("pods", pod_id=pod.id))
+
+
+def resolve_pod_invite(token: str) -> tuple[PodInvite | None, str | None]:
+    invite = PodInvite.query.filter_by(token_hash=hash_public_token(token)).first()
+    if not invite:
+        return None, "Invitation not found."
+    if invite.revoked_at:
+        return None, "This invitation was revoked."
+    if invite.expires_at < datetime.utcnow():
+        return None, "This invitation has expired."
+    if invite.use_count >= invite.usage_limit:
+        return None, "This invitation has already been used."
+    if not invite.pod or not invite.pod.is_active:
+        return None, "This pod is no longer available."
+    return invite, None
+
+
+@app.route("/pods/<int:pod_id>/invites", methods=["POST"])
+@login_required
+@limiter.limit("20 per hour", methods=["POST"])
+def create_pod_invite(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+    if not me.is_admin and not me.email_verified_at:
+        flash("Verify your email before inviting other players.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    try:
+        expires_days = max(1, min(30, int(request.form.get("expires_days", 7))))
+        usage_limit = max(1, min(25, int(request.form.get("usage_limit", 1))))
+    except (TypeError, ValueError):
+        flash("Invalid invitation settings.")
+        return redirect(url_for("pods", pod_id=pod_id))
+
+    role = (request.form.get("role") or "member").strip().lower()
+    if role not in {"member", "podmaster"}:
+        role = "member"
+    raw_token, token_hash = issue_public_token()
+    invite = PodInvite(
+        token_hash=token_hash,
+        pod_id=pod_id,
+        role=role,
+        expires_at=datetime.utcnow() + timedelta(days=expires_days),
+        usage_limit=usage_limit,
+        created_by_user_id=me.id,
+    )
+    db.session.add(invite)
+    pod = db.session.get(Pod, pod_id)
+    if PodInvite.query.filter_by(pod_id=pod_id).count() == 0:
+        record_funnel_event("first_invite_created", user=me, pod=pod)
+    db.session.commit()
+    invite_url = url_for("accept_pod_invite", token=raw_token, _external=True)
+    return render_template("invite_created.html", pod=pod, invite=invite, invite_url=invite_url)
+
+
+@app.route("/pods/<int:pod_id>/invites/<int:invite_id>/revoke", methods=["POST"])
+@login_required
+def revoke_pod_invite(pod_id, invite_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+    invite = PodInvite.query.filter_by(id=invite_id, pod_id=pod_id).first()
+    if not invite:
+        abort(404)
+    if not invite.revoked_at:
+        invite.revoked_at = datetime.utcnow()
+        db.session.commit()
+    flash("Invitation revoked.")
+    return redirect(url_for("pods", pod_id=pod_id))
+
+
+@app.route("/invite/<token>", methods=["GET", "POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+def accept_pod_invite(token):
+    invite, error = resolve_pod_invite(token)
+    if error:
+        return render_template("accept_invite.html", invite=None, error=error), 410
+
+    me = get_current_user()
+    if request.method == "POST":
+        if me:
+            if not me.player:
+                me.player = Player(name=me.display_name)
+                db.session.flush()
+            existing = PodMembership.query.filter_by(
+                pod_id=invite.pod_id, player_id=me.player.id
+            ).first()
+            if existing:
+                flash("You are already a member of this pod.")
+                return redirect(url_for("pods", pod_id=invite.pod_id))
+        else:
+            username = request.form.get("username", "").strip()
+            display_name = request.form.get("display_name", "").strip()
+            email = normalize_email(request.form.get("email"))
+            password = request.form.get("password", "")
+            confirm = request.form.get("confirm", "")
+            if not username or not display_name or not email or not password:
+                return render_template("accept_invite.html", invite=invite, error="Complete every field."), 400
+            if password != confirm:
+                return render_template("accept_invite.html", invite=invite, error="Passwords do not match."), 400
+            password_error = validate_password_rules(password)
+            if password_error:
+                return render_template("accept_invite.html", invite=invite, error=password_error), 400
+            if User.query.filter(db.or_(User.username == username, User.email == email)).first():
+                return render_template("accept_invite.html", invite=invite, error="Username or email is already registered. Sign in first."), 409
+            raw_verify, verify_hash = issue_public_token()
+            me = User(
+                username=username,
+                display_name=display_name,
+                email=email,
+                password_hash=generate_password_hash(password),
+                is_active=True,
+                approved_at=datetime.utcnow(),
+                email_verification_token_hash=verify_hash,
+                email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
+            )
+            db.session.add(me)
+            db.session.flush()
+            me.player = Player(name=display_name)
+            db.session.flush()
+            record_funnel_event("account_created", user=me, pod=invite.pod)
+            verify_url = url_for("verify_email", token=raw_verify, _external=True)
+            send_transactional_email(
+                me.email,
+                "Verify your Pod Chronicle account",
+                f"Verify your email within 24 hours:\n\n{verify_url}",
+            )
+
+        ensure_membership(invite.pod_id, me.player.id, role=invite.role)
+        invite.use_count += 1
+        record_funnel_event("invite_accepted", user=me, pod=invite.pod)
+        db.session.commit()
+        if not session.get("user_id"):
+            session.update(
+                user_id=me.id,
+                username=me.username,
+                display_name=me.display_name,
+                is_admin=me.is_admin,
+                use_sigtaara=me.use_sigtaara,
+                use_light_theme=me.use_light_theme,
+            )
+        session["active_pod_id"] = invite.pod_id
+        flash(f"Welcome to {invite.pod.name}.")
+        return redirect(url_for("pods", pod_id=invite.pod_id))
+
+    return render_template("accept_invite.html", invite=invite, error=None)
+
+
+@app.route("/pods/<int:pod_id>/guests", methods=["POST"])
+@login_required
+def create_guest_player(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        abort(403)
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Guest name is required.")
+        return redirect(url_for("pods", pod_id=pod_id))
+    player = Player(name=name)
+    db.session.add(player)
+    db.session.flush()
+    ensure_membership(pod_id, player.id)
+    db.session.commit()
+    flash(f"Added guest player {name}.")
+    return redirect(url_for("pods", pod_id=pod_id))
 
 
 @app.route("/pods/<int:pod_id>/name", methods=["POST"])
@@ -5414,6 +6258,9 @@ def game_detail(game_id):
     g = db.session.get(Game, game_id)
     if not g:
         abort(404)
+    me = get_current_user()
+    if not can_access_game(me, g):
+        abort(404)
 
     parts = GameParticipant.query.filter_by(game_id=game_id).all()
 
@@ -5448,8 +6295,101 @@ def game_detail(game_id):
                 {"player_id": gp.player_id, "name": gp.player.name, "samples": samples}
             )
 
+    active_shares = GameShare.query.filter_by(game_id=g.id, revoked_at=None).all()
     return render_template(
-        "game_detail.html", game=g, parts=parts_sorted, life_chart_series=life_chart_series
+        "game_detail.html",
+        game=g,
+        parts=parts_sorted,
+        life_chart_series=life_chart_series,
+        active_shares=active_shares,
+        can_share=bool(me and (me.is_admin or me.email_verified_at)),
+    )
+
+
+@app.route("/games/<int:game_id>/share", methods=["POST"])
+@login_required
+@limiter.limit("20 per hour", methods=["POST"])
+def publish_game_recap(game_id):
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        abort(404)
+    if not me.is_admin and not me.email_verified_at:
+        flash("Verify your email before publishing recaps.")
+        return redirect(url_for("game_detail", game_id=game_id))
+
+    raw_token, token_hash = issue_public_token()
+    share = GameShare(
+        token_hash=token_hash,
+        game_id=game.id,
+        created_by_user_id=me.id,
+        show_player_names=request.form.get("show_player_names") == "1",
+        show_deck_names=request.form.get("show_deck_names") == "1",
+    )
+    db.session.add(share)
+    db.session.commit()
+    share_url = url_for("public_recap", token=raw_token, _external=True)
+    return render_template("share_created.html", game=game, share=share, share_url=share_url)
+
+
+@app.route("/games/<int:game_id>/shares/<int:share_id>/revoke", methods=["POST"])
+@login_required
+def revoke_game_recap(game_id, share_id):
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        abort(404)
+    share = GameShare.query.filter_by(id=share_id, game_id=game_id).first()
+    if not share:
+        abort(404)
+    if not share.revoked_at:
+        share.revoked_at = datetime.utcnow()
+        db.session.commit()
+    flash("Public recap link revoked.")
+    return redirect(url_for("game_detail", game_id=game_id))
+
+
+@app.route("/r/<token>")
+def public_recap(token):
+    share = GameShare.query.filter_by(token_hash=hash_public_token(token)).first()
+    if not share or share.revoked_at or not share.game:
+        abort(404)
+    game = share.game
+    parts = (
+        GameParticipant.query.filter_by(game_id=game.id)
+        .order_by(GameParticipant.seat_position.asc())
+        .all()
+    )
+    recap_parts = []
+    for index, part in enumerate(parts, start=1):
+        flags = participant_flags_snapshot(part)
+        recap_parts.append(
+            {
+                "player": part.player.name if share.show_player_names else f"Player {index}",
+                "deck": (
+                    (part.deck.name if part.deck else "Unknown deck")
+                    if share.show_deck_names
+                    else "Private deck"
+                ),
+                "commander": (
+                    ((part.deck.commander_name or part.deck.commander) if part.deck else None)
+                    if share.show_deck_names
+                    else None
+                ),
+                "won": part.player_id == game.winner_id,
+                "mmr_delta": part.mmr_delta,
+                "salt_count": participant_salt_count(flags),
+                "life_delta": part.life_delta_total or 0,
+            }
+        )
+    winner = next((part for part in recap_parts if part["won"]), None)
+    return render_template(
+        "public_recap.html",
+        game=game,
+        pod=game.pod,
+        parts=recap_parts,
+        winner=winner,
+        token=token,
     )
 
 @app.route("/games/<int:game_id>/delete", methods=["POST"])
@@ -5470,7 +6410,7 @@ def delete_game(game_id):
 
 @app.route("/players")
 def players():
-    players_list = Player.query.order_by(Player.name.asc()).all()
+    players_list = scoped_player_query(get_current_user(), get_active_pod()).order_by(Player.name.asc()).all()
 
     # Bulk aggregate: avg MMR of active decks per player
     avg_mmr_by_player = dict(
@@ -5546,7 +6486,8 @@ def player_detail(player_id):
     # the pod-scoped /games, /saltmine, /api/stats pages. Do not re-flag as an R14-style
     # missing-scope bug without confirming the intended scope first.
     player = db.session.get(Player, player_id)
-    if not player:
+    me = get_current_user()
+    if not player or not can_access_player(me, player):
         abort(404)
 
     decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
@@ -5622,7 +6563,8 @@ def compare_players():
 
     player_a = db.session.get(Player, a_id)
     player_b = db.session.get(Player, b_id)
-    if not player_a or not player_b:
+    me = get_current_user()
+    if not can_access_player(me, player_a) or not can_access_player(me, player_b):
         abort(404)
 
     def _stats(p):
@@ -5713,7 +6655,8 @@ def api_compare():
 
     player_a = db.session.get(Player, a_id)
     player_b = db.session.get(Player, b_id)
-    if not player_a or not player_b:
+    me = get_current_user()
+    if not can_access_player(me, player_a) or not can_access_player(me, player_b):
         abort(404)
 
     def _stats(p):
@@ -5793,7 +6736,8 @@ def api_compare():
 @app.route("/player/<int:player_id>/export")
 def player_export(player_id):
     player = db.session.get(Player, player_id)
-    if not player:
+    me = get_current_user()
+    if not player or not me or (not me.is_admin and (not me.player or me.player.id != player.id)):
         abort(404)
 
     decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
@@ -5894,15 +6838,19 @@ def player_export(player_id):
 @app.route("/add_player", methods=["POST"])
 def add_player():
     name = request.form["name"].strip()
-    if name and not Player.query.filter_by(name=name).first():
+    active_pod = get_active_pod()
+    duplicate = (
+        scoped_player_query(get_current_user(), active_pod)
+        .filter(Player.name == name)
+        .first()
+        if active_pod and name
+        else None
+    )
+    if name and active_pod and not duplicate:
         player = Player(name=name)
         db.session.add(player)
         db.session.flush()
-
-        default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
-        if default_pod:
-            ensure_membership(default_pod.id, player.id)
-
+        ensure_membership(active_pod.id, player.id)
         db.session.commit()
     return redirect(url_for("players"))
 
@@ -6003,7 +6951,7 @@ def deck_detail(deck_id):
     u = get_current_user()
 
     deck = db.session.get(Deck, deck_id)
-    if not deck:
+    if not deck or not can_access_deck(u, deck):
         return "Deck not found", 404
 
     wins = (
@@ -6153,7 +7101,8 @@ def deck_detail(deck_id):
 @app.route("/deck/<int:deck_id>/export")
 def deck_export(deck_id):
     deck = db.session.get(Deck, deck_id)
-    if not deck:
+    me = get_current_user()
+    if not deck or not me or (not me.is_admin and (not me.player or deck.player_id != me.player.id)):
         return "Deck not found", 404
 
     decklist_data = _load_decklist_data(deck)
@@ -6865,7 +7814,9 @@ def remove_deck_decklist(deck_id):
 
 @app.route("/play_game")
 def play_game():
-    players = Player.query.all()
+    me = get_current_user()
+    active_pod = get_active_pod()
+    players = scoped_player_query(me, active_pod).order_by(Player.name.asc()).all()
     decks_by_player = {}
     for p in players:
         active_decks = (
@@ -6900,6 +7851,11 @@ def play_game():
 def start_game():
     participants = []
     seen = set()
+    me = get_current_user()
+    active_pod = get_active_pod()
+    allowed_player_ids = {
+        player.id for player in scoped_player_query(me, active_pod).all()
+    }
 
     for i in range(1, 7):
         p_id = request.form.get(f"player{i}")
@@ -6913,11 +7869,13 @@ def start_game():
 
             if p_id in seen:
                 return "Duplicate players not allowed", 400
+            if p_id not in allowed_player_ids:
+                return "Player is not a member of the active pod", 403
             seen.add(p_id)
 
             borrowing = request.form.get(f"borrow{i}") == "1"
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.retired or deck.planned:
+            if not deck or deck.retired or deck.planned or deck.player_id not in allowed_player_ids:
                 return "Invalid deck", 400
             if not borrowing and deck.player_id != p_id:
                 return "Invalid deck for player", 400
@@ -7606,6 +8564,19 @@ def end_game():
     _apply_mmr_for_game(game, participant_rows, winner_id)
 
     db.session.commit()
+    pod_game_count = Game.query.filter_by(pod_id=active_pod.id).count()
+    milestone = (
+        "first_completed_game" if pod_game_count == 1
+        else "second_completed_game" if pod_game_count == 2
+        else "game_completed"
+    )
+    record_funnel_event(
+        milestone,
+        user=get_current_user(),
+        pod=active_pod,
+        metadata={"game_id": game.id, "participant_count": len(participants)},
+    )
+    db.session.commit()
 
     # Delete ActiveGame record if present
     game_token = session.pop("game_token", None)
@@ -7623,7 +8594,7 @@ def end_game():
     session.pop("timer_config", None)
     session.pop("game_started_at", None)
     session.pop("turn_number", None)
-    return redirect(url_for("index"))
+    return redirect(url_for("game_detail", game_id=game.id))
 
 
 # -------------------------
@@ -7684,10 +8655,20 @@ def api_game_state(token):
     # releasing the lock; only the explicit COMMIT persists a change.
     try:
         with get_game_state_rmw_engine().connect() as connection:
-            connection.exec_driver_sql("BEGIN IMMEDIATE")  # take the write lock
-            row = connection.exec_driver_sql(
-                "SELECT state_json FROM active_game WHERE token = ?", (token,)
-            ).fetchone()
+            is_sqlite = connection.dialect.name == "sqlite"
+            transaction = None
+            if is_sqlite:
+                connection.exec_driver_sql("BEGIN IMMEDIATE")  # take the write lock
+                row = connection.execute(
+                    text("SELECT state_json FROM active_game WHERE token = :token"),
+                    {"token": token},
+                ).fetchone()
+            else:
+                transaction = connection.begin()
+                row = connection.execute(
+                    text("SELECT state_json FROM active_game WHERE token = :token FOR UPDATE"),
+                    {"token": token},
+                ).fetchone()
             if row is None:
                 return jsonify({"error": "Game not found"}), 404
             try:
@@ -7819,17 +8800,21 @@ def api_game_state(token):
                         state["passed"] = []
 
             state["version"] = int(state.get("version", 0)) + 1
-            connection.exec_driver_sql(
-                "UPDATE active_game SET state_json = ?, updated_at = ? WHERE token = ?",
-                (
-                    json.dumps(state),
-                    # Match SQLAlchemy's SQLite DateTime storage format so the
-                    # ORM reads updated_at back correctly on other routes.
-                    datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                    token,
+            connection.execute(
+                text(
+                    "UPDATE active_game SET state_json = :state_json, "
+                    "updated_at = :updated_at WHERE token = :token"
                 ),
+                {
+                    "state_json": json.dumps(state),
+                    "updated_at": datetime.utcnow(),
+                    "token": token,
+                },
             )
-            connection.exec_driver_sql("COMMIT")
+            if is_sqlite:
+                connection.exec_driver_sql("COMMIT")
+            else:
+                transaction.commit()
     except OperationalError as exc:
         app.logger.warning(
             "api_game_state: write-lock contention for token %s (%s); returning 503",
@@ -7922,7 +8907,7 @@ def player_panel(token, player_id):
 
 @app.route("/manual_game")
 def manual_game():
-    players = Player.query.all()
+    players = scoped_player_query(get_current_user(), get_active_pod()).order_by(Player.name.asc()).all()
     decks_by_player = {}
     for p in players:
         active_decks = (
@@ -7938,6 +8923,16 @@ def manual_record_game():
     if not winner_id:
         return "Must select a winner", 400
 
+    active_pod = get_active_pod()
+    if not active_pod:
+        return "No active pod available", 400
+    allowed_player_ids = {
+        player_id
+        for (player_id,) in scoped_player_query(get_current_user(), active_pod)
+        .with_entities(Player.id)
+        .all()
+    }
+
     participants = []
     seen = set()
     for i in range(1, 7):
@@ -7952,6 +8947,8 @@ def manual_record_game():
 
             if p_id in seen:
                 return "Duplicate players not allowed", 400
+            if p_id not in allowed_player_ids:
+                return "Player not found", 404
             seen.add(p_id)
 
             deck = db.session.get(Deck, d_id)
@@ -7968,10 +8965,6 @@ def manual_record_game():
         return "Invalid winner id", 400
     if winner_id not in seen:
         return "Winner must be a participant", 400
-
-    active_pod = get_active_pod()
-    if not active_pod:
-        return "No active pod available", 400
 
     game = Game(winner_id=winner_id, pod_id=active_pod.id)
     db.session.add(game)
@@ -8005,6 +8998,16 @@ def record_game():
     if not winner_id:
         return "Must select a winner", 400
 
+    active_pod = get_active_pod()
+    if not active_pod:
+        return "No active pod available", 400
+    allowed_player_ids = {
+        player_id
+        for (player_id,) in scoped_player_query(get_current_user(), active_pod)
+        .with_entities(Player.id)
+        .all()
+    }
+
     participants = []
     seen = set()
     for i in range(1, 5):
@@ -8019,10 +9022,12 @@ def record_game():
 
             if p_id in seen:
                 return "Duplicate players not allowed", 400
+            if p_id not in allowed_player_ids:
+                return "Player not found", 404
             seen.add(p_id)
 
             deck = db.session.get(Deck, d_id)
-            if not deck or deck.player_id != p_id:
+            if not deck or deck.player_id != p_id or deck.retired or deck.planned:
                 return "Invalid deck for player", 400
 
             participants.append({"player_id": p_id, "deck_id": d_id, "seat_position": len(participants) + 1})
@@ -8035,10 +9040,6 @@ def record_game():
         return "Invalid winner id", 400
     if winner_id not in seen:
         return "Winner must be a participant", 400
-
-    active_pod = get_active_pod()
-    if not active_pod:
-        return "No active pod available", 400
 
     game = Game(winner_id=winner_id, pod_id=active_pod.id)
     db.session.add(game)
@@ -8171,7 +9172,7 @@ def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: in
     member_ids = {membership.player_id for membership in memberships}
     available_players = [
         {"id": player.id, "name": player.name}
-        for player in Player.query.order_by(Player.name.asc()).all()
+        for player in scoped_player_query(current_user).order_by(Player.name.asc()).all()
         if player.id not in member_ids
     ]
     payload = _serialize_pod_summary(pod, current_user, active_pod_id=active_pod_id)
@@ -9140,6 +10141,8 @@ def api_deny_registration_request(request_id):
 @app.route("/api/players", methods=["GET", "POST"])
 @api_login_required
 def api_players():
+    current_user = get_current_user()
+    active_pod = get_active_pod()
     if request.method == "POST":
         payload = _api_json_payload()
         if not payload:
@@ -9147,18 +10150,16 @@ def api_players():
         name = (payload.get("name") or "").strip()
         if not name:
             return jsonify({"error": "name is required"}), 400
-        if Player.query.filter_by(name=name).first():
-            return jsonify({"error": "A player with that name already exists"}), 409
         player = Player(name=name)
         db.session.add(player)
         db.session.flush()
-        default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
-        if default_pod:
-            ensure_membership(default_pod.id, player.id)
+        if not active_pod:
+            return jsonify({"error": "No active pod available"}), 400
+        ensure_membership(active_pod.id, player.id)
         db.session.commit()
         return jsonify({"id": player.id, "name": player.name, "wins": 0, "played": 0, "winrate": 0.0, "deck_count": 0}), 201
 
-    players_list = Player.query.order_by(Player.name.asc()).all()
+    players_list = scoped_player_query(current_user, active_pod).order_by(Player.name.asc()).all()
     result = []
     for p in players_list:
         played = GameParticipant.query.filter_by(player_id=p.id).count()
@@ -9184,36 +10185,36 @@ def api_pods():
     active_pod = get_active_pod()
 
     if request.method == "POST":
-        if not current_user.is_admin:
-            return jsonify({"error": "Forbidden"}), 403
-
         payload = _api_json_payload()
         if payload is None:
             return jsonify({"error": "Invalid request body"}), 400
 
         name = (payload.get("name") or "").strip()
         slug_input = (payload.get("slug") or "").strip().lower()
-        slug = slug_input or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        slug = slug_input if (current_user.is_admin and slug_input) else unique_pod_slug(name)
 
         if not name:
             return jsonify({"error": "name is required"}), 400
         if not slug:
             return jsonify({"error": "slug is required"}), 400
-        if Pod.query.filter((Pod.name == name) | (Pod.slug == slug)).first():
-            return jsonify({"error": "Pod with same name or slug already exists."}), 409
+        if Pod.query.filter_by(slug=slug).first():
+            return jsonify({"error": "Pod URL already exists."}), 409
 
-        pod = Pod(name=name, slug=slug, is_active=True)
+        pod = Pod(name=name, slug=slug, owner_user_id=current_user.id, is_active=True)
         db.session.add(pod)
         db.session.flush()
-        for player in Player.query.all():
-            ensure_membership(pod.id, player.id, role="member")
+        if not current_user.player:
+            current_user.player = Player(name=current_user.display_name)
+            db.session.flush()
+        ensure_membership(pod.id, current_user.player.id, role="podmaster")
+        record_funnel_event("pod_created", user=current_user, pod=pod)
         db.session.commit()
         return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None)), 201
 
     pods_list = get_accessible_pods(current_user)
     return jsonify({
         "active_pod_id": active_pod.id if active_pod else None,
-        "can_create_pod": bool(current_user and current_user.is_admin),
+        "can_create_pod": bool(current_user),
         "pods": [
             _serialize_pod_summary(pod, current_user, active_pod_id=active_pod.id if active_pod else None)
             for pod in pods_list
@@ -9413,7 +10414,7 @@ def api_pod_member_detail(pod_id, player_id):
 def api_player_detail(player_id):
     current_user = get_current_user()
     player = db.session.get(Player, player_id)
-    if not player:
+    if not player or not can_access_player(current_user, player):
         return jsonify({"error": "Not found"}), 404
 
     if request.method == "PATCH":
@@ -9517,7 +10518,11 @@ def api_player_detail(player_id):
 @api_login_required
 def api_player_export(player_id):
     player = db.session.get(Player, player_id)
-    if not player:
+    current_user = get_current_user()
+    if not player or not current_user or (
+        not current_user.is_admin
+        and (not current_user.player or current_user.player.id != player.id)
+    ):
         return jsonify({"error": "Not found"}), 404
     decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
     games_played = GameParticipant.query.filter_by(player_id=player.id).count()
@@ -9614,6 +10619,14 @@ def api_games_list():
         active_pod = get_active_pod()
         if not active_pod:
             return jsonify({"error": "No active pod available"}), 400
+        allowed_player_ids = {
+            player.id for player in scoped_player_query(current_user, active_pod).all()
+        }
+        if any(
+            participant["player_id"] not in allowed_player_ids
+            for participant in parsed_payload["participants"]
+        ):
+            return jsonify({"error": "Participant is not in the active pod"}), 403
 
         game = Game(
             winner_id=parsed_payload["winner_id"],
@@ -9730,7 +10743,7 @@ def api_games_list():
 def api_game_detail(game_id):
     current_user = get_current_user()
     game = db.session.get(Game, game_id)
-    if not game:
+    if not game or not can_access_game(current_user, game):
         return jsonify({"error": "Not found"}), 404
     if request.method == "DELETE":
         if not current_user.is_admin:
@@ -9874,7 +10887,7 @@ def api_decks():
 def api_deck_detail(deck_id):
     current_user = get_current_user()
     deck = db.session.get(Deck, deck_id)
-    if not deck:
+    if not deck or not can_access_deck(current_user, deck):
         return jsonify({"error": "Not found"}), 404
 
     if request.method == "DELETE":
@@ -10101,8 +11114,10 @@ def api_search():
 
     like_q = f"%{q}%"
 
+    me = get_current_user()
+    active_pod = get_active_pod()
     player_rows = (
-        Player.query.filter(Player.name.ilike(like_q))
+        scoped_player_query(me, active_pod).filter(Player.name.ilike(like_q))
         .order_by(Player.name)
         .limit(SEARCH_RESULT_LIMIT)
         .all()
@@ -10118,7 +11133,7 @@ def api_search():
     ]
 
     deck_rows = (
-        Deck.query.filter(
+        scoped_deck_query(me, active_pod).filter(
             db.or_(Deck.name.ilike(like_q), Deck.commander.ilike(like_q))
         )
         .order_by(Deck.name)

@@ -135,8 +135,10 @@ class ApiDecksWriteTests(unittest.TestCase):
                 f"/api/decks/{other_deck.id}",
                 json={"name": "Should Fail"},
             )
-            self.assertEqual(forbidden_resp.status_code, 403)
-            self.assertEqual(forbidden_resp.get_json()["error"], "Forbidden")
+            # Cross-pod/entity enumeration is fail-closed and does not reveal
+            # whether the requested deck exists.
+            self.assertEqual(forbidden_resp.status_code, 404)
+            self.assertEqual(forbidden_resp.get_json()["error"], "Not found")
 
     def test_validation_errors_for_required_fields_and_invalid_body(self):
         with app.app.app_context():
