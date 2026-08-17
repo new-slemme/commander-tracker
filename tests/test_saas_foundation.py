@@ -57,6 +57,15 @@ class SaasFoundationTests(unittest.TestCase):
         self.assertEqual(client.get("/pricing").status_code, 200)
         self.assertEqual(client.get("/privacy").status_code, 200)
 
+    def test_public_pages_use_edh_son_title(self):
+        client = app.app.test_client()
+        for path in ("/", "/pricing", "/privacy", "/support"):
+            response = client.get(path)
+            self.assertEqual(response.status_code, 200)
+            html = response.get_data(as_text=True)
+            self.assertIn("EDH Son", html)
+            self.assertNotIn("Pod Chronicle", html)
+
     def test_signup_creates_owned_pod_and_allows_same_display_name_in_another_pod(self):
         client = app.app.test_client()
         for suffix in ("one", "two"):

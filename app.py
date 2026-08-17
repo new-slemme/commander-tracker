@@ -4173,7 +4173,7 @@ def register():
             )
             send_transactional_email(
                 user.email,
-                "Verify your Pod Chronicle account",
+                "Verify your EDH Son account",
                 f"Verify your email within 24 hours:\n\n{verification_url}",
             )
             if app.config.get("TESTING"):
@@ -4218,7 +4218,7 @@ def forgot_password():
             reset_url = url_for("reset_password", token=raw_token, _external=True)
             send_transactional_email(
                 user.email,
-                "Reset your Pod Chronicle password",
+                "Reset your EDH Son password",
                 f"Reset your password within one hour:\n\n{reset_url}",
             )
             if app.config.get("TESTING"):
@@ -5664,7 +5664,7 @@ def accept_pod_invite(token):
             verify_url = url_for("verify_email", token=raw_verify, _external=True)
             send_transactional_email(
                 me.email,
-                "Verify your Pod Chronicle account",
+                "Verify your EDH Son account",
                 f"Verify your email within 24 hours:\n\n{verify_url}",
             )
 
