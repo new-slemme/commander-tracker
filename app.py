@@ -10429,6 +10429,11 @@ def api_player_detail(player_id):
         if new_name != player.name and Player.query.filter_by(name=new_name).first():
             return jsonify({"error": "A player with that name already exists"}), 409
         player.name = new_name
+        if player.user:
+            # Account-backed players use the same display name throughout the
+            # app. Keep the account row in sync when an admin renames the
+            # player from the player-management UI/API.
+            player.user.display_name = new_name
         db.session.commit()
         return jsonify({"id": player.id, "name": player.name}), 200
 

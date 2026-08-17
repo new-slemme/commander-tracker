@@ -158,6 +158,30 @@ class PlayerApiDrawerFieldsTests(unittest.TestCase):
             self.assertEqual(resp.status_code, 404)
 
 
+    def test_rename_linked_player_updates_account_display_name(self):
+        with flask_app.test_client() as client:
+            with flask_app.app_context():
+                admin, _ = _make_user("rename_admin", is_admin=True)
+                target_user, target_player = _make_user("rename_target")
+                db.session.commit()
+                admin_id = admin.id
+                target_user_id = target_user.id
+                target_player_id = target_player.id
+
+            _login(client, admin_id, is_admin=True)
+            resp = client.patch(
+                f"/api/players/{target_player_id}",
+                json={"name": "Renamed Player"},
+            )
+
+            self.assertEqual(resp.status_code, 200)
+            with flask_app.app_context():
+                renamed_user = db.session.get(User, target_user_id)
+                renamed_player = db.session.get(Player, target_player_id)
+                self.assertEqual(renamed_user.display_name, "Renamed Player")
+                self.assertEqual(renamed_player.name, "Renamed Player")
+
+
 class DeckApiDrawerFieldsTests(unittest.TestCase):
     """Deck detail API must expose drawer-required fields without breaking existing ones."""
 

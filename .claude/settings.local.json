@@ -16,7 +16,9 @@
       "Bash(pip show *)",
       "Bash(python3.11 -m pip install --user pytest -q)",
       "Bash(python3.11 -m unittest discover -s tests -v)",
-      "Bash(pip index *)"
+      "Bash(pip index *)",
+      "Read(//home/slemme/mine/commander-tracker/**)",
+      "Bash(TEST_BUILD_CONTEXT=/home/slemme/mine/commander-tracker-test docker compose up -d --build commander-tracker-test)"
     ]
   }
 }

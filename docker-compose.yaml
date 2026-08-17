@@ -6,7 +6,7 @@ services:
     container_name: commander-tracker
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "127.0.0.1:5000:5000"
     environment:
       - CCAUTO_BASE_URL=http://cc-auto:4242
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env or environment}
@@ -25,7 +25,7 @@ services:
     container_name: commander-tracker-test
     restart: unless-stopped
     ports:
-      - "5001:5000"
+      - "127.0.0.1:5001:5000"
     environment:
       - CCAUTO_BASE_URL=http://cc-auto:4242
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY:?Set FLASK_SECRET_KEY in .env or environment}
