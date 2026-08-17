@@ -216,7 +216,7 @@ class DeckApiDrawerFieldsTests(unittest.TestCase):
             self.assertIn("full_page_url", data)
             self.assertIn(str(did), data["full_page_url"])
 
-    def test_unauthorized_deck_returns_403(self):
+    def test_unauthorized_deck_is_hidden(self):
         uid, pid, did = self._setup_deck()
         with flask_app.test_client() as client:
             with flask_app.app_context():
@@ -225,7 +225,7 @@ class DeckApiDrawerFieldsTests(unittest.TestCase):
                 uid2 = u2.id
             _login(client, uid2, is_admin=False)
             resp = client.get(f"/api/decks/{did}")
-            self.assertEqual(resp.status_code, 403)
+            self.assertEqual(resp.status_code, 404)
 
     def test_missing_deck_returns_404(self):
         uid, pid, did = self._setup_deck()

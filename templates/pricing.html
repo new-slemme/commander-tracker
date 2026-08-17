@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Pricing · Pod Chronicle{% endblock %}
+{% block content %}
+<link href="{{ url_for('static', filename='css/public.css') }}" rel="stylesheet">
+<main class="public-shell narrow">
+  <p class="eyebrow">Simple on purpose</p><h1>Game night is free.</h1>
+  <div class="public-grid pricing-grid mt-4">
+    <article class="public-card"><h2>Core · €0</h2><p>Pods, decks, live counter, game history, rankings, and standard recaps.</p><a class="btn btn-primary" href="{{ url_for('register') }}">Create a pod</a></article>
+    <article class="public-card"><h2>Founding Supporter · €5/month</h2><p>Voluntary beta support. No exclusive feature entitlement; you help fund hosting and careful product work.</p><a class="btn btn-outline-light" href="{{ url_for('support') }}">Support the project</a></article>
+    <article class="public-card"><h2>Pod Pro · proposed</h2><p>Custom themes, seasons, scheduled summaries, private links, and full pod exports. No paid gate will launch before focused IP review.</p><span class="text-secondary">Target: €6/month or €49/year per pod</span></article>
+  </div>
+</main>
+{% endblock %}

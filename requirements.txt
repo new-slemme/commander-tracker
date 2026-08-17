@@ -6,3 +6,6 @@ alembic
 Werkzeug
 requests
 gunicorn
+psycopg[binary]
+boto3
+sentry-sdk[flask]

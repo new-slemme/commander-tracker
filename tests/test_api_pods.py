@@ -102,7 +102,10 @@ class ApiPodsTests(unittest.TestCase):
             self.assertEqual(create_response.status_code, 201)
             created = create_response.get_json()
             created_id = created["id"]
-            self.assertGreaterEqual(created["member_count"], 5)
+            # A new tenant starts with its creator as the sole podmaster; it no
+            # longer inherits every global player record.
+            self.assertEqual(created["member_count"], 1)
+            self.assertEqual(created["my_role"], "podmaster")
 
             retire_response = client.post(f"/api/pods/{created_id}/retire")
             self.assertEqual(retire_response.status_code, 200)

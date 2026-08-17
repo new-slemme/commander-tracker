@@ -90,9 +90,21 @@ class DeckDetailCommanderBracketTests(unittest.TestCase):
 
     def test_deck_detail_displays_commander_bracket(self):
         with app.app.app_context():
-            player = app.Player(name="Bracket Tester")
+            user = app.User(
+                username="bracket-tester",
+                display_name="Bracket Tester",
+                password_hash="unused",
+                is_active=True,
+            )
+            app.db.session.add(user)
+            app.db.session.flush()
+            player = app.Player(name="Bracket Tester", user_id=user.id)
             app.db.session.add(player)
             app.db.session.flush()
+            pod = app.Pod(name="Bracket Pod", slug="bracket-pod")
+            app.db.session.add(pod)
+            app.db.session.flush()
+            app.db.session.add(app.PodMembership(pod_id=pod.id, player_id=player.id))
 
             deck = app.Deck(
                 name="Bracket Deck",
@@ -110,6 +122,8 @@ class DeckDetailCommanderBracketTests(unittest.TestCase):
             app.db.session.commit()
 
             client = app.app.test_client()
+            with client.session_transaction() as session:
+                session["user_id"] = user.id
             response = client.get(f"/deck/{deck.id}")
 
         self.assertEqual(response.status_code, 200)
