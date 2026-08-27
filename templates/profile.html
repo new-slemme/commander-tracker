@@ -69,10 +69,10 @@
 
       <div class="divider"></div>
 
-      <!-- Change display name -->
+      <!-- Change account identity and preferences -->
       <h3 class="profile-card-title mb-2">Profile settings</h3>
       <div class="help-text mb-3">
-        Your display name is used for stats and game tracking.
+        Your username is used to sign in. Your display name is used for stats and game tracking.
       </div>
 
       <form method="POST" class="mb-4">
@@ -80,6 +80,16 @@
         <input type="hidden" name="action" value="update_profile">
 
         <div class="profile-form-grid mb-3">
+          <div>
+            <label class="form-label mb-1" for="profile_username">Username</label>
+            <input class="form-control"
+                   id="profile_username"
+                   name="username"
+                   value="{{ user.username }}"
+                   maxlength="100"
+                   autocomplete="username"
+                   required>
+          </div>
           <div>
             <label class="form-label mb-1">Display name</label>
             <input class="form-control"

@@ -3609,6 +3609,50 @@ def scoped_player_query(user: User | None, pod: Pod | None = None):
     )
 
 
+def apply_user_identity(user: User, username: str | None, display_name: str | None):
+    """Validate and stage an account/player identity update.
+
+    The caller owns the transaction so web and API routes can update any
+    related session or preference state before committing.
+    """
+    normalized_username = (username or "").strip()
+    normalized_display_name = (display_name or "").strip()
+
+    if not normalized_username:
+        return "Username cannot be empty.", 400
+    if not normalized_display_name:
+        return "Display name cannot be empty.", 400
+    if len(normalized_username) > 100:
+        return "Username cannot be longer than 100 characters.", 400
+    if len(normalized_display_name) > 100:
+        return "Display name cannot be longer than 100 characters.", 400
+
+    duplicate_user = (
+        User.query
+        .filter(func.lower(User.username) == normalized_username.lower())
+        .filter(User.id != user.id)
+        .first()
+    )
+    if duplicate_user:
+        return "That username is already taken.", 409
+
+    if user.player:
+        duplicate_player = (
+            scoped_player_query(user)
+            .filter(Player.name == normalized_display_name)
+            .filter(Player.id != user.player.id)
+            .first()
+        )
+        if duplicate_player:
+            return "That display name is already used in one of the user's pods.", 409
+
+    user.username = normalized_username
+    user.display_name = normalized_display_name
+    if user.player:
+        user.player.name = normalized_display_name
+    return None
+
+
 def scoped_deck_query(user: User | None, pod: Pod | None = None):
     return Deck.query.filter(
         Deck.player_id.in_(
@@ -4364,15 +4408,13 @@ def profile():
             return redirect(url_for("profile"))
 
         if action == "update_profile":
+            new_username = request.form.get("username", "").strip()
             new_display = request.form.get("display_name", "").strip()
             use_sigtaara = request.form.get("use_sigtaara") == "on"
             use_light_theme = request.form.get("use_light_theme") == "on"
             mana_fucked_salt_value_raw = (request.form.get("mana_fucked_salt_value") or "").strip()
             misplayed_salt_value_raw = (request.form.get("misplayed_salt_value") or "").strip()
 
-            if not new_display:
-                flash("Display name cannot be empty.")
-                return redirect(url_for("profile"))
 
             if not mana_fucked_salt_value_raw:
                 flash("Mana Fucked salt value is required.")
@@ -4402,26 +4444,18 @@ def profile():
                 flash("Misplayed salt value must be between 0 and 50.")
                 return redirect(url_for("profile"))
 
-            duplicate_in_my_pods = (
-                scoped_player_query(u)
-                .filter(Player.name == new_display)
-                .filter(Player.id != (u.player.id if u.player else -1))
-                .first()
-            )
-            if duplicate_in_my_pods:
-                flash("That display name is already used in one of your pods.")
+            identity_error = apply_user_identity(u, new_username, new_display)
+            if identity_error:
+                flash(identity_error[0])
                 return redirect(url_for("profile"))
 
-            u.display_name = new_display
             u.use_sigtaara = use_sigtaara
             u.use_light_theme = use_light_theme
             u.mana_fucked_salt_value = mana_fucked_salt_value
             u.misplayed_salt_value = misplayed_salt_value
-            if u.player:
-                u.player.name = new_display  # keep in sync with game tracking
-
             db.session.commit()
-            session["display_name"] = new_display
+            session["username"] = u.username
+            session["display_name"] = u.display_name
             session["use_sigtaara"] = use_sigtaara
             session["use_light_theme"] = use_light_theme
             flash("Profile updated.")
@@ -5058,6 +5092,31 @@ def admin_deactivate_user(user_id):
     u.is_active = False
     db.session.commit()
     flash(f"Deactivated {u.display_name}")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/update", methods=["POST"])
+@admin_required
+def admin_update_user(user_id):
+    user = db.session.get(User, user_id)
+    if not user:
+        abort(404)
+
+    identity_error = apply_user_identity(
+        user,
+        request.form.get("username"),
+        request.form.get("display_name"),
+    )
+    if identity_error:
+        flash(identity_error[0])
+        return redirect(url_for("admin_users"))
+
+    db.session.commit()
+    current_user = get_current_user()
+    if current_user and current_user.id == user.id:
+        session["username"] = user.username
+        session["display_name"] = user.display_name
+    flash(f"Updated account identity for {user.display_name}.")
     return redirect(url_for("admin_users"))
 
 
@@ -10021,15 +10080,34 @@ def api_admin_deactivate_user(user_id):
     return jsonify({"ok": True}), 200
 
 
-@app.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+@app.route("/api/admin/users/<int:user_id>", methods=["PATCH", "DELETE"])
 @api_login_required
-def api_admin_delete_user(user_id):
+def api_admin_user_detail(user_id):
     current_user = get_current_user()
     if not current_user or not current_user.is_admin:
         return jsonify({"error": "Forbidden"}), 403
     user = db.session.get(User, user_id)
     if not user:
         return jsonify({"error": "Not found"}), 404
+
+    if request.method == "PATCH":
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({"error": "Request body must be a JSON object."}), 400
+        identity_error = apply_user_identity(
+            user,
+            data.get("username", user.username),
+            data.get("display_name", user.display_name),
+        )
+        if identity_error:
+            return jsonify({"error": identity_error[0]}), identity_error[1]
+
+        db.session.commit()
+        if current_user.id == user.id:
+            session["username"] = user.username
+            session["display_name"] = user.display_name
+        return jsonify({"user": _serialize_admin_user(user)}), 200
+
     if current_user.id == user.id:
         return jsonify({"error": "You can't delete your own account."}), 409
 

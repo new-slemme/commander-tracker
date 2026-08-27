@@ -97,9 +97,26 @@
         </thead>
         <tbody>
           {% for u in active %}
+            {% set identity_form_id = "identity-user-" ~ u.id %}
             <tr>
-              <td class="fw-semibold text-white">{{ u.username }}</td>
-              <td>{{ u.display_name }}</td>
+              <td>
+                <input class="form-control form-control-sm"
+                       form="{{ identity_form_id }}"
+                       name="username"
+                       value="{{ u.username }}"
+                       maxlength="100"
+                       aria-label="Username for {{ u.display_name }}"
+                       required>
+              </td>
+              <td>
+                <input class="form-control form-control-sm"
+                       form="{{ identity_form_id }}"
+                       name="display_name"
+                       value="{{ u.display_name }}"
+                       maxlength="100"
+                       aria-label="Display name for {{ u.username }}"
+                       required>
+              </td>
               <td class="text-nowrap">
                 {% if u.is_admin %}
                   <span class="app-badge alert">Admin</span>
@@ -110,6 +127,13 @@
               <td class="text-muted text-nowrap">{{ u.approved_at }}</td>
               <td class="text-end">
                 <div class="d-inline-flex gap-2 flex-wrap justify-content-end">
+                  <form id="{{ identity_form_id }}" method="POST" action="{{ url_for('admin_update_user', user_id=u.id) }}" class="d-inline">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-primary round-action-btn">
+                      Save identity
+                    </button>
+                  </form>
+
                   <form method="POST" action="{{ url_for('admin_deactivate_user', user_id=u.id) }}" class="d-inline">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger round-action-btn"
