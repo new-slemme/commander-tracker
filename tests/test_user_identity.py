@@ -101,6 +101,8 @@ class UserIdentityTests(unittest.TestCase):
             app.db.session.commit()
             target_id = target.id
 
+            target_client = app.app.test_client()
+            self._sign_in(target_client, target)
             client = app.app.test_client()
             self._sign_in(client, admin)
             response = client.post(
@@ -113,6 +115,11 @@ class UserIdentityTests(unittest.TestCase):
             self.assertEqual(updated.username, "jerome-renamed")
             self.assertEqual(updated.display_name, "Jerome")
             self.assertEqual(updated.player.name, "Jerome")
+            self.assertEqual(updated.session_version, 1)
+
+            expired_response = target_client.get("/profile")
+            self.assertEqual(expired_response.status_code, 302)
+            self.assertIn("/login", expired_response.headers["Location"])
 
     def test_duplicate_username_is_rejected_case_insensitively(self):
         with app.app.app_context():
@@ -156,6 +163,8 @@ class UserIdentityTests(unittest.TestCase):
             self.assertEqual(payload["username"], "jerome")
             self.assertEqual(payload["display_name"], "Jerome")
             self.assertEqual(payload["player_name"], "Jerome")
+            updated = app.db.session.get(app.User, target_id)
+            self.assertEqual(updated.session_version, 1)
 
 
 if __name__ == "__main__":

@@ -5111,8 +5111,10 @@ def admin_update_user(user_id):
         flash(identity_error[0])
         return redirect(url_for("admin_users"))
 
-    db.session.commit()
     current_user = get_current_user()
+    if current_user and current_user.id != user.id:
+        user.session_version += 1
+    db.session.commit()
     if current_user and current_user.id == user.id:
         session["username"] = user.username
         session["display_name"] = user.display_name
@@ -10102,6 +10104,8 @@ def api_admin_user_detail(user_id):
         if identity_error:
             return jsonify({"error": identity_error[0]}), identity_error[1]
 
+        if current_user.id != user.id:
+            user.session_version += 1
         db.session.commit()
         if current_user.id == user.id:
             session["username"] = user.username
