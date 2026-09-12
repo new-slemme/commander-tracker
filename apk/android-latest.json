@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 59,
-  "versionName": "1.9.0",
+  "versionCode": 60,
+  "versionName": "2.0.0",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-1.9.0+59.apk",
-  "artifactPath": "apk/edh-son-1.9.0+59.apk",
-  "sha256": "fb6950cebebc694fe46845b76f62515833f43ccf3b8af50b38bc762597918bb4",
-  "publishedAt": "2026-07-03T18:04:40.175285871Z",
-  "notes": ""
+  "artifactFileName": "edh-son-2.0.0+60.apk",
+  "artifactPath": "apk/edh-son-2.0.0+60.apk",
+  "sha256": "6a3daad97434e963e10700cfa6e844109d724f477019b086cc23ea1c5fb8715c",
+  "publishedAt": "2026-09-12T18:46:59.825086197Z",
+  "notes": "Version 2.0.0 brings the app back in step with the server.\n\nLive games no longer lose life changes. A tap that failed to reach the server used\nto leave the wrong total on screen; life is now tracked as committed and pending\nchanges, retried properly, and sent as an absolute value so a retry cannot\ndouble-apply it.\n\nLife over the course of a game is recorded and drawn as a chart on game detail.\n\nYou can create an account, reset a forgotten password and verify your email\nwithout leaving the app. Emailed links open here directly.\n\nPod invites, guest players for people without an account, and shareable public\ngame recaps — with per-recap control over whether names and decks are shown.\n\nDeck rating tiers with a trend sparkline, global search over players and decks,\nper-seat game details including monarch, poison and MMR change, and a rematch\nbutton that carries the table into a new game.\n\nPod settings for your flavour name, accent colour, sharing and which mechanics\nyour group plays. Switch one off and it disappears from the life counter.\n\nYou can download everything the server holds about your account from Profile."
 }

@@ -427,6 +427,25 @@ and `derive_deck_mechanics()`. Scoring is the one that needed a decision.
 
 ---
 
+## P2 — Repository hygiene (added 2026-09-12)
+
+### [ ] TASK-R34 — `apk/` holds 57 tracked APKs and `.git` is over 500 MB  `[sonnet]`
+- **Where:** `apk/` (57 `.apk` files on disk, 56 tracked), `.git` at ~506 MB.
+- **Situation:** every release since 0.6.0 is committed as a ~15–20 MB binary. v2.0.0 added
+  another 19.6 MB. The trend is roughly +20 MB per release, all of it reproducible from the
+  Android repo's tagged source plus the keystore.
+- **Why it is tracked at all:** `apk/` is bind-mounted into the container, so the working tree
+  *is* the served directory. An untracked APK would show as an untracked file forever and a
+  stray `git clean -fdx` would delete a live release. That is a real reason, not an accident.
+- **Options:** keep only the current release plus the previous one as a rollback target and prune
+  the rest from history (rewrites history — needs care and a decision about the remote); or move
+  serving to a directory outside the repo and gitignore `apk/` entirely, which decouples the two
+  concerns properly; or leave it and accept the growth, which is defensible for a small project.
+- **Not urgent.** Flagging because the growth is monotonic and the fix gets harder the longer it
+  is left. Nothing is broken today.
+
+---
+
 ## Notes for whoever picks these up
 - Test suite baseline: `40 passed, 8 failed`. Of the 8 failures, only
   `test_apk_release.py::…stale` is a real app bug (TASK-R12). The other 7 are test-harness issues
