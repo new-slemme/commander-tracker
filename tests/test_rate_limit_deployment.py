@@ -21,6 +21,14 @@ API_DOCS = Path(__file__).resolve().parent.parent / "docs" / "API.md"
 WORKERS_RE = re.compile(r'"-w"\s*,\s*"(\d+)"')
 THREADS_RE = re.compile(r'"--threads"\s*,\s*"(\d+)"')
 
+# Flask writes `<int:game_id>`; the docs write `{game_id}`. Normalise before comparing,
+# the same way tests/test_api_contract.py does.
+FLASK_PARAM_RE = re.compile(r"<(?:[a-zA-Z_]+:)?([a-zA-Z_][a-zA-Z0-9_]*)>")
+
+
+def _doc_path(rule: str) -> str:
+    return FLASK_PARAM_RE.sub(r"{\1}", rule)
+
 
 class RateLimitDeploymentTests(unittest.TestCase):
 
@@ -75,7 +83,7 @@ class RateLimitDeploymentTests(unittest.TestCase):
             if rule is None:
                 continue
             for route_limit in route_limits:
-                declared[rule] = "".join(route_limit.limit_provider)
+                    declared[_doc_path(rule)] = "".join(route_limit.limit_provider)
 
         for path, documented_limit in documented.items():
             with self.subTest(path=path):

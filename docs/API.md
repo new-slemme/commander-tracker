@@ -121,6 +121,9 @@ absolute `life` field, which is idempotent.
 | `POST /api/password/reset` | 10 / hour |
 | `POST /api/email/verify` | 10 / hour |
 | `POST /api/email/verify/resend` | 5 / hour |
+| `POST /api/pods/{pod_id}/invites` | 20 / hour |
+| `POST /api/invite/{token}` | 10 / hour |
+| `POST /api/games/{game_id}/shares` | 20 / hour |
 
 Limits are per client IP and shared with the equivalent web form, so a client behind a NAT that
 also has browser users can see `429` sooner than it expects. Surface it as "too many attempts,
@@ -177,6 +180,16 @@ Complete and machine-checked. `auth` values:
 | `PATCH` | `/api/pods/{pod_id}` | auth |
 | `DELETE` | `/api/pods/{pod_id}` | admin |
 | `POST` | `/api/pods/{pod_id}/switch` | auth |
+| `GET` | `/api/pods/{pod_id}/invites` | auth |
+| `POST` | `/api/pods/{pod_id}/invites` | auth |
+| `POST` | `/api/pods/{pod_id}/invites/{invite_id}/revoke` | auth |
+| `GET` | `/api/invite/{token}` | public |
+| `POST` | `/api/invite/{token}` | auth |
+| `POST` | `/api/pods/{pod_id}/guests` | auth |
+| `GET` | `/api/games/{game_id}/shares` | auth |
+| `POST` | `/api/games/{game_id}/shares` | auth |
+| `POST` | `/api/games/{game_id}/shares/{share_id}/revoke` | auth |
+| `GET` | `/api/recap/{token}` | public |
 | `POST` | `/api/pods/{pod_id}/retire` | admin |
 | `POST` | `/api/pods/{pod_id}/restore` | admin |
 | `POST` | `/api/pods/{pod_id}/members` | auth |
@@ -247,8 +260,8 @@ Signed in, the full set:
   "features": {
     "registration": true, "password_reset": true, "email_verification": true,
     "search": true, "compare": true, "mmr": true,
-    "life_history": true, "pod_invites": false, "guest_players": false,
-    "game_shares": false, "pod_config": false, "account_export": false
+    "life_history": true, "pod_invites": true, "guest_players": true,
+    "game_shares": true, "pod_config": false, "account_export": false
   }
 }
 ```
@@ -768,6 +781,183 @@ Detail adds `members` and `available_players`. `GET /api/pods` returns
 
 ---
 
+### 5.8a Invites
+
+All three management endpoints require `can_manage_pod` (podmaster or admin) and answer `403`
+otherwise. Creating one additionally requires a verified email address — see
+[Email verification as a gate](#email-verification-as-a-gate).
+
+#### `POST /api/pods/{pod_id}/invites` · auth · 20/hour
+
+```json
+{ "expires_days": 7, "usage_limit": 1, "role": "member" }
+```
+
+Every field is optional. `expires_days` defaults to 7 and is clamped to 1–30; `usage_limit`
+defaults to 1 and is clamped to 1–25; `role` is `member` or `podmaster`, and anything else
+becomes `member`. Values are **clamped, not rejected** — a caller asking for 60 days gets 30.
+A value that is not a number at all is a `400`.
+
+`201`:
+
+```json
+{
+  "id": 5, "pod_id": 4, "role": "member",
+  "usage_limit": 1, "use_count": 0, "spent": false, "revoked": false,
+  "expires_at": "2026-09-19T17:00:00", "created_at": "2026-09-12T17:00:00",
+  "token": "<raw token>",
+  "invite_url": "https://edh.figurensohn.de/invite/<raw token>"
+}
+```
+
+**`token` and `invite_url` appear only here.** The server keeps a hash, so the link cannot be
+shown again — if the user loses it, revoke the invite and create another. Hand it straight to a
+share sheet.
+
+#### `GET /api/pods/{pod_id}/invites` · auth
+
+`{"invites": [...]}`, newest first, each entry as above **without** `token` or `invite_url`.
+Use `revoked` and `spent` to decide what is still live.
+
+#### `POST /api/pods/{pod_id}/invites/{invite_id}/revoke` · auth
+
+`200` with the updated invite. Idempotent; an already-revoked invite is not an error.
+
+#### `GET /api/invite/{token}` · public
+
+What to show someone before they commit — deliberately reachable with no session, because that
+is the whole point of an invite link.
+
+```json
+{
+  "pod": { "id": 4, "name": "Friday Crew", "slug": "friday-crew" },
+  "role": "member",
+  "expires_at": "2026-09-19T17:00:00",
+  "uses_remaining": 1
+}
+```
+
+`410` when the invite cannot be used. Revoked, expired, fully spent, belonging to a retired pod,
+and never having existed all return the **same** body, so this cannot be used to discover which
+tokens are real.
+
+#### `POST /api/invite/{token}` · auth · 10/hour
+
+Joins the pod and makes it the session's active pod.
+
+```json
+{ "pod": {...}, "role": "member", "already_member": false }
+```
+
+Requires a session — unlike the web route, which can register someone inline. A client should
+call `POST /api/register` first, then accept. `401` if there is no session, `410` if the invite
+is unusable.
+
+Accepting twice on the same account is **idempotent**: `already_member` comes back `true` and no
+further use is spent, so re-opening the link does not burn the invite.
+
+---
+
+### 5.8b Guest players
+
+#### `POST /api/pods/{pod_id}/guests` · auth
+
+For someone who turned up to one game night and has no account.
+
+```json
+{ "name": "Visiting Dave" }
+```
+
+`201 {"player_id": 31, "name": "Visiting Dave", "pod_id": 4, "is_guest": true}`
+
+The created `Player` has no `user_id`, no email, and membership in **this pod only**. It is a
+record about a person who never agreed to anything, so keep that scope in mind before surfacing
+guests anywhere outside the pod that created them.
+
+`400` with `field: "name"` when the name is blank or over 100 characters · `403` unless you can
+manage the pod.
+
+---
+
+### 5.8c Public game recaps
+
+#### `POST /api/games/{game_id}/shares` · auth · 20/hour
+
+Mints an **unauthenticated** URL for one game. Requires access to the game and a verified email
+address.
+
+```json
+{ "show_player_names": true, "show_deck_names": true }
+```
+
+Both default to `false`. That is deliberate: a caller that sends nothing publishes the least it
+can, not the most. With `show_player_names` off the seats read `Player 1`, `Player 2`, …; with
+`show_deck_names` off the deck becomes `Private deck` and the commander is withheld.
+
+`201`:
+
+```json
+{
+  "id": 2, "game_id": 17,
+  "show_player_names": true, "show_deck_names": true,
+  "revoked": false, "created_at": "2026-09-12T17:00:00",
+  "token": "<raw token>",
+  "share_url": "https://edh.figurensohn.de/r/<raw token>"
+}
+```
+
+As with invites, `token` and `share_url` are returned only on creation.
+
+**This publishes other people's game data to the open web.** The switches are the only control
+the people in that game have, so present them as a real choice before publishing, not as
+defaults buried in a confirmation.
+
+#### `GET /api/games/{game_id}/shares` · auth
+
+`{"shares": [...]}` without tokens. Shows what is currently published so a client can offer to
+revoke it.
+
+#### `POST /api/games/{game_id}/shares/{share_id}/revoke` · auth
+
+`200` with the updated share. The public URL starts returning `404` immediately.
+
+#### `GET /api/recap/{token}` · public
+
+The JSON twin of the `/r/{token}` web page, shaped by that share's own switches — never richer
+than what the page would show.
+
+```json
+{
+  "game": { "id": 17, "date": "2026-09-12T19:00:00", "win_type": "combat", "ending_turn": 11 },
+  "pod": { "name": "Friday Crew" },
+  "participants": [
+    { "player": "Alice", "deck": "Atraxa Superfriends", "commander": "Atraxa, Praetors' Voice",
+      "won": true, "mmr_delta": 12, "salt_count": 0, "life_delta": -8 }
+  ],
+  "show_player_names": true,
+  "show_deck_names": true
+}
+```
+
+`404` when the token is unknown or the share was revoked.
+
+---
+
+### 5.8d Email verification as a gate
+
+Two actions are blocked until the account's address is confirmed, matching the web routes:
+creating a pod invite, and publishing a recap. Both reach people outside the account.
+
+```json
+{ "error": "Verify your email address first.", "reason": "email_unverified" }
+```
+
+`403` with that `reason`. Branch on `reason` rather than the message: it means "show the
+verification banner and offer Resend", not "this user lacks permission". Administrators are
+exempt. Playing, recording games, and everything else stay available while unverified.
+
+---
+
 ### 5.9 Administration
 
 All under `/api/admin` require `is_admin`. Self-targeting destructive actions return `409`.
@@ -903,10 +1093,10 @@ On any `401`, discard the cookie and return to step 1.
 
 These product features exist only as HTML routes today. A standalone client cannot use them:
 
-- Pod invite links (`/pods/{id}/invites`, `/invite/{token}`) and guest players (`/pods/{id}/guests`)
-- Public game recap sharing (`/games/{id}/share`, `/r/{token}`)
 - Per-pod branding and scoring configuration
 - Account data export (`/account/export`)
 
-Adding JSON equivalents is phases 4 and 6 of `edh-son-android/INTEGRATION-PLAN.md`. Registration, email verification, and password reset were phase 3 and now have JSON
-equivalents — see [5.1a Onboarding](#51a-onboarding).
+Adding JSON equivalents is phase 6 of `edh-son-android/INTEGRATION-PLAN.md`. Registration, email verification, and password reset were phase 3 and now have JSON
+equivalents — see [5.1a Onboarding](#51a-onboarding). Invites, guest players, and recap
+sharing were phase 4 — see [5.8a](#58a-invites), [5.8b](#58b-guest-players) and
+[5.8c](#58c-public-game-recaps).

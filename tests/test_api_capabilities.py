@@ -148,6 +148,7 @@ class CapabilitiesEndpointTests(unittest.TestCase):
         shipped = (
             "search", "compare", "mmr", "life_history",
             "registration", "password_reset", "email_verification",
+            "pod_invites", "guest_players", "game_shares",
         )
         for key in shipped:
             self.assertTrue(body["features"][key], f"'{key}' is implemented today")
@@ -155,7 +156,7 @@ class CapabilitiesEndpointTests(unittest.TestCase):
     def test_unimplemented_features_report_false(self):
         """Flip these to true in the same commit that lands the endpoint."""
         _, body = self._authenticated()
-        for key in ("pod_invites", "guest_players", "game_shares", "pod_config", "account_export"):
+        for key in ("pod_config", "account_export"):
             self.assertFalse(
                 body["features"][key],
                 f"'{key}' has no JSON API yet — advertising it true would make "

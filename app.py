@@ -403,9 +403,9 @@ API_FEATURES = {
     "password_reset": True,
     "email_verification": True,
     # Not yet exposed as JSON — see edh-son-android/INTEGRATION-PLAN.md
-    "pod_invites": False,
-    "guest_players": False,
-    "game_shares": False,
+    "pod_invites": True,
+    "guest_players": True,
+    "game_shares": True,
     "pod_config": False,
     "account_export": False,
 }
@@ -426,6 +426,27 @@ MAX_POD_NAME_LENGTH = 100
 # Not a column width. Long passwords are welcome -- this only stops an unauthenticated
 # caller from making the server hash a multi-megabyte string.
 MAX_PASSWORD_LENGTH = 1024
+
+# Guest players are records for people who never signed up, so the name is the only
+# field. Same width as a display name.
+MAX_GUEST_NAME_LENGTH = 100
+
+# Invite bounds, mirroring the web form. Values outside the range are clamped rather
+# than refused: a caller asking for 60 days wants "as long as possible".
+MIN_INVITE_EXPIRES_DAYS = 1
+MAX_INVITE_EXPIRES_DAYS = 30
+DEFAULT_INVITE_EXPIRES_DAYS = 7
+MIN_INVITE_USAGE_LIMIT = 1
+MAX_INVITE_USAGE_LIMIT = 25
+DEFAULT_INVITE_USAGE_LIMIT = 1
+POD_INVITE_ROLES = ("member", "podmaster")
+
+# One wording for every unusable invite. Revoked, expired, spent, unknown and
+# belonging-to-a-retired-pod are all answered identically, so the endpoint cannot be
+# used to find out which tokens exist.
+INVITE_UNAVAILABLE_MESSAGE = "That invitation is no longer available."
+
+EMAIL_UNVERIFIED_REASON = "email_unverified"
 
 EMAIL_PATTERN = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 
@@ -4441,6 +4462,8 @@ def require_login():
             "api_me",
             "api_capabilities",
             "api_register",
+            "api_preview_invite",
+            "api_public_recap",
             "api_forgot_password",
             "api_reset_password",
             "api_verify_email",
@@ -10051,6 +10074,356 @@ def api_resend_email_verification():
             else EMAIL_VERIFICATION_UNSENT_MESSAGE
         ),
     }), 202
+
+
+def _clamped_int(value, *, default: int, low: int, high: int) -> int | None:
+    """Read an optional integer setting. None means the caller sent nonsense.
+
+    Absent falls back to the default; out of range is clamped, matching the web form,
+    because a caller asking for 60 days wants the longest we allow, not an error.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _email_verification_required(user: User) -> tuple[dict, int] | None:
+    """Block an action that reaches other people until the address is confirmed.
+
+    Inviting strangers and publishing to the open web both do; playing does not. The
+    `reason` lets a client show its verification banner instead of a bare refusal.
+    """
+    if user.is_admin or user.email_verified_at:
+        return None
+    return (
+        {
+            "error": "Verify your email address first.",
+            "reason": EMAIL_UNVERIFIED_REASON,
+        },
+        403,
+    )
+
+
+def _serialize_pod_invite(invite: PodInvite) -> dict:
+    """Everything about an invite except the token, which exists only in the response
+    to its own creation -- we keep a hash and cannot re-derive it."""
+    return {
+        "id": invite.id,
+        "pod_id": invite.pod_id,
+        "role": invite.role,
+        "usage_limit": invite.usage_limit,
+        "use_count": invite.use_count,
+        "expires_at": invite.expires_at.isoformat(),
+        "created_at": invite.created_at.isoformat(),
+        "revoked": bool(invite.revoked_at),
+        "spent": invite.use_count >= invite.usage_limit,
+    }
+
+
+@app.route("/api/pods/<int:pod_id>/invites", methods=["GET"])
+@api_login_required
+def api_list_pod_invites(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    invites = (
+        PodInvite.query.filter_by(pod_id=pod_id)
+        .order_by(PodInvite.created_at.desc())
+        .all()
+    )
+    return jsonify({"invites": [_serialize_pod_invite(i) for i in invites]})
+
+
+@app.route("/api/pods/<int:pod_id>/invites", methods=["POST"])
+@limiter.limit("20 per hour", methods=["POST"])
+@api_login_required
+def api_create_pod_invite(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    blocked = _email_verification_required(me)
+    if blocked:
+        return jsonify(blocked[0]), blocked[1]
+
+    data, error = _json_object_body()
+    if error:
+        return error
+    expires_days = _clamped_int(
+        data.get("expires_days"),
+        default=DEFAULT_INVITE_EXPIRES_DAYS,
+        low=MIN_INVITE_EXPIRES_DAYS,
+        high=MAX_INVITE_EXPIRES_DAYS,
+    )
+    usage_limit = _clamped_int(
+        data.get("usage_limit"),
+        default=DEFAULT_INVITE_USAGE_LIMIT,
+        low=MIN_INVITE_USAGE_LIMIT,
+        high=MAX_INVITE_USAGE_LIMIT,
+    )
+    if expires_days is None or usage_limit is None:
+        return jsonify({"error": "Invalid invitation settings."}), 400
+
+    role = _text_field(data, "role").lower() or "member"
+    if role not in POD_INVITE_ROLES:
+        role = "member"
+
+    raw_token, token_hash = issue_public_token()
+    invite = PodInvite(
+        token_hash=token_hash,
+        pod_id=pod_id,
+        role=role,
+        expires_at=datetime.utcnow() + timedelta(days=expires_days),
+        usage_limit=usage_limit,
+        created_by_user_id=me.id,
+    )
+    db.session.add(invite)
+    pod = db.session.get(Pod, pod_id)
+    if PodInvite.query.filter_by(pod_id=pod_id).count() == 0:
+        record_funnel_event("first_invite_created", user=me, pod=pod)
+    db.session.commit()
+
+    payload = _serialize_pod_invite(invite)
+    # The only time the raw token is ever returned. A listing cannot repeat it.
+    payload["token"] = raw_token
+    payload["invite_url"] = url_for("accept_pod_invite", token=raw_token, _external=True)
+    return jsonify(payload), 201
+
+
+@app.route("/api/pods/<int:pod_id>/invites/<int:invite_id>/revoke", methods=["POST"])
+@api_login_required
+def api_revoke_pod_invite(pod_id, invite_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    invite = PodInvite.query.filter_by(id=invite_id, pod_id=pod_id).first()
+    if not invite:
+        return jsonify({"error": "Not found"}), 404
+    if not invite.revoked_at:
+        invite.revoked_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(_serialize_pod_invite(invite))
+
+
+@app.route("/api/invite/<token>", methods=["GET"])
+def api_preview_invite(token):
+    """What a person sees before deciding to join. Public: the whole point of an
+    invite link is that it works before you have an account."""
+    invite, _ = resolve_pod_invite(token)
+    if not invite:
+        return jsonify({"error": INVITE_UNAVAILABLE_MESSAGE}), 410
+    return jsonify({
+        "pod": {"id": invite.pod.id, "name": invite.pod.name, "slug": invite.pod.slug},
+        "role": invite.role,
+        "expires_at": invite.expires_at.isoformat(),
+        "uses_remaining": max(0, invite.usage_limit - invite.use_count),
+    })
+
+
+@app.route("/api/invite/<token>", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+@api_login_required
+def api_accept_invite(token):
+    """Join the pod the invite names.
+
+    Requires a session: unlike the web route, which can register someone inline, a
+    client already has /api/register and should sign the person up first, then accept.
+    """
+    me = get_current_user()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    invite, _ = resolve_pod_invite(token)
+    if not invite:
+        return jsonify({"error": INVITE_UNAVAILABLE_MESSAGE}), 410
+
+    if not me.player:
+        me.player = Player(name=me.display_name)
+        db.session.flush()
+
+    existing = PodMembership.query.filter_by(
+        pod_id=invite.pod_id, player_id=me.player.id
+    ).first()
+    already_joined = existing is not None
+    if not already_joined:
+        ensure_membership(invite.pod_id, me.player.id, role=invite.role)
+        # Only a real join spends a use; re-opening the link on the same account is
+        # idempotent, so a shared device does not burn the invite twice.
+        invite.use_count += 1
+        record_funnel_event("invite_accepted", user=me, pod=invite.pod)
+    session["active_pod_id"] = invite.pod_id
+    db.session.commit()
+    return jsonify({
+        "pod": {"id": invite.pod.id, "name": invite.pod.name, "slug": invite.pod.slug},
+        "role": invite.role,
+        "already_member": already_joined,
+    })
+
+
+@app.route("/api/pods/<int:pod_id>/guests", methods=["POST"])
+@api_login_required
+def api_create_guest_player(pod_id):
+    """Add a player who has no account -- someone who turned up to one game night.
+
+    Deliberately scoped to this pod only, with no email, no login, and no way to
+    reach other pods: it is a record about a person who never agreed to anything.
+    """
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    data, error = _json_object_body()
+    if error:
+        return error
+    name = _text_field(data, "name")
+    if not name:
+        return jsonify({"error": "Guest name is required.", "field": "name"}), 400
+    if len(name) > MAX_GUEST_NAME_LENGTH:
+        return jsonify({
+            "error": f"Guest name must be {MAX_GUEST_NAME_LENGTH} characters or fewer",
+            "field": "name",
+        }), 400
+
+    player = Player(name=name)
+    db.session.add(player)
+    db.session.flush()
+    ensure_membership(pod_id, player.id)
+    db.session.commit()
+    return jsonify({
+        "player_id": player.id,
+        "name": player.name,
+        "pod_id": pod_id,
+        "is_guest": True,
+    }), 201
+
+
+def _serialize_game_share(share: GameShare) -> dict:
+    return {
+        "id": share.id,
+        "game_id": share.game_id,
+        "show_player_names": share.show_player_names,
+        "show_deck_names": share.show_deck_names,
+        "created_at": share.created_at.isoformat(),
+        "revoked": bool(share.revoked_at),
+    }
+
+
+@app.route("/api/games/<int:game_id>/shares", methods=["GET"])
+@api_login_required
+def api_list_game_shares(game_id):
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        return jsonify({"error": "Not found"}), 404
+    shares = (
+        GameShare.query.filter_by(game_id=game_id)
+        .order_by(GameShare.created_at.desc())
+        .all()
+    )
+    return jsonify({"shares": [_serialize_game_share(s) for s in shares]})
+
+
+@app.route("/api/games/<int:game_id>/shares", methods=["POST"])
+@limiter.limit("20 per hour", methods=["POST"])
+@api_login_required
+def api_publish_game_recap(game_id):
+    """Mint an unauthenticated URL for one game.
+
+    Two switches decide how much of other people's data goes out: without
+    `show_player_names` the seats become "Player 1", "Player 2"; without
+    `show_deck_names` the decks and commanders are withheld. Both default to off, so
+    a caller that sends nothing publishes the least it can rather than the most.
+    """
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        return jsonify({"error": "Not found"}), 404
+    blocked = _email_verification_required(me)
+    if blocked:
+        return jsonify(blocked[0]), blocked[1]
+
+    data, error = _json_object_body()
+    if error:
+        return error
+
+    raw_token, token_hash = issue_public_token()
+    share = GameShare(
+        token_hash=token_hash,
+        game_id=game.id,
+        created_by_user_id=me.id,
+        show_player_names=bool(data.get("show_player_names")),
+        show_deck_names=bool(data.get("show_deck_names")),
+    )
+    db.session.add(share)
+    db.session.commit()
+
+    payload = _serialize_game_share(share)
+    payload["token"] = raw_token
+    payload["share_url"] = url_for("public_recap", token=raw_token, _external=True)
+    return jsonify(payload), 201
+
+
+@app.route("/api/games/<int:game_id>/shares/<int:share_id>/revoke", methods=["POST"])
+@api_login_required
+def api_revoke_game_recap(game_id, share_id):
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        return jsonify({"error": "Not found"}), 404
+    share = GameShare.query.filter_by(id=share_id, game_id=game_id).first()
+    if not share:
+        return jsonify({"error": "Not found"}), 404
+    if not share.revoked_at:
+        share.revoked_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(_serialize_game_share(share))
+
+
+@app.route("/api/recap/<token>", methods=["GET"])
+def api_public_recap(token):
+    """The JSON twin of /r/<token>. Public by design, and shaped by the share's
+    own switches -- never richer than what the web page would show."""
+    share = GameShare.query.filter_by(token_hash=hash_public_token(token)).first()
+    if not share or share.revoked_at or not share.game:
+        return jsonify({"error": "Not found"}), 404
+    game = share.game
+    parts = (
+        GameParticipant.query.filter_by(game_id=game.id)
+        .order_by(GameParticipant.seat_position.asc())
+        .all()
+    )
+    participants = []
+    for index, part in enumerate(parts, start=1):
+        flags = participant_flags_snapshot(part)
+        participants.append({
+            "player": part.player.name if share.show_player_names else f"Player {index}",
+            "deck": (
+                (part.deck.name if part.deck else "Unknown deck")
+                if share.show_deck_names else "Private deck"
+            ),
+            "commander": (
+                ((part.deck.commander_name or part.deck.commander) if part.deck else None)
+                if share.show_deck_names else None
+            ),
+            "won": part.player_id == game.winner_id,
+            "mmr_delta": part.mmr_delta,
+            "salt_count": participant_salt_count(flags),
+            "life_delta": part.life_delta_total or 0,
+        })
+    return jsonify({
+        "game": {
+            "id": game.id,
+            "date": game.date.isoformat() if game.date else None,
+            "win_type": game.win_type,
+            "ending_turn": game.ending_turn,
+        },
+        "pod": {"name": game.pod.name} if game.pod else None,
+        "participants": participants,
+        "show_player_names": share.show_player_names,
+        "show_deck_names": share.show_deck_names,
+    })
 
 
 @app.route("/api/capabilities")
