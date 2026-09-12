@@ -23,4 +23,8 @@ USER app
 
 # GUNICORN_WORKER_TIMEOUT_SECS: generous timeout for card-art/deck-import
 # requests that proxy to Scryfall/Moxfield/Archidekt.
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "4", "--timeout", "60", "app:app"]
+# One worker on purpose: the rate limiter keeps its counters in process memory, so
+# every additional worker multiplies each documented limit by one. Concurrency comes
+# from threads instead, which share those counters. Raising -w means moving limiter
+# storage to a shared backend first -- tests/test_rate_limit_deployment.py enforces it.
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "1", "--threads", "8", "--timeout", "60", "app:app"]

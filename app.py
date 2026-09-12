@@ -15,6 +15,8 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from collections import namedtuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from datetime import datetime, timedelta
 import hashlib
@@ -209,7 +211,7 @@ def _sqlite_connect_pragmas(dbapi_connection, _connection_record):
 # in AUTOCOMMIT so the api_game_state POST handler can issue an explicit
 # BEGIN IMMEDIATE — taking the SQLite write lock up front — and serialise
 # concurrent updates via that lock. Because it is a *separate* connection pool
-# to the same database file, this locking works across gunicorn -w 4 worker
+# to the same database file, this locking works across both threads and worker
 # processes (an in-process threading.Lock would not) and, crucially, leaves the
 # main ORM session's transaction handling completely untouched. Built lazily
 # from the ORM engine's resolved URL so it always targets the same database.
@@ -262,18 +264,29 @@ OBJECT_STORAGE_BUCKET = (os.getenv("OBJECT_STORAGE_BUCKET") or "").strip()
 OBJECT_STORAGE_ENDPOINT = (os.getenv("OBJECT_STORAGE_ENDPOINT") or "").strip() or None
 OBJECT_STORAGE_REGION = (os.getenv("OBJECT_STORAGE_REGION") or "eu-central-1").strip()
 _object_storage_client = None
+_object_storage_client_init_lock = threading.Lock()
 
 
 def get_object_storage_client():
+    """Return the shared S3 client, constructing it once on first use.
+
+    The lock matters under the threaded worker: two requests racing here would
+    otherwise both build a client, and boto3 client construction is not safe to run
+    concurrently. Double-checked so the common path stays lock-free.
+    """
     global _object_storage_client
     if not OBJECT_STORAGE_BUCKET:
         return None
     if _object_storage_client is None:
-        import boto3
+        with _object_storage_client_init_lock:
+            if _object_storage_client is None:
+                import boto3
 
-        _object_storage_client = boto3.client(
-            "s3", endpoint_url=OBJECT_STORAGE_ENDPOINT, region_name=OBJECT_STORAGE_REGION
-        )
+                _object_storage_client = boto3.client(
+                    "s3",
+                    endpoint_url=OBJECT_STORAGE_ENDPOINT,
+                    region_name=OBJECT_STORAGE_REGION,
+                )
     return _object_storage_client
 
 
@@ -354,6 +367,130 @@ MAX_PER_PLAYER_TURN_STATS = 500
 # Life-history sampling for the in-game life graph: one [timestamp, life]
 # sample per actual life change, capped per player so state_json stays bounded.
 MAX_LIFE_HISTORY_SAMPLES = 120
+
+# Sanity bounds for client-supplied samples. Life can legitimately go negative in
+# Commander, and well past 40 upward, but not by these margins.
+MAX_LIFE_HISTORY_TIMESTAMP = 2 ** 31 - 1
+MAX_LIFE_HISTORY_LIFE = 100_000
+
+# A submission longer than this is refused outright rather than validated element by
+# element and then truncated. Generous next to MAX_LIFE_HISTORY_SAMPLES so a genuinely
+# long game is never rejected; the point is only to bound work a client controls.
+MAX_LIFE_HISTORY_SUBMISSION = MAX_LIFE_HISTORY_SAMPLES * 20
+
+# A deck's MMR history grows by one entry per game, forever. A sparkline only needs a
+# recent trend, so the API serves the newest slice rather than the whole column.
+MAX_MMR_HISTORY_POINTS = 60
+
+# Per-pod configuration. These columns existed unused for a long time; the shapes below
+# are the contract, defined with the JSON API rather than mirrored from a web form.
+POD_MECHANIC_KEYS = (
+    "monarch",
+    "initiative",
+    "citys_blessing",
+    "poison",
+    "energy",
+    "experience",
+)
+
+# private: members only. pod: anyone with a link to the pod. public: listed publicly.
+POD_VISIBILITIES = ("private", "pod", "public")
+
+MAX_FLAVOR_NAME_LENGTH = 100
+HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+# Contract advertised by GET /api/capabilities. Bump when the JSON contract changes
+# in a way a client must branch on; add a feature flag for anything a client would
+# otherwise have to discover by calling an endpoint and interpreting a 404.
+API_CONTRACT_VERSION = 1
+
+# Flags an anonymous caller legitimately needs: they decide whether the sign-in
+# screen offers "Create account" and "Forgot password". Each mirrors a web route
+# (/register, /forgot-password, /verify-email/<token>) that is already publicly
+# reachable, so publishing them reveals nothing a browser could not discover.
+# Everything else is only actionable once signed in and stays behind the session.
+PUBLIC_API_FEATURE_KEYS = (
+    "registration",
+    "password_reset",
+    "email_verification",
+)
+
+API_FEATURES = {
+    # Shipped
+    "search": True,
+    "compare": True,
+    "mmr": True,
+    "life_history": True,
+    "registration": True,
+    "password_reset": True,
+    "email_verification": True,
+    # Not yet exposed as JSON — see edh-son-android/INTEGRATION-PLAN.md
+    "pod_invites": True,
+    "guest_players": True,
+    "game_shares": True,
+    "pod_config": True,
+    "account_export": True,
+}
+
+# Lifetimes of the single-use tokens mailed out during onboarding. Short enough
+# that a token found in an old inbox is usually already dead.
+EMAIL_VERIFICATION_TTL_HOURS = 24
+PASSWORD_RESET_TTL_HOURS = 1
+
+# Column widths for the registration text fields. SQLite treats db.String(n) as type
+# affinity rather than a constraint, so without these a client can store as much as the
+# request-body cap allows in any of them.
+MAX_USERNAME_LENGTH = 100
+MAX_DISPLAY_NAME_LENGTH = 100
+MAX_EMAIL_LENGTH = 320
+MAX_POD_NAME_LENGTH = 100
+
+# Not a column width. Long passwords are welcome -- this only stops an unauthenticated
+# caller from making the server hash a multi-megabyte string.
+MAX_PASSWORD_LENGTH = 1024
+
+# Guest players are records for people who never signed up, so the name is the only
+# field. Same width as a display name.
+MAX_GUEST_NAME_LENGTH = 100
+
+# Invite bounds, mirroring the web form. Values outside the range are clamped rather
+# than refused: a caller asking for 60 days wants "as long as possible".
+MIN_INVITE_EXPIRES_DAYS = 1
+MAX_INVITE_EXPIRES_DAYS = 30
+DEFAULT_INVITE_EXPIRES_DAYS = 7
+MIN_INVITE_USAGE_LIMIT = 1
+MAX_INVITE_USAGE_LIMIT = 25
+DEFAULT_INVITE_USAGE_LIMIT = 1
+POD_INVITE_ROLES = ("member", "podmaster")
+
+# One wording for every unusable invite. Revoked, expired, spent, unknown and
+# belonging-to-a-retired-pod are all answered identically, so the endpoint cannot be
+# used to find out which tokens exist.
+INVITE_UNAVAILABLE_MESSAGE = "That invitation is no longer available."
+
+EMAIL_UNVERIFIED_REASON = "email_unverified"
+NOT_A_PARTICIPANT_REASON = "not_a_participant"
+
+EMAIL_PATTERN = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+
+# One wording for "we may or may not have mailed you", and one for "that token is
+# no good". Both are deliberately incurious: varying them by whether the account
+# or the token exists turns these endpoints into enumeration oracles.
+PASSWORD_RESET_SENT_MESSAGE = "If that email is registered, a reset link has been sent."
+PASSWORD_RESET_INVALID_MESSAGE = "That reset link is invalid or expired."
+EMAIL_VERIFICATION_INVALID_MESSAGE = "That verification link is invalid or expired."
+EMAIL_VERIFICATION_SENT_MESSAGE = "Verification email sent. Check your inbox."
+EMAIL_VERIFICATION_UNSENT_MESSAGE = (
+    "We could not send the verification email just now. Please try again shortly."
+)
+
+# Digital Asset Links. Overridable so a fork signing with its own key can point at
+# its own certificate without editing code.
+ANDROID_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME", "de.slemme.edhcompanion")
+ANDROID_SIGNING_FINGERPRINT = os.getenv(
+    "ANDROID_SIGNING_FINGERPRINT",
+    "57:6C:D0:76:69:FC:AD:35:45:1D:5B:8D:C3:A1:64:52:8B:2E:2E:82:E6:06:39:FE:50:BC:B6:5A:EB:29:A0:07",
+)
 
 DECK_TAGS_VERSION = 2
 KNOWN_DECK_TAG_KEYS = (
@@ -3572,12 +3709,236 @@ def record_funnel_event(
     )
 
 
+# -------------------------
+# Onboarding (shared by the web forms and the JSON API)
+# -------------------------
+
+REGISTRATION_REQUIRED_FIELDS = ("username", "display_name", "email", "pod_name", "password")
+REGISTRATION_INCOMPLETE_MESSAGE = (
+    "Username, email, display name, pod name, and password are required"
+)
+
+# `status` lets the JSON API answer 409 for a collision and 400 for bad input while
+# the web form, which only ever flashes the message, ignores it.
+RegistrationProblem = namedtuple("RegistrationProblem", "field message status")
+
+REGISTRATION_FIELD_LIMITS = {
+    "username": MAX_USERNAME_LENGTH,
+    "display_name": MAX_DISPLAY_NAME_LENGTH,
+    "email": MAX_EMAIL_LENGTH,
+    "pod_name": MAX_POD_NAME_LENGTH,
+    "password": MAX_PASSWORD_LENGTH,
+}
+
+REGISTRATION_FIELD_LABELS = {
+    "username": "Username",
+    "display_name": "Display name",
+    "email": "Email address",
+    "pod_name": "Pod name",
+    "password": "Password",
+}
+
+
+def validate_registration(fields: dict) -> RegistrationProblem | None:
+    """Return the first problem with a registration attempt, or None if it is sound.
+
+    Order matches what a person filling the form would want to fix first, and is
+    the same for both entry points so the web and the app cannot drift apart.
+    """
+    for name in REGISTRATION_REQUIRED_FIELDS:
+        if not fields.get(name):
+            return RegistrationProblem(name, REGISTRATION_INCOMPLETE_MESSAGE, 400)
+    # Before the uniqueness queries and before hashing, so an oversized field costs
+    # neither a database round trip nor a KDF pass.
+    for name, limit in REGISTRATION_FIELD_LIMITS.items():
+        if len(fields[name]) > limit:
+            return RegistrationProblem(
+                name, f"{REGISTRATION_FIELD_LABELS[name]} must be {limit} characters or fewer", 400
+            )
+    if not EMAIL_PATTERN.fullmatch(fields["email"]):
+        return RegistrationProblem("email", "Enter a valid email address", 400)
+    if fields.get("confirm") is not None and fields["password"] != fields["confirm"]:
+        return RegistrationProblem("confirm", "Passwords do not match", 400)
+    if User.query.filter_by(username=fields["username"]).first():
+        return RegistrationProblem("username", "Username already taken", 409)
+    if User.query.filter_by(email=fields["email"]).first():
+        return RegistrationProblem(
+            "email", "An account already uses that email address", 409
+        )
+    password_error = validate_password_rules(fields["password"])
+    if password_error:
+        return RegistrationProblem("password", password_error, 400)
+    return None
+
+
+def create_account_with_pod(
+    *, username: str, display_name: str, email: str, password: str, pod_name: str
+) -> tuple[User, Pod, str]:
+    """Create the account, its player, its pod, and the podmaster membership.
+
+    Leaves the transaction open and returns the raw verification token; the caller
+    commits and then mails it, so a failed commit cannot mail a live token for an
+    account that was never written.
+    """
+    user = User(
+        username=username,
+        display_name=display_name,
+        email=email,
+        password_hash=generate_password_hash(password),
+        is_active=True,
+        is_admin=False,
+        approved_at=datetime.utcnow(),
+    )
+    raw_verification_token = issue_email_verification(user)
+    db.session.add(user)
+    db.session.flush()
+    player = Player(name=display_name, user_id=user.id)
+    db.session.add(player)
+    db.session.flush()
+    pod = Pod(
+        name=pod_name,
+        slug=unique_pod_slug(pod_name),
+        owner_user_id=user.id,
+        is_active=True,
+    )
+    db.session.add(pod)
+    db.session.flush()
+    ensure_membership(pod.id, player.id, role="podmaster")
+    record_funnel_event("account_created", user=user, pod=pod)
+    record_funnel_event("pod_created", user=user, pod=pod)
+    return user, pod, raw_verification_token
+
+
+def issue_email_verification(user: User) -> str:
+    """Mint a fresh verification token, retiring any previous one. Returns the raw
+    token; only its hash is kept, so this is the last chance to read it."""
+    raw_token, token_hash = issue_public_token()
+    user.email_verification_token_hash = token_hash
+    user.email_verification_expires_at = datetime.utcnow() + timedelta(
+        hours=EMAIL_VERIFICATION_TTL_HOURS
+    )
+    return raw_token
+
+
+def try_send_transactional_email(recipient: str, subject: str, body: str, *, purpose: str) -> bool:
+    """Send, reporting failure instead of raising.
+
+    The account, token, or invite is already committed by the time we get here, so an
+    unreachable relay must not turn a completed write into a 500 and leave the caller
+    believing nothing happened. The error is logged; the token never is.
+    """
+    try:
+        return send_transactional_email(recipient, subject, body)
+    except Exception:
+        app.logger.exception("Failed to send %s email", purpose)
+        return False
+
+
+def send_email_verification(user: User, raw_token: str) -> bool:
+    """Mail the verification link. Returns whether it actually went out."""
+    verification_url = url_for("verify_email", token=raw_token, _external=True)
+    return try_send_transactional_email(
+        user.email,
+        "Verify your EDH Son account",
+        f"Verify your email within {EMAIL_VERIFICATION_TTL_HOURS} hours:\n\n{verification_url}",
+        purpose="email verification",
+    )
+
+
+def consume_email_verification(token: str) -> User | None:
+    """Mark the matching account verified and burn the token. None when the token
+    is unknown or expired -- the caller must not distinguish the two."""
+    if not token:
+        return None
+    user = User.query.filter_by(email_verification_token_hash=hash_public_token(token)).first()
+    if (
+        not user
+        or not user.email_verification_expires_at
+        or user.email_verification_expires_at < datetime.utcnow()
+    ):
+        return None
+    user.email_verified_at = datetime.utcnow()
+    user.email_verification_token_hash = None
+    user.email_verification_expires_at = None
+    return user
+
+
+def begin_password_reset(email: str) -> str | None:
+    """Mail a reset link when the address belongs to a live account, and commit.
+
+    Returns the raw token so a test harness can pick it up; callers must answer
+    the request identically whether this returns a token or None.
+    """
+    user = User.query.filter_by(email=email, deleted_at=None).first() if email else None
+    if not user:
+        return None
+    raw_token, token_hash = issue_public_token()
+    user.password_reset_token_hash = token_hash
+    user.password_reset_expires_at = datetime.utcnow() + timedelta(
+        hours=PASSWORD_RESET_TTL_HOURS
+    )
+    db.session.commit()
+    reset_url = url_for("reset_password", token=raw_token, _external=True)
+    # Best effort on purpose: the token is committed, and the caller answers
+    # identically either way, so a relay outage must not surface as a 500 that
+    # distinguishes a registered address from an unregistered one.
+    try_send_transactional_email(
+        user.email,
+        "Reset your EDH Son password",
+        f"Reset your password within one hour:\n\n{reset_url}",
+        purpose="password reset",
+    )
+    return raw_token
+
+
+def find_password_reset_user(token: str) -> User | None:
+    """The account a reset token belongs to, or None when unknown or expired."""
+    if not token:
+        return None
+    user = User.query.filter_by(password_reset_token_hash=hash_public_token(token)).first()
+    if (
+        not user
+        or not user.password_reset_expires_at
+        or user.password_reset_expires_at < datetime.utcnow()
+    ):
+        return None
+    return user
+
+
+def apply_password_reset(user: User, password: str) -> None:
+    """Set the new password, burn the token, and revoke every open session.
+
+    A reset is usually the remedy for someone else being inside the account; a
+    session opened under the old password must not outlive it.
+    """
+    user.password_hash = generate_password_hash(password)
+    user.password_reset_token_hash = None
+    user.password_reset_expires_at = None
+    user.session_version += 1
+
+
 def accessible_pod_ids(user: User | None) -> set[int]:
     return {pod.id for pod in get_accessible_pods(user)} if user else set()
 
 
 def can_access_game(user: User | None, game: Game | None) -> bool:
     return bool(user and game and (user.is_admin or game.pod_id in accessible_pod_ids(user)))
+
+
+def played_in_game(user: User | None, game: Game | None) -> bool:
+    """Whether this account actually sat at that table.
+
+    Deliberately narrower than can_access_game(). Pod membership is the right gate
+    for *reading* a game -- that is what a shared scorebook is. Publishing it to the
+    open web is a decision about the participants' own data, and someone who was not
+    there has no standing to make it for the people who were.
+    """
+    if not user or not game or not user.player:
+        return False
+    return (
+        GameParticipant.query.filter_by(game_id=game.id, player_id=user.player.id).first()
+        is not None
+    )
 
 
 def can_access_player(user: User | None, player: Player | None) -> bool:
@@ -4061,6 +4422,22 @@ def get_csrf_token() -> str:
 app.jinja_env.globals["csrf_token"] = get_csrf_token
 
 
+def _revoked_session_response(message=None):
+    """Reject a request whose session is no longer valid.
+
+    /api answers with JSON 401 like every other API rejection. A redirect would be
+    followed by the client's HTTP stack, which then tries to parse the HTML login
+    page as JSON and reports it as a malformed server URL — hiding the real cause.
+
+    Web requests keep the redirect (and the flash) so the browser flow is unchanged.
+    """
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Unauthorized"}), 401
+    if message:
+        flash(message)
+    return redirect(url_for("login"))
+
+
 @app.before_request
 def require_login():
     # CSRF check for authenticated state-mutating requests on non-API routes
@@ -4115,12 +4492,20 @@ def require_login():
             "accept_pod_invite",
             "public_recap",
             "static",
+            "android_asset_links",
             "art",
             "object_media",
             "healthz",
             "api_login",
             "api_logout",
             "api_me",
+            "api_capabilities",
+            "api_register",
+            "api_preview_invite",
+            "api_public_recap",
+            "api_forgot_password",
+            "api_reset_password",
+            "api_verify_email",
             "api_card_art",
             "api_gallery_image",
             "api_cards_autocomplete",
@@ -4140,14 +4525,13 @@ def require_login():
         signed_in_user = get_current_user()
         if not signed_in_user or signed_in_user.deleted_at:
             session.clear()
-            return redirect(url_for("login"))
+            return _revoked_session_response()
         session_version = session.get("session_version")
         if session_version is None:
             session["session_version"] = signed_in_user.session_version
         elif session_version != signed_in_user.session_version:
             session.clear()
-            flash("That session was revoked. Please sign in again.")
-            return redirect(url_for("login"))
+            return _revoked_session_response("That session was revoked. Please sign in again.")
 
     get_active_pod()
 
@@ -4159,67 +4543,27 @@ def require_login():
 @limiter.limit("5 per hour", methods=["POST"])
 def register():
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        display_name = request.form.get("display_name", "").strip()
-        email = normalize_email(request.form.get("email"))
-        pod_name = request.form.get("pod_name", "").strip()
-        password = request.form.get("password", "")
-        confirm = request.form.get("confirm", "")
-
-        if not username or not display_name or not email or not pod_name or not password:
-            flash("Username, email, display name, pod name, and password are required")
-        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
-            flash("Enter a valid email address")
-        elif password != confirm:
-            flash("Passwords do not match")
-        elif User.query.filter_by(username=username).first():
-            flash("Username already taken")
-        elif User.query.filter_by(email=email).first():
-            flash("An account already uses that email address")
+        fields = {
+            "username": request.form.get("username", "").strip(),
+            "display_name": request.form.get("display_name", "").strip(),
+            "email": normalize_email(request.form.get("email")),
+            "pod_name": request.form.get("pod_name", "").strip(),
+            "password": request.form.get("password", ""),
+            "confirm": request.form.get("confirm", ""),
+        }
+        problem = validate_registration(fields)
+        if problem:
+            flash(problem.message)
         else:
-            password_error = validate_password_rules(password)
-            if password_error:
-                flash(password_error)
-                return render_template("register.html")
-
-            raw_verification_token, verification_hash = issue_public_token()
-            user = User(
-                username=username,
-                display_name=display_name,
-                email=email,
-                password_hash=generate_password_hash(password),
-                is_active=True,
-                is_admin=False,
-                approved_at=datetime.utcnow(),
-                email_verification_token_hash=verification_hash,
-                email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
+            user, pod, raw_verification_token = create_account_with_pod(
+                username=fields["username"],
+                display_name=fields["display_name"],
+                email=fields["email"],
+                password=fields["password"],
+                pod_name=fields["pod_name"],
             )
-            db.session.add(user)
-            db.session.flush()
-            player = Player(name=display_name, user_id=user.id)
-            db.session.add(player)
-            db.session.flush()
-            pod = Pod(
-                name=pod_name,
-                slug=unique_pod_slug(pod_name),
-                owner_user_id=user.id,
-                is_active=True,
-            )
-            db.session.add(pod)
-            db.session.flush()
-            ensure_membership(pod.id, player.id, role="podmaster")
-            record_funnel_event("account_created", user=user, pod=pod)
-            record_funnel_event("pod_created", user=user, pod=pod)
             db.session.commit()
-
-            verification_url = url_for(
-                "verify_email", token=raw_verification_token, _external=True
-            )
-            send_transactional_email(
-                user.email,
-                "Verify your EDH Son account",
-                f"Verify your email within 24 hours:\n\n{verification_url}",
-            )
+            send_email_verification(user, raw_verification_token)
             if app.config.get("TESTING"):
                 session["test_email_verification_token"] = raw_verification_token
             flash(
@@ -4232,17 +4576,9 @@ def register():
 
 @app.route("/verify-email/<token>")
 def verify_email(token):
-    user = User.query.filter_by(email_verification_token_hash=hash_public_token(token)).first()
-    if (
-        not user
-        or not user.email_verification_expires_at
-        or user.email_verification_expires_at < datetime.utcnow()
-    ):
-        flash("That verification link is invalid or expired.")
+    if not consume_email_verification(token):
+        flash(EMAIL_VERIFICATION_INVALID_MESSAGE)
         return redirect(url_for("login"))
-    user.email_verified_at = datetime.utcnow()
-    user.email_verification_token_hash = None
-    user.email_verification_expires_at = None
     db.session.commit()
     flash("Email verified. You can now invite your playgroup.")
     return redirect(url_for("login"))
@@ -4252,22 +4588,10 @@ def verify_email(token):
 @limiter.limit("5 per hour", methods=["POST"])
 def forgot_password():
     if request.method == "POST":
-        email = normalize_email(request.form.get("email"))
-        user = User.query.filter_by(email=email, deleted_at=None).first() if email else None
-        if user:
-            raw_token, token_hash = issue_public_token()
-            user.password_reset_token_hash = token_hash
-            user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
-            db.session.commit()
-            reset_url = url_for("reset_password", token=raw_token, _external=True)
-            send_transactional_email(
-                user.email,
-                "Reset your EDH Son password",
-                f"Reset your password within one hour:\n\n{reset_url}",
-            )
-            if app.config.get("TESTING"):
-                session["test_password_reset_token"] = raw_token
-        flash("If that email is registered, a reset link has been sent.")
+        raw_token = begin_password_reset(normalize_email(request.form.get("email")))
+        if raw_token and app.config.get("TESTING"):
+            session["test_password_reset_token"] = raw_token
+        flash(PASSWORD_RESET_SENT_MESSAGE)
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
 
@@ -4275,13 +4599,9 @@ def forgot_password():
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
 @limiter.limit("10 per hour", methods=["POST"])
 def reset_password(token):
-    user = User.query.filter_by(password_reset_token_hash=hash_public_token(token)).first()
-    if (
-        not user
-        or not user.password_reset_expires_at
-        or user.password_reset_expires_at < datetime.utcnow()
-    ):
-        flash("That reset link is invalid or expired.")
+    user = find_password_reset_user(token)
+    if not user:
+        flash(PASSWORD_RESET_INVALID_MESSAGE)
         return redirect(url_for("forgot_password"))
     if request.method == "POST":
         password = request.form.get("password", "")
@@ -4292,9 +4612,7 @@ def reset_password(token):
         elif password_error:
             flash(password_error)
         else:
-            user.password_hash = generate_password_hash(password)
-            user.password_reset_token_hash = None
-            user.password_reset_expires_at = None
+            apply_password_reset(user, password)
             db.session.commit()
             session.clear()
             flash("Password updated. Sign in with your new password.")
@@ -4523,10 +4841,16 @@ def profile():
     return render_template("profile.html", user=u)
 
 
-@app.route("/account/export")
-@login_required
-def account_export():
-    u = get_current_user()
+def build_account_export(u: User) -> dict:
+    """Everything this account holds, for a GDPR data request.
+
+    Shared by the web download and the JSON API so the two cannot drift and tell a
+    user different things depending on where they asked. Scoped to this account only:
+    an export is exactly where over-fetching becomes a data leak.
+
+    An account can exist without a Player row (freshly approved, never played), which
+    is why the deck and game lookups are guarded rather than assumed.
+    """
     player = u.player
     pod_rows = get_accessible_pods(u)
     decks = Deck.query.filter_by(player_id=player.id).all() if player else []
@@ -4572,11 +4896,27 @@ def account_export():
             for part in participations
         ],
     }
+    return payload
+
+
+@app.route("/account/export")
+@login_required
+def account_export():
     return Response(
-        json.dumps(payload, indent=2),
+        json.dumps(build_account_export(get_current_user()), indent=2),
         mimetype="application/json",
         headers={"Content-Disposition": "attachment; filename=pod-chronicle-account.json"},
     )
+
+
+@app.route("/api/account/export")
+@api_login_required
+def api_account_export():
+    """The same payload without the browser download headers -- a client saves it."""
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify(build_account_export(user))
 
 
 # -------------------------
@@ -4611,6 +4951,28 @@ def service_worker():
     response.headers["Service-Worker-Allowed"] = "/"
     response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+@app.route("/.well-known/assetlinks.json")
+def android_asset_links():
+    """Digital Asset Links, so Android opens our emailed links in the app.
+
+    Public and unauthenticated by design: Android fetches it with no cookies while
+    verifying the app's claim on this domain, and a redirect to the login page reads
+    to it as a failed verification. The fingerprint is the release signing
+    certificate's public digest -- it is meant to be published, and is what stops any
+    other app from claiming these links.
+    """
+    return jsonify([
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": ANDROID_PACKAGE_NAME,
+                "sha256_cert_fingerprints": [ANDROID_SIGNING_FINGERPRINT],
+            },
+        }
+    ])
 
 
 @app.route("/healthz")
@@ -5723,10 +6085,11 @@ def accept_pod_invite(token):
             db.session.flush()
             record_funnel_event("account_created", user=me, pod=invite.pod)
             verify_url = url_for("verify_email", token=raw_verify, _external=True)
-            send_transactional_email(
+            try_send_transactional_email(
                 me.email,
                 "Verify your EDH Son account",
                 f"Verify your email within 24 hours:\n\n{verify_url}",
+                purpose="email verification",
             )
 
         ensure_membership(invite.pod_id, me.player.id, role=invite.role)
@@ -8371,7 +8734,10 @@ def load_active_game_life_history(token: str | None) -> dict:
             and all(isinstance(v, (int, float)) for v in sample)
         ]
         if len(cleaned) >= 2:
-            result[pid] = cleaned
+            # Cap here too rather than trusting the state writer to have done it.
+            # Today it does, but that invariant lives in a different function, and
+            # anything else that ever writes state_json would bypass it.
+            result[pid] = cleaned[-MAX_LIFE_HISTORY_SAMPLES:]
     return result
 
 
@@ -9129,6 +9495,52 @@ def record_game():
 # -------------------------
 
 
+def _serialize_game_participant(
+    gp: GameParticipant,
+    game: Game,
+    *,
+    commander_damage: dict,
+    life_history: list,
+    deck_tags_cache: dict[int, dict[str, bool]] | None = None,
+) -> dict:
+    """One seat in a finished game, as the game detail screen renders it.
+
+    `monarch`, `poison`, `mmr_delta` and `mechanics` are what the web's narrative view
+    shows and the JSON previously withheld. The `*_url` fields are web paths; a native
+    client should navigate by id instead.
+
+    `commander_damage` and `life_history` are passed in because deriving them needs the
+    calling route's validated player set.
+    """
+    flags = participant_flags_snapshot(gp)
+    return {
+        "player_id": gp.player_id,
+        "player_name": gp.player.name,
+        "deck_id": gp.deck_id,
+        "deck_name": gp.deck.name,
+        "commander": gp.deck.commander_name or gp.deck.commander,
+        "art_url": gp.deck.commander_art_url,
+        "won": game.winner_id == gp.player_id,
+        "seat_position": gp.seat_position,
+        "salt_count": gp.salt_count,
+        "mana_fucked": gp.mana_fucked,
+        "misplayed": gp.misplayed,
+        "monarch": bool(flags["monarch"]),
+        "poison": flags["poison"],
+        # None, not 0: a game that was never rated is a different fact from one that
+        # moved the rating by nothing.
+        "mmr_delta": gp.mmr_delta,
+        "mechanics": derive_deck_mechanics(
+            get_deck_parsed_tags(gp.deck, cache=deck_tags_cache)
+        ),
+        "commander_damage": commander_damage,
+        "life_history": life_history,
+        "player_accent": player_id_to_accent(gp.player_id),
+        "player_url": f"/player/{gp.player_id}",
+        "deck_url": f"/deck/{gp.deck_id}",
+    }
+
+
 def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, bool]] | None = None) -> dict:
     wins = (
         GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
@@ -9158,6 +9570,39 @@ def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, 
     }
 
 
+def deck_mmr_history_points(deck: Deck) -> list[dict]:
+    """The deck's rating over its recent games, trimmed for charting.
+
+    Drops the stored timestamp -- a sparkline plots by game order, not wall clock --
+    and keeps only the newest MAX_MMR_HISTORY_POINTS entries. Malformed rows are
+    skipped rather than raising: this is a display nicety, and a decade-old row with a
+    missing key is no reason to fail the whole deck request.
+    """
+    try:
+        raw = json.loads(deck.mmr_history_json or "[]")
+    except (json.JSONDecodeError, TypeError):
+        app.logger.warning("Deck %s has unparseable mmr_history_json", deck.id)
+        return []
+    if not isinstance(raw, list):
+        return []
+
+    points = []
+    for entry in raw[-MAX_MMR_HISTORY_POINTS:]:
+        if not isinstance(entry, dict):
+            continue
+        mmr_after = entry.get("mmr_after")
+        if isinstance(mmr_after, bool) or not isinstance(mmr_after, int):
+            continue
+        delta = entry.get("delta")
+        game_id = entry.get("game_id")
+        points.append({
+            "mmr": mmr_after,
+            "delta": delta if isinstance(delta, int) and not isinstance(delta, bool) else 0,
+            "game_id": game_id if isinstance(game_id, int) and not isinstance(game_id, bool) else None,
+        })
+    return points
+
+
 def _serialize_deck_detail(deck: Deck) -> dict:
     payload = _serialize_deck_summary(deck)
     participations = (
@@ -9179,6 +9624,8 @@ def _serialize_deck_detail(deck: Deck) -> dict:
             "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
         })
     payload["recent_games"] = recent_games
+    # Detail only: the deck list renders many tiles and does not draw this chart.
+    payload["mmr_history"] = deck_mmr_history_points(deck)
     payload["decklist_text"] = deck.decklist_text or ""
     payload["card_print_prefs"] = json.loads(deck.card_print_prefs_json) if deck.card_print_prefs_json else {}
     payload["custom_commander_art_url"] = deck.custom_commander_art_url or ""
@@ -9222,6 +9669,128 @@ def _serialize_pod_member(membership: PodMembership, current_user: User | None) 
     }
 
 
+def pod_enabled_mechanics(pod: Pod) -> dict[str, bool]:
+    """Which mechanics this pod plays with.
+
+    An absent or empty column means *all* of them. Defaulting to off would silently
+    strip the life counter for every pod that predates this setting, which is the
+    opposite of what an unset value should mean.
+    """
+    try:
+        stored = json.loads(pod.enabled_mechanics_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        app.logger.warning("Pod %s has unparseable enabled_mechanics_json", pod.id)
+        stored = {}
+    if not isinstance(stored, dict):
+        stored = {}
+    return {key: bool(stored.get(key, True)) for key in POD_MECHANIC_KEYS}
+
+
+def pod_scoring(pod: Pod) -> dict:
+    """The pod's scoring config, passed through untouched.
+
+    Read-only for now: nothing in the product consumes it and no schema is documented,
+    so accepting writes would store data with no meaning. See TASK-R33.
+    """
+    try:
+        stored = json.loads(pod.scoring_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return stored if isinstance(stored, dict) else {}
+
+
+def normalize_hex_color(value) -> str | None:
+    """`#rgb` or `#rrggbb` in, lowercase `#rrggbb` out. None when it is not a colour."""
+    if not isinstance(value, str) or not HEX_COLOR_RE.match(value.strip()):
+        return None
+    digits = value.strip().lstrip("#").lower()
+    if len(digits) == 3:
+        digits = "".join(char * 2 for char in digits)
+    return f"#{digits}"
+
+
+def _apply_pod_config(pod: Pod, payload: dict) -> RegistrationProblem | None:
+    """Apply the optional configuration fields of a pod PATCH.
+
+    Absent keys are left alone -- a PATCH that sets a colour must not reset the
+    flavour name. Returns the first problem, or None.
+    """
+    if "scoring" in payload or "scoring_json" in payload:
+        return RegistrationProblem(
+            "scoring", "Pod scoring is not configurable through the API yet.", 400
+        )
+
+    if "flavor_name" in payload:
+        flavor = payload.get("flavor_name")
+        if not isinstance(flavor, str) or not flavor.strip():
+            return RegistrationProblem("flavor_name", "Flavour name is required", 400)
+        if len(flavor.strip()) > MAX_FLAVOR_NAME_LENGTH:
+            return RegistrationProblem(
+                "flavor_name",
+                f"Flavour name must be {MAX_FLAVOR_NAME_LENGTH} characters or fewer",
+                400,
+            )
+        pod.flavor_name = flavor.strip()
+
+    if "primary_color" in payload:
+        color = normalize_hex_color(payload.get("primary_color"))
+        if color is None:
+            return RegistrationProblem(
+                "primary_color", "Use a hex colour such as #ff7a00", 400
+            )
+        pod.primary_color = color
+
+    if "visibility" in payload:
+        visibility = payload.get("visibility")
+        if visibility not in POD_VISIBILITIES:
+            return RegistrationProblem(
+                "visibility",
+                f"Visibility must be one of {', '.join(POD_VISIBILITIES)}",
+                400,
+            )
+        pod.visibility = visibility
+
+    if "timezone" in payload:
+        zone = payload.get("timezone")
+        if not isinstance(zone, str) or not zone.strip():
+            return RegistrationProblem("timezone", "Timezone is required", 400)
+        try:
+            ZoneInfo(zone.strip())
+        except (ZoneInfoNotFoundError, ValueError):
+            return RegistrationProblem("timezone", "Unknown timezone", 400)
+        pod.timezone = zone.strip()
+
+    if "recap_public_by_default" in payload:
+        value = payload.get("recap_public_by_default")
+        if not isinstance(value, bool):
+            return RegistrationProblem(
+                "recap_public_by_default", "Expected true or false", 400
+            )
+        pod.recap_public_by_default = value
+
+    if "enabled_mechanics" in payload:
+        requested = payload.get("enabled_mechanics")
+        if not isinstance(requested, dict):
+            return RegistrationProblem(
+                "enabled_mechanics", "Expected an object of mechanic flags", 400
+            )
+        unknown = sorted(set(requested) - set(POD_MECHANIC_KEYS))
+        if unknown:
+            return RegistrationProblem(
+                "enabled_mechanics", f"Unknown mechanics: {', '.join(unknown)}", 400
+            )
+        if any(not isinstance(v, bool) for v in requested.values()):
+            return RegistrationProblem(
+                "enabled_mechanics", "Mechanic flags must be true or false", 400
+            )
+        # Merged onto the current state so a partial update switches off only what it
+        # names, and stored whole so reads do not depend on the default again.
+        merged = pod_enabled_mechanics(pod) | requested
+        pod.enabled_mechanics_json = json.dumps(merged, separators=(",", ":"), sort_keys=True)
+
+    return None
+
+
 def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: int | None = None) -> dict:
     memberships = (
         PodMembership.query
@@ -9239,6 +9808,13 @@ def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: in
     payload = _serialize_pod_summary(pod, current_user, active_pod_id=active_pod_id)
     payload["members"] = [_serialize_pod_member(membership, current_user) for membership in memberships]
     payload["available_players"] = available_players
+    payload["flavor_name"] = pod.flavor_name
+    payload["primary_color"] = pod.primary_color
+    payload["visibility"] = pod.visibility
+    payload["timezone"] = pod.timezone
+    payload["recap_public_by_default"] = bool(pod.recap_public_by_default)
+    payload["enabled_mechanics"] = pod_enabled_mechanics(pod)
+    payload["scoring"] = pod_scoring(pod)
     return payload
 
 
@@ -9323,6 +9899,87 @@ def _api_deck_owner_id_from_payload(payload: dict, current_user: User) -> int | 
     return current_user.player.id
 
 
+def _authorized_active_game_history(token: str | None, current_user: User) -> dict:
+    """Life history from an active game, but only one the caller actually played in.
+
+    Game tokens are deliberately shareable — the join link is the token — so holding
+    one proves nothing about who you are. Without this check any authenticated caller
+    who has ever seen a token could replay it here and graft that table's real life
+    history onto a game record of their own authoring.
+
+    An unauthorized or unknown token yields {} rather than an error: refusing would
+    turn this endpoint into an oracle for which tokens exist, and a stale token must
+    never block recording a finished game.
+    """
+    if not token:
+        return {}
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return {}
+
+    if active_game_rec.host_user_id == current_user.id:
+        return load_active_game_life_history(token)
+
+    # Not the host — but any device at the table may be the one that records the
+    # result, so a seated participant is equally entitled to the history.
+    caller_player_id = current_user.player.id if current_user.player else None
+    if caller_player_id is None:
+        return {}
+    try:
+        seated = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(seated, list):
+        return {}
+    seated_player_ids = {
+        entry.get("player_id") for entry in seated if isinstance(entry, dict)
+    }
+    if caller_player_id not in seated_player_ids:
+        return {}
+    return load_active_game_life_history(token)
+
+
+def _normalize_life_history(raw) -> tuple[list | None, str | None]:
+    """Validate client-supplied [[timestamp, life], ...] samples.
+
+    Returns (samples, None) or (None, error_message). A history with fewer than two
+    samples is normalized to None: one sample means the life never changed, which
+    matches what load_active_game_life_history() keeps and is not worth charting.
+
+    Over-long histories are capped rather than refused — a long game is not a client
+    error — keeping the most recent samples, as the live-state writer does.
+    """
+    shape_error = "participants.life_history must be a list of [timestamp, life] integer pairs"
+    range_error = "participants.life_history values are out of range"
+    if not isinstance(raw, list):
+        return None, shape_error
+    # Checked before the loop: a million trivial pairs would otherwise all be
+    # validated and then discarded by the truncation below.
+    if len(raw) > MAX_LIFE_HISTORY_SUBMISSION:
+        return None, (
+            f"participants.life_history must contain at most "
+            f"{MAX_LIFE_HISTORY_SUBMISSION} samples"
+        )
+    samples = []
+    for item in raw:
+        if not isinstance(item, list) or len(item) != 2:
+            return None, shape_error
+        timestamp, life = item
+        for value in (timestamp, life):
+            if isinstance(value, bool) or not isinstance(value, int):
+                return None, shape_error
+        # Python ints are arbitrary-precision, so an absurd value passes the type
+        # check and then raises inside json.dumps — a 400 turning into a 500.
+        if not 0 <= timestamp <= MAX_LIFE_HISTORY_TIMESTAMP:
+            return None, range_error
+        if abs(life) > MAX_LIFE_HISTORY_LIFE:
+            return None, range_error
+        samples.append([timestamp, life])
+    if len(samples) < 2:
+        return None, None
+    return samples[-MAX_LIFE_HISTORY_SAMPLES:], None
+
+
 def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[dict | None, tuple[Response, int] | None]:
     participants_raw = payload.get("participants")
     winner_id = payload.get("winner_id")
@@ -9333,6 +9990,7 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
 
     normalized_participants = []
     seen_player_ids = set()
+    participant_life_history_by_player: dict[int, list] = {}
     for index, participant_raw in enumerate(participants_raw):
         if not isinstance(participant_raw, dict):
             return None, (jsonify({"error": "participants must contain objects"}), 400)
@@ -9356,6 +10014,13 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
             seat_position = index + 1
         if not isinstance(seat_position, int) or seat_position < 1 or seat_position > 6:
             return None, (jsonify({"error": "seat_position must be an integer between 1 and 6"}), 400)
+        life_history_raw = participant_raw.get("life_history")
+        if life_history_raw is not None:
+            life_history, life_history_error = _normalize_life_history(life_history_raw)
+            if life_history_error:
+                return None, (jsonify({"error": life_history_error}), 400)
+            if life_history:
+                participant_life_history_by_player[player_id] = life_history
         normalized_participants.append({
             "player_id": player_id,
             "deck_id": deck_id,
@@ -9487,6 +10152,8 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
         "date": game_date,
         "duration_seconds": duration_seconds,
         "participant_flags_by_player": participant_flags_by_player,
+        "participant_life_history_by_player": participant_life_history_by_player,
+        "game_token": payload.get("game_token") if isinstance(payload.get("game_token"), str) else None,
     }, None
 
 
@@ -9529,12 +10196,551 @@ def api_logout():
     return jsonify({"message": "Logged out"})
 
 
+def _json_object_body():
+    """Parse a JSON object body. Returns (data, None) or (None, error_response)."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, (jsonify({"error": "Invalid request body"}), 400)
+    return data, None
+
+
+def _text_field(data: dict, name: str) -> str:
+    """A trimmed string field. Anything that is not a string reads as absent, so a
+    malformed body fails validation instead of raising inside a handler."""
+    value = data.get(name)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _raw_field(data: dict, name: str) -> str:
+    """Like _text_field but keeps surrounding whitespace -- passwords are not trimmed."""
+    value = data.get(name)
+    return value if isinstance(value, str) else ""
+
+
+def _establish_session(user: User) -> None:
+    session["user_id"] = user.id
+    session["username"] = user.username
+    session["display_name"] = user.display_name
+    session["is_admin"] = user.is_admin
+    session["use_sigtaara"] = user.use_sigtaara
+    session["use_light_theme"] = user.use_light_theme
+    session["session_version"] = user.session_version
+    get_active_pod()
+
+
+@app.route("/api/register", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+def api_register():
+    """Create an account, its player, and the pod it owns.
+
+    Unlike the web form, which bounces to a login page, this signs the client in:
+    a phone has nowhere to bounce to. Email verification is still outstanding
+    afterwards and still gates the actions that require it.
+    """
+    data, error = _json_object_body()
+    if error:
+        return error
+    fields = {
+        "username": _text_field(data, "username"),
+        "display_name": _text_field(data, "display_name"),
+        "email": normalize_email(_text_field(data, "email")),
+        "pod_name": _text_field(data, "pod_name"),
+        "password": _raw_field(data, "password"),
+        "confirm": data.get("confirm") if "confirm" in data else None,
+    }
+    problem = validate_registration(fields)
+    if problem:
+        return jsonify({"error": problem.message, "field": problem.field}), problem.status
+
+    user, pod, raw_verification_token = create_account_with_pod(
+        username=fields["username"],
+        display_name=fields["display_name"],
+        email=fields["email"],
+        password=fields["password"],
+        pod_name=fields["pod_name"],
+    )
+    db.session.commit()
+    email_sent = send_email_verification(user, raw_verification_token)
+    _establish_session(user)
+    return jsonify({
+        "user_id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "player_id": user.player.id if user.player else None,
+        "email": user.email,
+        "email_verified": False,
+        # False means the account exists but no email went out -- offer Resend rather
+        # than telling the user to go and check their inbox.
+        "verification_email_sent": email_sent,
+        "pod": {"id": pod.id, "name": pod.name, "slug": pod.slug},
+    }), 201
+
+
+@app.route("/api/password/forgot", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+def api_forgot_password():
+    """Always answers the same. Whether the address is registered is not ours to tell."""
+    data, error = _json_object_body()
+    if error:
+        return error
+    begin_password_reset(normalize_email(_text_field(data, "email")))
+    return jsonify({"message": PASSWORD_RESET_SENT_MESSAGE}), 202
+
+
+@app.route("/api/password/reset", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+def api_reset_password():
+    """The token travels in the body, not the path, so it stays out of access logs
+    and referrers. Unknown and expired tokens are answered identically."""
+    data, error = _json_object_body()
+    if error:
+        return error
+    user = find_password_reset_user(_text_field(data, "token"))
+    if not user:
+        return jsonify({"error": PASSWORD_RESET_INVALID_MESSAGE}), 400
+    password = _raw_field(data, "password")
+    password_error = validate_password_rules(password)
+    if password_error:
+        # The token survives a rejected password so the user can simply try again.
+        return jsonify({"error": password_error, "field": "password"}), 400
+    apply_password_reset(user, password)
+    db.session.commit()
+    session.clear()
+    return jsonify({"message": "Password updated. Sign in with your new password."})
+
+
+@app.route("/api/email/verify", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+def api_verify_email():
+    """POST rather than the web route's GET: an emailed link gets prefetched by
+    mail clients and scanners, and a prefetch must not spend a one-shot token."""
+    data, error = _json_object_body()
+    if error:
+        return error
+    if not consume_email_verification(_text_field(data, "token")):
+        return jsonify({"error": EMAIL_VERIFICATION_INVALID_MESSAGE}), 400
+    db.session.commit()
+    return jsonify({"email_verified": True})
+
+
+@app.route("/api/email/verify/resend", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+@api_login_required
+def api_resend_email_verification():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    if user.email_verified_at:
+        return jsonify({"email_verified": True, "message": "That address is already verified."})
+    if not user.email:
+        return jsonify({"error": "This account has no email address.", "field": "email"}), 400
+    raw_token = issue_email_verification(user)
+    db.session.commit()
+    email_sent = send_email_verification(user, raw_token)
+    return jsonify({
+        "email_verified": False,
+        "verification_email_sent": email_sent,
+        "message": (
+            EMAIL_VERIFICATION_SENT_MESSAGE if email_sent
+            else EMAIL_VERIFICATION_UNSENT_MESSAGE
+        ),
+    }), 202
+
+
+def _clamped_int(value, *, default: int, low: int, high: int) -> int | None:
+    """Read an optional integer setting. None means the caller sent nonsense.
+
+    Absent falls back to the default; out of range is clamped, matching the web form,
+    because a caller asking for 60 days wants the longest we allow, not an error.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return None
+
+
+def _email_verification_required(user: User) -> tuple[dict, int] | None:
+    """Block an action that reaches other people until the address is confirmed.
+
+    Inviting strangers and publishing to the open web both do; playing does not. The
+    `reason` lets a client show its verification banner instead of a bare refusal.
+    """
+    if user.is_admin or user.email_verified_at:
+        return None
+    return (
+        {
+            "error": "Verify your email address first.",
+            "reason": EMAIL_UNVERIFIED_REASON,
+        },
+        403,
+    )
+
+
+def _serialize_pod_invite(invite: PodInvite) -> dict:
+    """Everything about an invite except the token, which exists only in the response
+    to its own creation -- we keep a hash and cannot re-derive it."""
+    return {
+        "id": invite.id,
+        "pod_id": invite.pod_id,
+        "role": invite.role,
+        "usage_limit": invite.usage_limit,
+        "use_count": invite.use_count,
+        "expires_at": invite.expires_at.isoformat(),
+        "created_at": invite.created_at.isoformat(),
+        "revoked": bool(invite.revoked_at),
+        "spent": invite.use_count >= invite.usage_limit,
+    }
+
+
+@app.route("/api/pods/<int:pod_id>/invites", methods=["GET"])
+@api_login_required
+def api_list_pod_invites(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    invites = (
+        PodInvite.query.filter_by(pod_id=pod_id)
+        .order_by(PodInvite.created_at.desc())
+        .all()
+    )
+    return jsonify({"invites": [_serialize_pod_invite(i) for i in invites]})
+
+
+@app.route("/api/pods/<int:pod_id>/invites", methods=["POST"])
+@limiter.limit("20 per hour", methods=["POST"])
+@api_login_required
+def api_create_pod_invite(pod_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    blocked = _email_verification_required(me)
+    if blocked:
+        return jsonify(blocked[0]), blocked[1]
+
+    data, error = _json_object_body()
+    if error:
+        return error
+    expires_days = _clamped_int(
+        data.get("expires_days"),
+        default=DEFAULT_INVITE_EXPIRES_DAYS,
+        low=MIN_INVITE_EXPIRES_DAYS,
+        high=MAX_INVITE_EXPIRES_DAYS,
+    )
+    usage_limit = _clamped_int(
+        data.get("usage_limit"),
+        default=DEFAULT_INVITE_USAGE_LIMIT,
+        low=MIN_INVITE_USAGE_LIMIT,
+        high=MAX_INVITE_USAGE_LIMIT,
+    )
+    if expires_days is None or usage_limit is None:
+        return jsonify({"error": "Invalid invitation settings."}), 400
+
+    role = _text_field(data, "role").lower() or "member"
+    if role not in POD_INVITE_ROLES:
+        role = "member"
+
+    raw_token, token_hash = issue_public_token()
+    invite = PodInvite(
+        token_hash=token_hash,
+        pod_id=pod_id,
+        role=role,
+        expires_at=datetime.utcnow() + timedelta(days=expires_days),
+        usage_limit=usage_limit,
+        created_by_user_id=me.id,
+    )
+    db.session.add(invite)
+    pod = db.session.get(Pod, pod_id)
+    if PodInvite.query.filter_by(pod_id=pod_id).count() == 0:
+        record_funnel_event("first_invite_created", user=me, pod=pod)
+    db.session.commit()
+
+    payload = _serialize_pod_invite(invite)
+    # The only time the raw token is ever returned. A listing cannot repeat it.
+    payload["token"] = raw_token
+    payload["invite_url"] = url_for("accept_pod_invite", token=raw_token, _external=True)
+    return jsonify(payload), 201
+
+
+@app.route("/api/pods/<int:pod_id>/invites/<int:invite_id>/revoke", methods=["POST"])
+@api_login_required
+def api_revoke_pod_invite(pod_id, invite_id):
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    invite = PodInvite.query.filter_by(id=invite_id, pod_id=pod_id).first()
+    if not invite:
+        return jsonify({"error": "Not found"}), 404
+    if not invite.revoked_at:
+        invite.revoked_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(_serialize_pod_invite(invite))
+
+
+@app.route("/api/invite/<token>", methods=["GET"])
+def api_preview_invite(token):
+    """What a person sees before deciding to join. Public: the whole point of an
+    invite link is that it works before you have an account."""
+    invite, _ = resolve_pod_invite(token)
+    if not invite:
+        return jsonify({"error": INVITE_UNAVAILABLE_MESSAGE}), 410
+    return jsonify({
+        "pod": {"id": invite.pod.id, "name": invite.pod.name, "slug": invite.pod.slug},
+        "role": invite.role,
+        "expires_at": invite.expires_at.isoformat(),
+        "uses_remaining": max(0, invite.usage_limit - invite.use_count),
+    })
+
+
+@app.route("/api/invite/<token>", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+@api_login_required
+def api_accept_invite(token):
+    """Join the pod the invite names.
+
+    Requires a session: unlike the web route, which can register someone inline, a
+    client already has /api/register and should sign the person up first, then accept.
+    """
+    me = get_current_user()
+    if not me:
+        return jsonify({"error": "Unauthorized"}), 401
+    invite, _ = resolve_pod_invite(token)
+    if not invite:
+        return jsonify({"error": INVITE_UNAVAILABLE_MESSAGE}), 410
+
+    if not me.player:
+        me.player = Player(name=me.display_name)
+        db.session.flush()
+
+    existing = PodMembership.query.filter_by(
+        pod_id=invite.pod_id, player_id=me.player.id
+    ).first()
+    already_joined = existing is not None
+    if not already_joined:
+        ensure_membership(invite.pod_id, me.player.id, role=invite.role)
+        # Only a real join spends a use; re-opening the link on the same account is
+        # idempotent, so a shared device does not burn the invite twice.
+        invite.use_count += 1
+        record_funnel_event("invite_accepted", user=me, pod=invite.pod)
+    session["active_pod_id"] = invite.pod_id
+    db.session.commit()
+    return jsonify({
+        "pod": {"id": invite.pod.id, "name": invite.pod.name, "slug": invite.pod.slug},
+        "role": invite.role,
+        "already_member": already_joined,
+    })
+
+
+@app.route("/api/pods/<int:pod_id>/guests", methods=["POST"])
+@api_login_required
+def api_create_guest_player(pod_id):
+    """Add a player who has no account -- someone who turned up to one game night.
+
+    Deliberately scoped to this pod only, with no email, no login, and no way to
+    reach other pods: it is a record about a person who never agreed to anything.
+    """
+    me = get_current_user()
+    if not can_manage_pod(me, pod_id):
+        return jsonify({"error": "Forbidden"}), 403
+    data, error = _json_object_body()
+    if error:
+        return error
+    name = _text_field(data, "name")
+    if not name:
+        return jsonify({"error": "Guest name is required.", "field": "name"}), 400
+    if len(name) > MAX_GUEST_NAME_LENGTH:
+        return jsonify({
+            "error": f"Guest name must be {MAX_GUEST_NAME_LENGTH} characters or fewer",
+            "field": "name",
+        }), 400
+
+    player = Player(name=name)
+    db.session.add(player)
+    db.session.flush()
+    ensure_membership(pod_id, player.id)
+    db.session.commit()
+    return jsonify({
+        "player_id": player.id,
+        "name": player.name,
+        "pod_id": pod_id,
+        "is_guest": True,
+    }), 201
+
+
+def _serialize_game_share(share: GameShare) -> dict:
+    return {
+        "id": share.id,
+        "game_id": share.game_id,
+        "show_player_names": share.show_player_names,
+        "show_deck_names": share.show_deck_names,
+        "created_at": share.created_at.isoformat(),
+        "revoked": bool(share.revoked_at),
+    }
+
+
+@app.route("/api/games/<int:game_id>/shares", methods=["GET"])
+@api_login_required
+def api_list_game_shares(game_id):
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        return jsonify({"error": "Not found"}), 404
+    shares = (
+        GameShare.query.filter_by(game_id=game_id)
+        .order_by(GameShare.created_at.desc())
+        .all()
+    )
+    return jsonify({"shares": [_serialize_game_share(s) for s in shares]})
+
+
+@app.route("/api/games/<int:game_id>/shares", methods=["POST"])
+@limiter.limit("20 per hour", methods=["POST"])
+@api_login_required
+def api_publish_game_recap(game_id):
+    """Mint an unauthenticated URL for one game.
+
+    Two switches decide how much of other people's data goes out: without
+    `show_player_names` the seats become "Player 1", "Player 2"; without
+    `show_deck_names` the decks and commanders are withheld. Both default to off, so
+    a caller that sends nothing publishes the least it can rather than the most.
+    """
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        return jsonify({"error": "Not found"}), 404
+    # Reading is a pod matter; publishing is the participants'. An admin can still
+    # act, since they can already reach everything.
+    if not me.is_admin and not played_in_game(me, game):
+        return jsonify({
+            "error": "Only someone who played in this game can publish it.",
+            "reason": NOT_A_PARTICIPANT_REASON,
+        }), 403
+    blocked = _email_verification_required(me)
+    if blocked:
+        return jsonify(blocked[0]), blocked[1]
+
+    data, error = _json_object_body()
+    if error:
+        return error
+
+    raw_token, token_hash = issue_public_token()
+    share = GameShare(
+        token_hash=token_hash,
+        game_id=game.id,
+        created_by_user_id=me.id,
+        show_player_names=bool(data.get("show_player_names")),
+        show_deck_names=bool(data.get("show_deck_names")),
+    )
+    db.session.add(share)
+    db.session.commit()
+
+    payload = _serialize_game_share(share)
+    payload["token"] = raw_token
+    payload["share_url"] = url_for("public_recap", token=raw_token, _external=True)
+    return jsonify(payload), 201
+
+
+@app.route("/api/games/<int:game_id>/shares/<int:share_id>/revoke", methods=["POST"])
+@api_login_required
+def api_revoke_game_recap(game_id, share_id):
+    me = get_current_user()
+    game = db.session.get(Game, game_id)
+    if not game or not can_access_game(me, game):
+        return jsonify({"error": "Not found"}), 404
+    share = GameShare.query.filter_by(id=share_id, game_id=game_id).first()
+    if not share:
+        return jsonify({"error": "Not found"}), 404
+    if not share.revoked_at:
+        share.revoked_at = datetime.utcnow()
+        db.session.commit()
+    return jsonify(_serialize_game_share(share))
+
+
+@app.route("/api/recap/<token>", methods=["GET"])
+def api_public_recap(token):
+    """The JSON twin of /r/<token>. Public by design, and shaped by the share's
+    own switches -- never richer than what the web page would show."""
+    share = GameShare.query.filter_by(token_hash=hash_public_token(token)).first()
+    if not share or share.revoked_at or not share.game:
+        return jsonify({"error": "Not found"}), 404
+    game = share.game
+    parts = (
+        GameParticipant.query.filter_by(game_id=game.id)
+        .order_by(GameParticipant.seat_position.asc())
+        .all()
+    )
+    participants = []
+    for index, part in enumerate(parts, start=1):
+        flags = participant_flags_snapshot(part)
+        participants.append({
+            "player": part.player.name if share.show_player_names else f"Player {index}",
+            "deck": (
+                (part.deck.name if part.deck else "Unknown deck")
+                if share.show_deck_names else "Private deck"
+            ),
+            "commander": (
+                ((part.deck.commander_name or part.deck.commander) if part.deck else None)
+                if share.show_deck_names else None
+            ),
+            "won": part.player_id == game.winner_id,
+            "mmr_delta": part.mmr_delta,
+            "salt_count": participant_salt_count(flags),
+            "life_delta": part.life_delta_total or 0,
+        })
+    return jsonify({
+        "game": {
+            "id": game.id,
+            "date": game.date.isoformat() if game.date else None,
+            "win_type": game.win_type,
+            "ending_turn": game.ending_turn,
+        },
+        "pod": {"name": game.pod.name} if game.pod else None,
+        "participants": participants,
+        "show_player_names": share.show_player_names,
+        "show_deck_names": share.show_deck_names,
+    })
+
+
+@app.route("/api/capabilities")
+def api_capabilities():
+    """Advertise what this server supports so clients can degrade deliberately.
+
+    Public on purpose: a client decides whether to offer a signup screen before it
+    has a session. A client seeing 404 here should assume the pre-2.0 baseline.
+
+    Anonymous callers get only PUBLIC_API_FEATURE_KEYS. The full set — including
+    features that are not built yet — is for signed-in clients; an unshipped roadmap
+    is not something to hand to anyone who asks.
+
+    Flip a flag to True in the same commit that lands its endpoint — advertising a
+    capability that does not exist is worse than not advertising it at all.
+    """
+    if session.get("user_id"):
+        features = dict(API_FEATURES)
+    else:
+        features = {key: API_FEATURES[key] for key in PUBLIC_API_FEATURE_KEYS}
+    return jsonify({
+        "contract_version": API_CONTRACT_VERSION,
+        "features": features,
+    })
+
+
 @app.route("/api/me")
 @api_login_required
 def api_me():
     u = get_current_user()
     if not u:
         return jsonify({"error": "Unauthorized"}), 401
+    owned_pod_ids = [
+        pod_id
+        for (pod_id,) in Pod.query.with_entities(Pod.id)
+        .filter_by(owner_user_id=u.id)
+        .order_by(Pod.id.asc())
+        .all()
+    ]
     return jsonify({
         "user_id": u.id,
         "username": u.username,
@@ -9542,6 +10748,13 @@ def api_me():
         "is_admin": u.is_admin,
         "player_id": u.player.id if u.player else None,
         "can_access_registration_requests": can_access_registration_request_queue(u),
+        "email": u.email,
+        "email_verified": bool(u.email_verified_at),
+        # The client mirrors this into its stored session so it can tell a revoked
+        # session from a network failure without waiting for the next 401.
+        "session_version": u.session_version,
+        "owned_pod_ids": owned_pod_ids,
+        "use_sigtaara": u.use_sigtaara,
     })
 
 
@@ -10334,6 +11547,11 @@ def api_pod_detail(pod_id):
         if duplicate:
             return jsonify({"error": "A pod with that name already exists."}), 409
 
+        problem = _apply_pod_config(pod, payload)
+        if problem:
+            db.session.rollback()
+            return jsonify({"error": problem.message, "field": problem.field}), problem.status
+
         pod.name = new_name
         db.session.commit()
         return jsonify(_serialize_pod_detail(pod, current_user, active_pod_id=active_pod.id if active_pod else None))
@@ -10728,10 +11946,24 @@ def api_games_list():
         db.session.add(game)
         db.session.flush()
 
+        # Life history has two sources. A server-backed table already accumulated
+        # samples under its token, so the client need only name it; a local/offline
+        # counter has to send its own. Explicit samples win — they are the client's
+        # own record of the game it actually ran.
+        life_history_by_player = dict(parsed_payload["participant_life_history_by_player"])
+        adopted_history = _authorized_active_game_history(parsed_payload["game_token"], current_user)
+        for player_id_str, samples in adopted_history.items():
+            try:
+                adopted_player_id = int(player_id_str)
+            except (TypeError, ValueError):
+                continue
+            life_history_by_player.setdefault(adopted_player_id, samples)
+
         participant_rows = []
         for participant in parsed_payload["participants"]:
             participant_flags_json = parsed_payload["participant_flags_by_player"].get(participant["player_id"])
             hot_fields = participant_hot_fields_from_flags(participant_flags_json)
+            participant_life_history = life_history_by_player.get(participant["player_id"])
             row = GameParticipant(
                 game_id=game.id,
                 player_id=participant["player_id"],
@@ -10742,6 +11974,7 @@ def api_games_list():
                 mana_fucked=bool(hot_fields["mana_fucked"]),
                 misplayed=bool(hot_fields["misplayed"]),
                 life_delta_total=int(hot_fields["life_delta_total"]),
+                life_history_json=json.dumps(participant_life_history) if participant_life_history else None,
             )
             db.session.add(row)
             participant_rows.append(row)
@@ -10854,6 +12087,21 @@ def api_game_detail(game_id):
         sanitized_card_state = sanitize_card_state_payload(payload.get("card_state", {}), valid_player_ids) or {}
         return sanitized_card_state.get("commander_damage", {})
 
+    def life_history_for(participant: GameParticipant) -> list:
+        """[[timestamp, life], ...], or [] when the game recorded none.
+
+        Always a list so a client can chart it without a null check.
+        """
+        if not participant.life_history_json:
+            return []
+        try:
+            loaded = json.loads(participant.life_history_json)
+        except json.JSONDecodeError:
+            return []
+        return loaded if isinstance(loaded, list) else []
+
+    # Shared across seats: several may be playing the same deck.
+    detail_deck_tags_cache: dict[int, dict[str, bool]] = {}
     return jsonify({
         "id": game.id,
         "date": game.date.isoformat(),
@@ -10864,23 +12112,13 @@ def api_game_detail(game_id):
         "starting_player": {"id": game.starting_player_id, "name": game.starting_player.name} if game.starting_player else None,
         "full_page_url": f"/games/{game.id}",
         "participants": [
-            {
-                "player_id": gp.player_id,
-                "player_name": gp.player.name,
-                "deck_id": gp.deck_id,
-                "deck_name": gp.deck.name,
-                "commander": gp.deck.commander_name or gp.deck.commander,
-                "art_url": gp.deck.commander_art_url,
-                "won": game.winner_id == gp.player_id,
-                "seat_position": gp.seat_position,
-                "salt_count": gp.salt_count,
-                "mana_fucked": gp.mana_fucked,
-                "misplayed": gp.misplayed,
-                "commander_damage": commander_damage_for(gp),
-                "player_accent": player_id_to_accent(gp.player_id),
-                "player_url": f"/player/{gp.player_id}",
-                "deck_url": f"/deck/{gp.deck_id}",
-            }
+            _serialize_game_participant(
+                gp,
+                game,
+                commander_damage=commander_damage_for(gp),
+                life_history=life_history_for(gp),
+                deck_tags_cache=detail_deck_tags_cache,
+            )
             for gp in parts
         ],
     })

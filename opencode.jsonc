@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "@hueyexe/opencode-ensemble@0.16.1"
+  ],
+  "permission": {
+    "external_directory": {
+      "~/.local/share/opencode/worktree/**": "allow"
+    }
+  }
+}
