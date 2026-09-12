@@ -149,19 +149,21 @@ class CapabilitiesEndpointTests(unittest.TestCase):
             "search", "compare", "mmr", "life_history",
             "registration", "password_reset", "email_verification",
             "pod_invites", "guest_players", "game_shares",
+            "pod_config", "account_export",
         )
         for key in shipped:
             self.assertTrue(body["features"][key], f"'{key}' is implemented today")
 
-    def test_unimplemented_features_report_false(self):
-        """Flip these to true in the same commit that lands the endpoint."""
+    def test_every_advertised_feature_is_actually_shipped(self):
+        """Every flag is now true. A new flag starts false and flips in the commit
+        that lands its endpoint -- see the git history of this file for the pattern."""
         _, body = self._authenticated()
-        for key in ("pod_config", "account_export"):
-            self.assertFalse(
-                body["features"][key],
-                f"'{key}' has no JSON API yet — advertising it true would make "
-                "clients call an endpoint that does not exist",
-            )
+        unshipped = sorted(k for k, v in body["features"].items() if not v)
+        self.assertEqual(
+            unshipped, [],
+            f"these advertise nothing: {unshipped}. A false flag is fine, but it must "
+            "correspond to an endpoint that genuinely does not exist yet.",
+        )
 
     def test_public_flags_are_explicit_false_not_omitted(self):
         """An explicit false distinguishes 'off here' from 'server predates it'."""

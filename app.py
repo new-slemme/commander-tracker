@@ -16,6 +16,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from collections import namedtuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from datetime import datetime, timedelta
 import hashlib
@@ -381,6 +382,23 @@ MAX_LIFE_HISTORY_SUBMISSION = MAX_LIFE_HISTORY_SAMPLES * 20
 # recent trend, so the API serves the newest slice rather than the whole column.
 MAX_MMR_HISTORY_POINTS = 60
 
+# Per-pod configuration. These columns existed unused for a long time; the shapes below
+# are the contract, defined with the JSON API rather than mirrored from a web form.
+POD_MECHANIC_KEYS = (
+    "monarch",
+    "initiative",
+    "citys_blessing",
+    "poison",
+    "energy",
+    "experience",
+)
+
+# private: members only. pod: anyone with a link to the pod. public: listed publicly.
+POD_VISIBILITIES = ("private", "pod", "public")
+
+MAX_FLAVOR_NAME_LENGTH = 100
+HEX_COLOR_RE = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
 # Contract advertised by GET /api/capabilities. Bump when the JSON contract changes
 # in a way a client must branch on; add a feature flag for anything a client would
 # otherwise have to discover by calling an endpoint and interpreting a 404.
@@ -410,8 +428,8 @@ API_FEATURES = {
     "pod_invites": True,
     "guest_players": True,
     "game_shares": True,
-    "pod_config": False,
-    "account_export": False,
+    "pod_config": True,
+    "account_export": True,
 }
 
 # Lifetimes of the single-use tokens mailed out during onboarding. Short enough
@@ -4823,10 +4841,16 @@ def profile():
     return render_template("profile.html", user=u)
 
 
-@app.route("/account/export")
-@login_required
-def account_export():
-    u = get_current_user()
+def build_account_export(u: User) -> dict:
+    """Everything this account holds, for a GDPR data request.
+
+    Shared by the web download and the JSON API so the two cannot drift and tell a
+    user different things depending on where they asked. Scoped to this account only:
+    an export is exactly where over-fetching becomes a data leak.
+
+    An account can exist without a Player row (freshly approved, never played), which
+    is why the deck and game lookups are guarded rather than assumed.
+    """
     player = u.player
     pod_rows = get_accessible_pods(u)
     decks = Deck.query.filter_by(player_id=player.id).all() if player else []
@@ -4872,11 +4896,27 @@ def account_export():
             for part in participations
         ],
     }
+    return payload
+
+
+@app.route("/account/export")
+@login_required
+def account_export():
     return Response(
-        json.dumps(payload, indent=2),
+        json.dumps(build_account_export(get_current_user()), indent=2),
         mimetype="application/json",
         headers={"Content-Disposition": "attachment; filename=pod-chronicle-account.json"},
     )
+
+
+@app.route("/api/account/export")
+@api_login_required
+def api_account_export():
+    """The same payload without the browser download headers -- a client saves it."""
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    return jsonify(build_account_export(user))
 
 
 # -------------------------
@@ -9629,6 +9669,128 @@ def _serialize_pod_member(membership: PodMembership, current_user: User | None) 
     }
 
 
+def pod_enabled_mechanics(pod: Pod) -> dict[str, bool]:
+    """Which mechanics this pod plays with.
+
+    An absent or empty column means *all* of them. Defaulting to off would silently
+    strip the life counter for every pod that predates this setting, which is the
+    opposite of what an unset value should mean.
+    """
+    try:
+        stored = json.loads(pod.enabled_mechanics_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        app.logger.warning("Pod %s has unparseable enabled_mechanics_json", pod.id)
+        stored = {}
+    if not isinstance(stored, dict):
+        stored = {}
+    return {key: bool(stored.get(key, True)) for key in POD_MECHANIC_KEYS}
+
+
+def pod_scoring(pod: Pod) -> dict:
+    """The pod's scoring config, passed through untouched.
+
+    Read-only for now: nothing in the product consumes it and no schema is documented,
+    so accepting writes would store data with no meaning. See TASK-R33.
+    """
+    try:
+        stored = json.loads(pod.scoring_json or "{}")
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return stored if isinstance(stored, dict) else {}
+
+
+def normalize_hex_color(value) -> str | None:
+    """`#rgb` or `#rrggbb` in, lowercase `#rrggbb` out. None when it is not a colour."""
+    if not isinstance(value, str) or not HEX_COLOR_RE.match(value.strip()):
+        return None
+    digits = value.strip().lstrip("#").lower()
+    if len(digits) == 3:
+        digits = "".join(char * 2 for char in digits)
+    return f"#{digits}"
+
+
+def _apply_pod_config(pod: Pod, payload: dict) -> RegistrationProblem | None:
+    """Apply the optional configuration fields of a pod PATCH.
+
+    Absent keys are left alone -- a PATCH that sets a colour must not reset the
+    flavour name. Returns the first problem, or None.
+    """
+    if "scoring" in payload or "scoring_json" in payload:
+        return RegistrationProblem(
+            "scoring", "Pod scoring is not configurable through the API yet.", 400
+        )
+
+    if "flavor_name" in payload:
+        flavor = payload.get("flavor_name")
+        if not isinstance(flavor, str) or not flavor.strip():
+            return RegistrationProblem("flavor_name", "Flavour name is required", 400)
+        if len(flavor.strip()) > MAX_FLAVOR_NAME_LENGTH:
+            return RegistrationProblem(
+                "flavor_name",
+                f"Flavour name must be {MAX_FLAVOR_NAME_LENGTH} characters or fewer",
+                400,
+            )
+        pod.flavor_name = flavor.strip()
+
+    if "primary_color" in payload:
+        color = normalize_hex_color(payload.get("primary_color"))
+        if color is None:
+            return RegistrationProblem(
+                "primary_color", "Use a hex colour such as #ff7a00", 400
+            )
+        pod.primary_color = color
+
+    if "visibility" in payload:
+        visibility = payload.get("visibility")
+        if visibility not in POD_VISIBILITIES:
+            return RegistrationProblem(
+                "visibility",
+                f"Visibility must be one of {', '.join(POD_VISIBILITIES)}",
+                400,
+            )
+        pod.visibility = visibility
+
+    if "timezone" in payload:
+        zone = payload.get("timezone")
+        if not isinstance(zone, str) or not zone.strip():
+            return RegistrationProblem("timezone", "Timezone is required", 400)
+        try:
+            ZoneInfo(zone.strip())
+        except (ZoneInfoNotFoundError, ValueError):
+            return RegistrationProblem("timezone", "Unknown timezone", 400)
+        pod.timezone = zone.strip()
+
+    if "recap_public_by_default" in payload:
+        value = payload.get("recap_public_by_default")
+        if not isinstance(value, bool):
+            return RegistrationProblem(
+                "recap_public_by_default", "Expected true or false", 400
+            )
+        pod.recap_public_by_default = value
+
+    if "enabled_mechanics" in payload:
+        requested = payload.get("enabled_mechanics")
+        if not isinstance(requested, dict):
+            return RegistrationProblem(
+                "enabled_mechanics", "Expected an object of mechanic flags", 400
+            )
+        unknown = sorted(set(requested) - set(POD_MECHANIC_KEYS))
+        if unknown:
+            return RegistrationProblem(
+                "enabled_mechanics", f"Unknown mechanics: {', '.join(unknown)}", 400
+            )
+        if any(not isinstance(v, bool) for v in requested.values()):
+            return RegistrationProblem(
+                "enabled_mechanics", "Mechanic flags must be true or false", 400
+            )
+        # Merged onto the current state so a partial update switches off only what it
+        # names, and stored whole so reads do not depend on the default again.
+        merged = pod_enabled_mechanics(pod) | requested
+        pod.enabled_mechanics_json = json.dumps(merged, separators=(",", ":"), sort_keys=True)
+
+    return None
+
+
 def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: int | None = None) -> dict:
     memberships = (
         PodMembership.query
@@ -9646,6 +9808,13 @@ def _serialize_pod_detail(pod: Pod, current_user: User | None, active_pod_id: in
     payload = _serialize_pod_summary(pod, current_user, active_pod_id=active_pod_id)
     payload["members"] = [_serialize_pod_member(membership, current_user) for membership in memberships]
     payload["available_players"] = available_players
+    payload["flavor_name"] = pod.flavor_name
+    payload["primary_color"] = pod.primary_color
+    payload["visibility"] = pod.visibility
+    payload["timezone"] = pod.timezone
+    payload["recap_public_by_default"] = bool(pod.recap_public_by_default)
+    payload["enabled_mechanics"] = pod_enabled_mechanics(pod)
+    payload["scoring"] = pod_scoring(pod)
     return payload
 
 
@@ -11377,6 +11546,11 @@ def api_pod_detail(pod_id):
         duplicate = Pod.query.filter(Pod.id != pod_id, Pod.name == new_name).first()
         if duplicate:
             return jsonify({"error": "A pod with that name already exists."}), 409
+
+        problem = _apply_pod_config(pod, payload)
+        if problem:
+            db.session.rollback()
+            return jsonify({"error": problem.message, "field": problem.field}), problem.status
 
         pod.name = new_name
         db.session.commit()

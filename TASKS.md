@@ -404,6 +404,29 @@ scope in `INIT.md`; all of these are judgment calls at this scale, not violation
 
 ---
 
+## P2 — Deferred product decisions (added 2026-09-12)
+
+### [ ] TASK-R33 — `Pod.scoring_json` has no schema and no consumer  `[opus]`
+- **Where:** `app.py` `Pod.scoring_json`, `pod_scoring()`, `_apply_pod_config()`.
+- **Situation:** the column has existed since the SaaS foundation work but nothing anywhere
+  reads it, there is no web UI for it, and no schema is written down. Phase 6 exposed it
+  read-only on `GET /api/pods/{id}` (it round-trips whatever is stored) and made `PATCH`
+  refuse it with `400 field: "scoring"`.
+- **Why not just accept writes:** storing arbitrary JSON that nothing interprets is a sink,
+  not a feature. Shipping a settings screen for it would have meant inventing a scoring
+  system and presenting it as parity with the web, which has none.
+- **What is needed first:** decide what per-pod scoring actually means for this product —
+  points per win, per elimination, tie-breaks, whether it feeds MMR or sits beside it — then
+  the schema, validation, and UI follow from that. It is a product question, not a coding one.
+- **If the answer is "nothing":** drop the column in a migration rather than leaving a dormant
+  field that reads like an unfinished feature.
+
+Note: `enabled_mechanics_json` was in the same dormant state and *was* implemented in Phase 6,
+because its meaning is unambiguous — the six mechanics already exist as `POD_MECHANIC_KEYS`
+and `derive_deck_mechanics()`. Scoring is the one that needed a decision.
+
+---
+
 ## Notes for whoever picks these up
 - Test suite baseline: `40 passed, 8 failed`. Of the 8 failures, only
   `test_apk_release.py::…stale` is a real app bug (TASK-R12). The other 7 are test-harness issues

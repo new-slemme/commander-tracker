@@ -190,6 +190,7 @@ Complete and machine-checked. `auth` values:
 | `POST` | `/api/games/{game_id}/shares` | auth |
 | `POST` | `/api/games/{game_id}/shares/{share_id}/revoke` | auth |
 | `GET` | `/api/recap/{token}` | public |
+| `GET` | `/api/account/export` | auth |
 | `POST` | `/api/pods/{pod_id}/retire` | admin |
 | `POST` | `/api/pods/{pod_id}/restore` | admin |
 | `POST` | `/api/pods/{pod_id}/members` | auth |
@@ -261,7 +262,7 @@ Signed in, the full set:
     "registration": true, "password_reset": true, "email_verification": true,
     "search": true, "compare": true, "mmr": true,
     "life_history": true, "pod_invites": true, "guest_players": true,
-    "game_shares": true, "pod_config": false, "account_export": false
+    "game_shares": true, "pod_config": true, "account_export": true
   }
 }
 ```
@@ -835,6 +836,51 @@ Detail adds `members` and `available_players`. `GET /api/pods` returns
 
 ---
 
+#### Pod configuration
+
+`GET /api/pods/{pod_id}` carries the pod's branding and rules alongside its members:
+
+```json
+{
+  "flavor_name": "Saltmine",
+  "primary_color": "#ff7a00",
+  "visibility": "private",
+  "timezone": "UTC",
+  "recap_public_by_default": false,
+  "enabled_mechanics": {
+    "monarch": true, "initiative": true, "citys_blessing": true,
+    "poison": true, "energy": true, "experience": true
+  },
+  "scoring": {}
+}
+```
+
+`PATCH /api/pods/{pod_id}` accepts all of these except `scoring`, and requires
+`can_manage_pod`. `name` is still required; **every other field is optional and an omitted key
+is left untouched**, so setting a colour does not reset the flavour name.
+
+| Field | Accepted |
+|---|---|
+| `flavor_name` | non-empty, ≤ 100 characters |
+| `primary_color` | `#rgb` or `#rrggbb`; normalised to lowercase `#rrggbb` |
+| `visibility` | `private`, `pod`, or `public` |
+| `timezone` | any IANA zone name, validated against the system database |
+| `recap_public_by_default` | `true` / `false` |
+| `enabled_mechanics` | object of the six known mechanic keys to booleans |
+
+Rejections are `400` with a `field`, as elsewhere.
+
+**`enabled_mechanics` defaults to all true.** An empty stored value means "every mechanic",
+not "none" — defaulting to off would silently strip the life counter for every pod that
+predates the setting. A partial update merges onto the current state, so sending
+`{"poison": false}` switches off poison and leaves the rest alone.
+
+**`scoring` is read-only.** It round-trips whatever is stored but `PATCH` refuses to write it
+(`400`, `field: "scoring"`): nothing in the product consumes it and no schema is documented, so
+accepting arbitrary writes would store data with no meaning. See `TASKS.md` TASK-R33.
+
+---
+
 ### 5.8a Invites
 
 All three management endpoints require `can_manage_pod` (podmaster or admin) and answer `403`
@@ -1038,6 +1084,30 @@ in that order, so a bystander who is also unverified is told they did not play.
 `403` with that `reason`. Branch on `reason` rather than the message: it means "show the
 verification banner and offer Resend", not "this user lacks permission". Administrators are
 exempt. Playing, recording games, and everything else stay available while unverified.
+
+---
+
+### 5.8e Account export
+
+#### `GET /api/account/export` · auth
+
+Everything the signed-in account holds, for a data request. Same payload as the web
+`/account/export` download, built by the same code so the two cannot drift — but returned as
+plain JSON with **no** `Content-Disposition`, since a client saves it itself.
+
+```json
+{
+  "exported_at": "2026-09-12T18:00:00Z",
+  "account": { "username": "alice", "display_name": "Alice", "email": "alice@example.com",
+               "created_at": "...", "email_verified_at": "..." },
+  "pods":  [ { "id": 4, "name": "Friday Crew", "slug": "friday-crew", "timezone": "UTC" } ],
+  "decks": [ { "id": 9, "name": "Atraxa", "commander": "...", "decklist": "...", "mmr": 1040 } ],
+  "games": [ { "id": 17, "date": "...", "pod_id": 4, "deck_id": 9, "won": true, "mmr_delta": 12 } ]
+}
+```
+
+Scoped to this account only — its own decks and its own participations. An account with no
+`Player` row yet (approved but never played) exports successfully with empty `decks` and `games`.
 
 ---
 
