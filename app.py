@@ -15,6 +15,7 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from collections import namedtuple
 from pathlib import Path
 from datetime import datetime, timedelta
 import hashlib
@@ -354,6 +355,67 @@ MAX_PER_PLAYER_TURN_STATS = 500
 # Life-history sampling for the in-game life graph: one [timestamp, life]
 # sample per actual life change, capped per player so state_json stays bounded.
 MAX_LIFE_HISTORY_SAMPLES = 120
+
+# Sanity bounds for client-supplied samples. Life can legitimately go negative in
+# Commander, and well past 40 upward, but not by these margins.
+MAX_LIFE_HISTORY_TIMESTAMP = 2 ** 31 - 1
+MAX_LIFE_HISTORY_LIFE = 100_000
+
+# Contract advertised by GET /api/capabilities. Bump when the JSON contract changes
+# in a way a client must branch on; add a feature flag for anything a client would
+# otherwise have to discover by calling an endpoint and interpreting a 404.
+API_CONTRACT_VERSION = 1
+
+# Flags an anonymous caller legitimately needs: they decide whether the sign-in
+# screen offers "Create account" and "Forgot password". Each mirrors a web route
+# (/register, /forgot-password, /verify-email/<token>) that is already publicly
+# reachable, so publishing them reveals nothing a browser could not discover.
+# Everything else is only actionable once signed in and stays behind the session.
+PUBLIC_API_FEATURE_KEYS = (
+    "registration",
+    "password_reset",
+    "email_verification",
+)
+
+API_FEATURES = {
+    # Shipped
+    "search": True,
+    "compare": True,
+    "mmr": True,
+    "life_history": True,
+    "registration": True,
+    "password_reset": True,
+    "email_verification": True,
+    # Not yet exposed as JSON — see edh-son-android/INTEGRATION-PLAN.md
+    "pod_invites": False,
+    "guest_players": False,
+    "game_shares": False,
+    "pod_config": False,
+    "account_export": False,
+}
+
+# Lifetimes of the single-use tokens mailed out during onboarding. Short enough
+# that a token found in an old inbox is usually already dead.
+EMAIL_VERIFICATION_TTL_HOURS = 24
+PASSWORD_RESET_TTL_HOURS = 1
+
+EMAIL_PATTERN = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
+
+# One wording for "we may or may not have mailed you", and one for "that token is
+# no good". Both are deliberately incurious: varying them by whether the account
+# or the token exists turns these endpoints into enumeration oracles.
+PASSWORD_RESET_SENT_MESSAGE = "If that email is registered, a reset link has been sent."
+PASSWORD_RESET_INVALID_MESSAGE = "That reset link is invalid or expired."
+EMAIL_VERIFICATION_INVALID_MESSAGE = "That verification link is invalid or expired."
+EMAIL_VERIFICATION_SENT_MESSAGE = "Verification email sent. Check your inbox."
+
+# Digital Asset Links. Overridable so a fork signing with its own key can point at
+# its own certificate without editing code.
+ANDROID_PACKAGE_NAME = os.getenv("ANDROID_PACKAGE_NAME", "de.slemme.edhcompanion")
+ANDROID_SIGNING_FINGERPRINT = os.getenv(
+    "ANDROID_SIGNING_FINGERPRINT",
+    "57:6C:D0:76:69:FC:AD:35:45:1D:5B:8D:C3:A1:64:52:8B:2E:2E:82:E6:06:39:FE:50:BC:B6:5A:EB:29:A0:07",
+)
 
 DECK_TAGS_VERSION = 2
 KNOWN_DECK_TAG_KEYS = (
@@ -3572,6 +3634,171 @@ def record_funnel_event(
     )
 
 
+# -------------------------
+# Onboarding (shared by the web forms and the JSON API)
+# -------------------------
+
+REGISTRATION_REQUIRED_FIELDS = ("username", "display_name", "email", "pod_name", "password")
+REGISTRATION_INCOMPLETE_MESSAGE = (
+    "Username, email, display name, pod name, and password are required"
+)
+
+# `status` lets the JSON API answer 409 for a collision and 400 for bad input while
+# the web form, which only ever flashes the message, ignores it.
+RegistrationProblem = namedtuple("RegistrationProblem", "field message status")
+
+
+def validate_registration(fields: dict) -> RegistrationProblem | None:
+    """Return the first problem with a registration attempt, or None if it is sound.
+
+    Order matches what a person filling the form would want to fix first, and is
+    the same for both entry points so the web and the app cannot drift apart.
+    """
+    for name in REGISTRATION_REQUIRED_FIELDS:
+        if not fields.get(name):
+            return RegistrationProblem(name, REGISTRATION_INCOMPLETE_MESSAGE, 400)
+    if not EMAIL_PATTERN.fullmatch(fields["email"]):
+        return RegistrationProblem("email", "Enter a valid email address", 400)
+    if fields.get("confirm") is not None and fields["password"] != fields["confirm"]:
+        return RegistrationProblem("confirm", "Passwords do not match", 400)
+    if User.query.filter_by(username=fields["username"]).first():
+        return RegistrationProblem("username", "Username already taken", 409)
+    if User.query.filter_by(email=fields["email"]).first():
+        return RegistrationProblem(
+            "email", "An account already uses that email address", 409
+        )
+    password_error = validate_password_rules(fields["password"])
+    if password_error:
+        return RegistrationProblem("password", password_error, 400)
+    return None
+
+
+def create_account_with_pod(
+    *, username: str, display_name: str, email: str, password: str, pod_name: str
+) -> tuple[User, Pod, str]:
+    """Create the account, its player, its pod, and the podmaster membership.
+
+    Leaves the transaction open and returns the raw verification token; the caller
+    commits and then mails it, so a failed commit cannot mail a live token for an
+    account that was never written.
+    """
+    user = User(
+        username=username,
+        display_name=display_name,
+        email=email,
+        password_hash=generate_password_hash(password),
+        is_active=True,
+        is_admin=False,
+        approved_at=datetime.utcnow(),
+    )
+    raw_verification_token = issue_email_verification(user)
+    db.session.add(user)
+    db.session.flush()
+    player = Player(name=display_name, user_id=user.id)
+    db.session.add(player)
+    db.session.flush()
+    pod = Pod(
+        name=pod_name,
+        slug=unique_pod_slug(pod_name),
+        owner_user_id=user.id,
+        is_active=True,
+    )
+    db.session.add(pod)
+    db.session.flush()
+    ensure_membership(pod.id, player.id, role="podmaster")
+    record_funnel_event("account_created", user=user, pod=pod)
+    record_funnel_event("pod_created", user=user, pod=pod)
+    return user, pod, raw_verification_token
+
+
+def issue_email_verification(user: User) -> str:
+    """Mint a fresh verification token, retiring any previous one. Returns the raw
+    token; only its hash is kept, so this is the last chance to read it."""
+    raw_token, token_hash = issue_public_token()
+    user.email_verification_token_hash = token_hash
+    user.email_verification_expires_at = datetime.utcnow() + timedelta(
+        hours=EMAIL_VERIFICATION_TTL_HOURS
+    )
+    return raw_token
+
+
+def send_email_verification(user: User, raw_token: str) -> None:
+    verification_url = url_for("verify_email", token=raw_token, _external=True)
+    send_transactional_email(
+        user.email,
+        "Verify your EDH Son account",
+        f"Verify your email within {EMAIL_VERIFICATION_TTL_HOURS} hours:\n\n{verification_url}",
+    )
+
+
+def consume_email_verification(token: str) -> User | None:
+    """Mark the matching account verified and burn the token. None when the token
+    is unknown or expired -- the caller must not distinguish the two."""
+    if not token:
+        return None
+    user = User.query.filter_by(email_verification_token_hash=hash_public_token(token)).first()
+    if (
+        not user
+        or not user.email_verification_expires_at
+        or user.email_verification_expires_at < datetime.utcnow()
+    ):
+        return None
+    user.email_verified_at = datetime.utcnow()
+    user.email_verification_token_hash = None
+    user.email_verification_expires_at = None
+    return user
+
+
+def begin_password_reset(email: str) -> str | None:
+    """Mail a reset link when the address belongs to a live account, and commit.
+
+    Returns the raw token so a test harness can pick it up; callers must answer
+    the request identically whether this returns a token or None.
+    """
+    user = User.query.filter_by(email=email, deleted_at=None).first() if email else None
+    if not user:
+        return None
+    raw_token, token_hash = issue_public_token()
+    user.password_reset_token_hash = token_hash
+    user.password_reset_expires_at = datetime.utcnow() + timedelta(
+        hours=PASSWORD_RESET_TTL_HOURS
+    )
+    db.session.commit()
+    reset_url = url_for("reset_password", token=raw_token, _external=True)
+    send_transactional_email(
+        user.email,
+        "Reset your EDH Son password",
+        f"Reset your password within one hour:\n\n{reset_url}",
+    )
+    return raw_token
+
+
+def find_password_reset_user(token: str) -> User | None:
+    """The account a reset token belongs to, or None when unknown or expired."""
+    if not token:
+        return None
+    user = User.query.filter_by(password_reset_token_hash=hash_public_token(token)).first()
+    if (
+        not user
+        or not user.password_reset_expires_at
+        or user.password_reset_expires_at < datetime.utcnow()
+    ):
+        return None
+    return user
+
+
+def apply_password_reset(user: User, password: str) -> None:
+    """Set the new password, burn the token, and revoke every open session.
+
+    A reset is usually the remedy for someone else being inside the account; a
+    session opened under the old password must not outlive it.
+    """
+    user.password_hash = generate_password_hash(password)
+    user.password_reset_token_hash = None
+    user.password_reset_expires_at = None
+    user.session_version += 1
+
+
 def accessible_pod_ids(user: User | None) -> set[int]:
     return {pod.id for pod in get_accessible_pods(user)} if user else set()
 
@@ -4061,6 +4288,22 @@ def get_csrf_token() -> str:
 app.jinja_env.globals["csrf_token"] = get_csrf_token
 
 
+def _revoked_session_response(message=None):
+    """Reject a request whose session is no longer valid.
+
+    /api answers with JSON 401 like every other API rejection. A redirect would be
+    followed by the client's HTTP stack, which then tries to parse the HTML login
+    page as JSON and reports it as a malformed server URL — hiding the real cause.
+
+    Web requests keep the redirect (and the flash) so the browser flow is unchanged.
+    """
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Unauthorized"}), 401
+    if message:
+        flash(message)
+    return redirect(url_for("login"))
+
+
 @app.before_request
 def require_login():
     # CSRF check for authenticated state-mutating requests on non-API routes
@@ -4115,12 +4358,18 @@ def require_login():
             "accept_pod_invite",
             "public_recap",
             "static",
+            "android_asset_links",
             "art",
             "object_media",
             "healthz",
             "api_login",
             "api_logout",
             "api_me",
+            "api_capabilities",
+            "api_register",
+            "api_forgot_password",
+            "api_reset_password",
+            "api_verify_email",
             "api_card_art",
             "api_gallery_image",
             "api_cards_autocomplete",
@@ -4140,14 +4389,13 @@ def require_login():
         signed_in_user = get_current_user()
         if not signed_in_user or signed_in_user.deleted_at:
             session.clear()
-            return redirect(url_for("login"))
+            return _revoked_session_response()
         session_version = session.get("session_version")
         if session_version is None:
             session["session_version"] = signed_in_user.session_version
         elif session_version != signed_in_user.session_version:
             session.clear()
-            flash("That session was revoked. Please sign in again.")
-            return redirect(url_for("login"))
+            return _revoked_session_response("That session was revoked. Please sign in again.")
 
     get_active_pod()
 
@@ -4159,67 +4407,27 @@ def require_login():
 @limiter.limit("5 per hour", methods=["POST"])
 def register():
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        display_name = request.form.get("display_name", "").strip()
-        email = normalize_email(request.form.get("email"))
-        pod_name = request.form.get("pod_name", "").strip()
-        password = request.form.get("password", "")
-        confirm = request.form.get("confirm", "")
-
-        if not username or not display_name or not email or not pod_name or not password:
-            flash("Username, email, display name, pod name, and password are required")
-        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
-            flash("Enter a valid email address")
-        elif password != confirm:
-            flash("Passwords do not match")
-        elif User.query.filter_by(username=username).first():
-            flash("Username already taken")
-        elif User.query.filter_by(email=email).first():
-            flash("An account already uses that email address")
+        fields = {
+            "username": request.form.get("username", "").strip(),
+            "display_name": request.form.get("display_name", "").strip(),
+            "email": normalize_email(request.form.get("email")),
+            "pod_name": request.form.get("pod_name", "").strip(),
+            "password": request.form.get("password", ""),
+            "confirm": request.form.get("confirm", ""),
+        }
+        problem = validate_registration(fields)
+        if problem:
+            flash(problem.message)
         else:
-            password_error = validate_password_rules(password)
-            if password_error:
-                flash(password_error)
-                return render_template("register.html")
-
-            raw_verification_token, verification_hash = issue_public_token()
-            user = User(
-                username=username,
-                display_name=display_name,
-                email=email,
-                password_hash=generate_password_hash(password),
-                is_active=True,
-                is_admin=False,
-                approved_at=datetime.utcnow(),
-                email_verification_token_hash=verification_hash,
-                email_verification_expires_at=datetime.utcnow() + timedelta(hours=24),
+            user, pod, raw_verification_token = create_account_with_pod(
+                username=fields["username"],
+                display_name=fields["display_name"],
+                email=fields["email"],
+                password=fields["password"],
+                pod_name=fields["pod_name"],
             )
-            db.session.add(user)
-            db.session.flush()
-            player = Player(name=display_name, user_id=user.id)
-            db.session.add(player)
-            db.session.flush()
-            pod = Pod(
-                name=pod_name,
-                slug=unique_pod_slug(pod_name),
-                owner_user_id=user.id,
-                is_active=True,
-            )
-            db.session.add(pod)
-            db.session.flush()
-            ensure_membership(pod.id, player.id, role="podmaster")
-            record_funnel_event("account_created", user=user, pod=pod)
-            record_funnel_event("pod_created", user=user, pod=pod)
             db.session.commit()
-
-            verification_url = url_for(
-                "verify_email", token=raw_verification_token, _external=True
-            )
-            send_transactional_email(
-                user.email,
-                "Verify your EDH Son account",
-                f"Verify your email within 24 hours:\n\n{verification_url}",
-            )
+            send_email_verification(user, raw_verification_token)
             if app.config.get("TESTING"):
                 session["test_email_verification_token"] = raw_verification_token
             flash(
@@ -4232,17 +4440,9 @@ def register():
 
 @app.route("/verify-email/<token>")
 def verify_email(token):
-    user = User.query.filter_by(email_verification_token_hash=hash_public_token(token)).first()
-    if (
-        not user
-        or not user.email_verification_expires_at
-        or user.email_verification_expires_at < datetime.utcnow()
-    ):
-        flash("That verification link is invalid or expired.")
+    if not consume_email_verification(token):
+        flash(EMAIL_VERIFICATION_INVALID_MESSAGE)
         return redirect(url_for("login"))
-    user.email_verified_at = datetime.utcnow()
-    user.email_verification_token_hash = None
-    user.email_verification_expires_at = None
     db.session.commit()
     flash("Email verified. You can now invite your playgroup.")
     return redirect(url_for("login"))
@@ -4252,22 +4452,10 @@ def verify_email(token):
 @limiter.limit("5 per hour", methods=["POST"])
 def forgot_password():
     if request.method == "POST":
-        email = normalize_email(request.form.get("email"))
-        user = User.query.filter_by(email=email, deleted_at=None).first() if email else None
-        if user:
-            raw_token, token_hash = issue_public_token()
-            user.password_reset_token_hash = token_hash
-            user.password_reset_expires_at = datetime.utcnow() + timedelta(hours=1)
-            db.session.commit()
-            reset_url = url_for("reset_password", token=raw_token, _external=True)
-            send_transactional_email(
-                user.email,
-                "Reset your EDH Son password",
-                f"Reset your password within one hour:\n\n{reset_url}",
-            )
-            if app.config.get("TESTING"):
-                session["test_password_reset_token"] = raw_token
-        flash("If that email is registered, a reset link has been sent.")
+        raw_token = begin_password_reset(normalize_email(request.form.get("email")))
+        if raw_token and app.config.get("TESTING"):
+            session["test_password_reset_token"] = raw_token
+        flash(PASSWORD_RESET_SENT_MESSAGE)
         return redirect(url_for("login"))
     return render_template("forgot_password.html")
 
@@ -4275,13 +4463,9 @@ def forgot_password():
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
 @limiter.limit("10 per hour", methods=["POST"])
 def reset_password(token):
-    user = User.query.filter_by(password_reset_token_hash=hash_public_token(token)).first()
-    if (
-        not user
-        or not user.password_reset_expires_at
-        or user.password_reset_expires_at < datetime.utcnow()
-    ):
-        flash("That reset link is invalid or expired.")
+    user = find_password_reset_user(token)
+    if not user:
+        flash(PASSWORD_RESET_INVALID_MESSAGE)
         return redirect(url_for("forgot_password"))
     if request.method == "POST":
         password = request.form.get("password", "")
@@ -4292,9 +4476,7 @@ def reset_password(token):
         elif password_error:
             flash(password_error)
         else:
-            user.password_hash = generate_password_hash(password)
-            user.password_reset_token_hash = None
-            user.password_reset_expires_at = None
+            apply_password_reset(user, password)
             db.session.commit()
             session.clear()
             flash("Password updated. Sign in with your new password.")
@@ -4611,6 +4793,28 @@ def service_worker():
     response.headers["Service-Worker-Allowed"] = "/"
     response.headers["Cache-Control"] = "no-cache"
     return response
+
+
+@app.route("/.well-known/assetlinks.json")
+def android_asset_links():
+    """Digital Asset Links, so Android opens our emailed links in the app.
+
+    Public and unauthenticated by design: Android fetches it with no cookies while
+    verifying the app's claim on this domain, and a redirect to the login page reads
+    to it as a failed verification. The fingerprint is the release signing
+    certificate's public digest -- it is meant to be published, and is what stops any
+    other app from claiming these links.
+    """
+    return jsonify([
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": ANDROID_PACKAGE_NAME,
+                "sha256_cert_fingerprints": [ANDROID_SIGNING_FINGERPRINT],
+            },
+        }
+    ])
 
 
 @app.route("/healthz")
@@ -8371,7 +8575,10 @@ def load_active_game_life_history(token: str | None) -> dict:
             and all(isinstance(v, (int, float)) for v in sample)
         ]
         if len(cleaned) >= 2:
-            result[pid] = cleaned
+            # Cap here too rather than trusting the state writer to have done it.
+            # Today it does, but that invariant lives in a different function, and
+            # anything else that ever writes state_json would bypass it.
+            result[pid] = cleaned[-MAX_LIFE_HISTORY_SAMPLES:]
     return result
 
 
@@ -9323,6 +9530,80 @@ def _api_deck_owner_id_from_payload(payload: dict, current_user: User) -> int | 
     return current_user.player.id
 
 
+def _authorized_active_game_history(token: str | None, current_user: User) -> dict:
+    """Life history from an active game, but only one the caller actually played in.
+
+    Game tokens are deliberately shareable — the join link is the token — so holding
+    one proves nothing about who you are. Without this check any authenticated caller
+    who has ever seen a token could replay it here and graft that table's real life
+    history onto a game record of their own authoring.
+
+    An unauthorized or unknown token yields {} rather than an error: refusing would
+    turn this endpoint into an oracle for which tokens exist, and a stale token must
+    never block recording a finished game.
+    """
+    if not token:
+        return {}
+    active_game_rec = ActiveGame.query.filter_by(token=token).first()
+    if not active_game_rec:
+        return {}
+
+    if active_game_rec.host_user_id == current_user.id:
+        return load_active_game_life_history(token)
+
+    # Not the host — but any device at the table may be the one that records the
+    # result, so a seated participant is equally entitled to the history.
+    caller_player_id = current_user.player.id if current_user.player else None
+    if caller_player_id is None:
+        return {}
+    try:
+        seated = json.loads(active_game_rec.participants_json)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    if not isinstance(seated, list):
+        return {}
+    seated_player_ids = {
+        entry.get("player_id") for entry in seated if isinstance(entry, dict)
+    }
+    if caller_player_id not in seated_player_ids:
+        return {}
+    return load_active_game_life_history(token)
+
+
+def _normalize_life_history(raw) -> tuple[list | None, str | None]:
+    """Validate client-supplied [[timestamp, life], ...] samples.
+
+    Returns (samples, None) or (None, error_message). A history with fewer than two
+    samples is normalized to None: one sample means the life never changed, which
+    matches what load_active_game_life_history() keeps and is not worth charting.
+
+    Over-long histories are capped rather than refused — a long game is not a client
+    error — keeping the most recent samples, as the live-state writer does.
+    """
+    shape_error = "participants.life_history must be a list of [timestamp, life] integer pairs"
+    range_error = "participants.life_history values are out of range"
+    if not isinstance(raw, list):
+        return None, shape_error
+    samples = []
+    for item in raw:
+        if not isinstance(item, list) or len(item) != 2:
+            return None, shape_error
+        timestamp, life = item
+        for value in (timestamp, life):
+            if isinstance(value, bool) or not isinstance(value, int):
+                return None, shape_error
+        # Python ints are arbitrary-precision, so an absurd value passes the type
+        # check and then raises inside json.dumps — a 400 turning into a 500.
+        if not 0 <= timestamp <= MAX_LIFE_HISTORY_TIMESTAMP:
+            return None, range_error
+        if abs(life) > MAX_LIFE_HISTORY_LIFE:
+            return None, range_error
+        samples.append([timestamp, life])
+    if len(samples) < 2:
+        return None, None
+    return samples[-MAX_LIFE_HISTORY_SAMPLES:], None
+
+
 def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[dict | None, tuple[Response, int] | None]:
     participants_raw = payload.get("participants")
     winner_id = payload.get("winner_id")
@@ -9333,6 +9614,7 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
 
     normalized_participants = []
     seen_player_ids = set()
+    participant_life_history_by_player: dict[int, list] = {}
     for index, participant_raw in enumerate(participants_raw):
         if not isinstance(participant_raw, dict):
             return None, (jsonify({"error": "participants must contain objects"}), 400)
@@ -9356,6 +9638,13 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
             seat_position = index + 1
         if not isinstance(seat_position, int) or seat_position < 1 or seat_position > 6:
             return None, (jsonify({"error": "seat_position must be an integer between 1 and 6"}), 400)
+        life_history_raw = participant_raw.get("life_history")
+        if life_history_raw is not None:
+            life_history, life_history_error = _normalize_life_history(life_history_raw)
+            if life_history_error:
+                return None, (jsonify({"error": life_history_error}), 400)
+            if life_history:
+                participant_life_history_by_player[player_id] = life_history
         normalized_participants.append({
             "player_id": player_id,
             "deck_id": deck_id,
@@ -9487,6 +9776,8 @@ def _api_parse_manual_game_payload(payload: dict, current_user: User) -> tuple[d
         "date": game_date,
         "duration_seconds": duration_seconds,
         "participant_flags_by_player": participant_flags_by_player,
+        "participant_life_history_by_player": participant_life_history_by_player,
+        "game_token": payload.get("game_token") if isinstance(payload.get("game_token"), str) else None,
     }, None
 
 
@@ -9529,12 +9820,187 @@ def api_logout():
     return jsonify({"message": "Logged out"})
 
 
+def _json_object_body():
+    """Parse a JSON object body. Returns (data, None) or (None, error_response)."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None, (jsonify({"error": "Invalid request body"}), 400)
+    return data, None
+
+
+def _text_field(data: dict, name: str) -> str:
+    """A trimmed string field. Anything that is not a string reads as absent, so a
+    malformed body fails validation instead of raising inside a handler."""
+    value = data.get(name)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _raw_field(data: dict, name: str) -> str:
+    """Like _text_field but keeps surrounding whitespace -- passwords are not trimmed."""
+    value = data.get(name)
+    return value if isinstance(value, str) else ""
+
+
+def _establish_session(user: User) -> None:
+    session["user_id"] = user.id
+    session["username"] = user.username
+    session["display_name"] = user.display_name
+    session["is_admin"] = user.is_admin
+    session["use_sigtaara"] = user.use_sigtaara
+    session["use_light_theme"] = user.use_light_theme
+    session["session_version"] = user.session_version
+    get_active_pod()
+
+
+@app.route("/api/register", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+def api_register():
+    """Create an account, its player, and the pod it owns.
+
+    Unlike the web form, which bounces to a login page, this signs the client in:
+    a phone has nowhere to bounce to. Email verification is still outstanding
+    afterwards and still gates the actions that require it.
+    """
+    data, error = _json_object_body()
+    if error:
+        return error
+    fields = {
+        "username": _text_field(data, "username"),
+        "display_name": _text_field(data, "display_name"),
+        "email": normalize_email(_text_field(data, "email")),
+        "pod_name": _text_field(data, "pod_name"),
+        "password": _raw_field(data, "password"),
+        "confirm": data.get("confirm") if "confirm" in data else None,
+    }
+    problem = validate_registration(fields)
+    if problem:
+        return jsonify({"error": problem.message, "field": problem.field}), problem.status
+
+    user, pod, raw_verification_token = create_account_with_pod(
+        username=fields["username"],
+        display_name=fields["display_name"],
+        email=fields["email"],
+        password=fields["password"],
+        pod_name=fields["pod_name"],
+    )
+    db.session.commit()
+    send_email_verification(user, raw_verification_token)
+    _establish_session(user)
+    return jsonify({
+        "user_id": user.id,
+        "username": user.username,
+        "display_name": user.display_name,
+        "player_id": user.player.id if user.player else None,
+        "email": user.email,
+        "email_verified": False,
+        "pod": {"id": pod.id, "name": pod.name, "slug": pod.slug},
+    }), 201
+
+
+@app.route("/api/password/forgot", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+def api_forgot_password():
+    """Always answers the same. Whether the address is registered is not ours to tell."""
+    data, error = _json_object_body()
+    if error:
+        return error
+    begin_password_reset(normalize_email(_text_field(data, "email")))
+    return jsonify({"message": PASSWORD_RESET_SENT_MESSAGE}), 202
+
+
+@app.route("/api/password/reset", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+def api_reset_password():
+    """The token travels in the body, not the path, so it stays out of access logs
+    and referrers. Unknown and expired tokens are answered identically."""
+    data, error = _json_object_body()
+    if error:
+        return error
+    user = find_password_reset_user(_text_field(data, "token"))
+    if not user:
+        return jsonify({"error": PASSWORD_RESET_INVALID_MESSAGE}), 400
+    password = _raw_field(data, "password")
+    password_error = validate_password_rules(password)
+    if password_error:
+        # The token survives a rejected password so the user can simply try again.
+        return jsonify({"error": password_error, "field": "password"}), 400
+    apply_password_reset(user, password)
+    db.session.commit()
+    session.clear()
+    return jsonify({"message": "Password updated. Sign in with your new password."})
+
+
+@app.route("/api/email/verify", methods=["POST"])
+@limiter.limit("10 per hour", methods=["POST"])
+def api_verify_email():
+    """POST rather than the web route's GET: an emailed link gets prefetched by
+    mail clients and scanners, and a prefetch must not spend a one-shot token."""
+    data, error = _json_object_body()
+    if error:
+        return error
+    if not consume_email_verification(_text_field(data, "token")):
+        return jsonify({"error": EMAIL_VERIFICATION_INVALID_MESSAGE}), 400
+    db.session.commit()
+    return jsonify({"email_verified": True})
+
+
+@app.route("/api/email/verify/resend", methods=["POST"])
+@limiter.limit("5 per hour", methods=["POST"])
+@api_login_required
+def api_resend_email_verification():
+    user = get_current_user()
+    if not user:
+        return jsonify({"error": "Unauthorized"}), 401
+    if user.email_verified_at:
+        return jsonify({"email_verified": True, "message": "That address is already verified."})
+    if not user.email:
+        return jsonify({"error": "This account has no email address.", "field": "email"}), 400
+    raw_token = issue_email_verification(user)
+    db.session.commit()
+    send_email_verification(user, raw_token)
+    return jsonify({
+        "email_verified": False,
+        "message": EMAIL_VERIFICATION_SENT_MESSAGE,
+    }), 202
+
+
+@app.route("/api/capabilities")
+def api_capabilities():
+    """Advertise what this server supports so clients can degrade deliberately.
+
+    Public on purpose: a client decides whether to offer a signup screen before it
+    has a session. A client seeing 404 here should assume the pre-2.0 baseline.
+
+    Anonymous callers get only PUBLIC_API_FEATURE_KEYS. The full set — including
+    features that are not built yet — is for signed-in clients; an unshipped roadmap
+    is not something to hand to anyone who asks.
+
+    Flip a flag to True in the same commit that lands its endpoint — advertising a
+    capability that does not exist is worse than not advertising it at all.
+    """
+    if session.get("user_id"):
+        features = dict(API_FEATURES)
+    else:
+        features = {key: API_FEATURES[key] for key in PUBLIC_API_FEATURE_KEYS}
+    return jsonify({
+        "contract_version": API_CONTRACT_VERSION,
+        "features": features,
+    })
+
+
 @app.route("/api/me")
 @api_login_required
 def api_me():
     u = get_current_user()
     if not u:
         return jsonify({"error": "Unauthorized"}), 401
+    owned_pod_ids = [
+        pod_id
+        for (pod_id,) in Pod.query.with_entities(Pod.id)
+        .filter_by(owner_user_id=u.id)
+        .order_by(Pod.id.asc())
+        .all()
+    ]
     return jsonify({
         "user_id": u.id,
         "username": u.username,
@@ -9542,6 +10008,13 @@ def api_me():
         "is_admin": u.is_admin,
         "player_id": u.player.id if u.player else None,
         "can_access_registration_requests": can_access_registration_request_queue(u),
+        "email": u.email,
+        "email_verified": bool(u.email_verified_at),
+        # The client mirrors this into its stored session so it can tell a revoked
+        # session from a network failure without waiting for the next 401.
+        "session_version": u.session_version,
+        "owned_pod_ids": owned_pod_ids,
+        "use_sigtaara": u.use_sigtaara,
     })
 
 
@@ -10728,10 +11201,24 @@ def api_games_list():
         db.session.add(game)
         db.session.flush()
 
+        # Life history has two sources. A server-backed table already accumulated
+        # samples under its token, so the client need only name it; a local/offline
+        # counter has to send its own. Explicit samples win — they are the client's
+        # own record of the game it actually ran.
+        life_history_by_player = dict(parsed_payload["participant_life_history_by_player"])
+        adopted_history = _authorized_active_game_history(parsed_payload["game_token"], current_user)
+        for player_id_str, samples in adopted_history.items():
+            try:
+                adopted_player_id = int(player_id_str)
+            except (TypeError, ValueError):
+                continue
+            life_history_by_player.setdefault(adopted_player_id, samples)
+
         participant_rows = []
         for participant in parsed_payload["participants"]:
             participant_flags_json = parsed_payload["participant_flags_by_player"].get(participant["player_id"])
             hot_fields = participant_hot_fields_from_flags(participant_flags_json)
+            participant_life_history = life_history_by_player.get(participant["player_id"])
             row = GameParticipant(
                 game_id=game.id,
                 player_id=participant["player_id"],
@@ -10742,6 +11229,7 @@ def api_games_list():
                 mana_fucked=bool(hot_fields["mana_fucked"]),
                 misplayed=bool(hot_fields["misplayed"]),
                 life_delta_total=int(hot_fields["life_delta_total"]),
+                life_history_json=json.dumps(participant_life_history) if participant_life_history else None,
             )
             db.session.add(row)
             participant_rows.append(row)
@@ -10854,6 +11342,19 @@ def api_game_detail(game_id):
         sanitized_card_state = sanitize_card_state_payload(payload.get("card_state", {}), valid_player_ids) or {}
         return sanitized_card_state.get("commander_damage", {})
 
+    def life_history_for(participant: GameParticipant) -> list:
+        """[[timestamp, life], ...], or [] when the game recorded none.
+
+        Always a list so a client can chart it without a null check.
+        """
+        if not participant.life_history_json:
+            return []
+        try:
+            loaded = json.loads(participant.life_history_json)
+        except json.JSONDecodeError:
+            return []
+        return loaded if isinstance(loaded, list) else []
+
     return jsonify({
         "id": game.id,
         "date": game.date.isoformat(),
@@ -10877,6 +11378,7 @@ def api_game_detail(game_id):
                 "mana_fucked": gp.mana_fucked,
                 "misplayed": gp.misplayed,
                 "commander_damage": commander_damage_for(gp),
+                "life_history": life_history_for(gp),
                 "player_accent": player_id_to_accent(gp.player_id),
                 "player_url": f"/player/{gp.player_id}",
                 "deck_url": f"/deck/{gp.deck_id}",

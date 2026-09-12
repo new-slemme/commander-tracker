@@ -1,0 +1,6 @@
+{
+  "dashboardPort": 0,
+  "mergeOnCleanup": false,
+  "promptForModels": true,
+  "timeoutMs": 900000
+}
