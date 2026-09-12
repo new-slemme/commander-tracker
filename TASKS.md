@@ -362,6 +362,48 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## P2 — Privacy follow-ups (added 2026-09-12, from the Phase 4 compliance review)
+
+The review returned WARN on six items and blocked on none. The one it called worth fixing
+pre-merge — recap publishing being open to any pod member rather than the game's own
+participants — was fixed in the Phase 4 commit. These are the rest. GDPR is the only declared
+scope in `INIT.md`; all of these are judgment calls at this scale, not violations.
+
+### [ ] TASK-R30 — Co-participants are not told when a game they played is published  `[opus]`
+- **Where:** `app.py` `api_publish_game_recap`, `publish_game_recap`.
+- **Issue:** Publishing is now restricted to participants, but it is still *one* participant
+  deciding for everyone at the table. The others are not notified and cannot revoke a share of a
+  game they were in unless they happen to look at that game's detail screen. Legal basis for
+  publishing their data rests on legitimate interest, which is arguable for a friend group but
+  not settled.
+- **Fix:** Notify the other participants in-app when a game they played in gets a public link,
+  and let any participant revoke a share on a game they were in. Revoking is already open to
+  anyone with pod access, so the gap is really the notification.
+- **Why P2:** among friends who all consented to being in a shared pod, this is a trust and
+  courtesy matter more than a compliance one. It becomes important the moment a pod contains
+  someone who is not a close friend.
+
+### [ ] TASK-R31 — No record of who added a guest player  `[sonnet]`
+- **Where:** `app.py` `Player` model, `api_create_guest_player`, `create_guest_player`.
+- **Issue:** A guest row holds a third party's name with no `added_by_user_id`, so if that person
+  ever asks about the record there is no way to tell who entered it or which pod member to ask.
+- **Fix:** Add a nullable `added_by_user_id` FK to `Player`, set it on both guest-creation paths,
+  and add it to the `schema_migrations` bootstrap. Cheap if this model is being touched anyway.
+- **Note:** the handling answer itself is now written down in `docs/API.md` §5.8b — administrator
+  renames the player, since `DELETE` is refused once the guest has recorded games.
+
+### [ ] TASK-R32 — Nothing expires; write down that this is deliberate  `[haiku]`
+- **Where:** `docs/` (no code change).
+- **Issue:** Revoking a share or invite sets `revoked_at` but the row, and the underlying game and
+  guest data, are kept forever. The review flagged this under storage limitation, while noting
+  that permanent game history is arguably the product's whole purpose.
+- **Fix:** One short retention note in the docs stating that game history is retained
+  indefinitely by design, that revoked shares and invites are kept as an audit record rather than
+  deleted, and that account deletion anonymizes rather than removes. Documenting the intent is
+  the whole task; no behaviour change.
+
+---
+
 ## Notes for whoever picks these up
 - Test suite baseline: `40 passed, 8 failed`. Of the 8 failures, only
   `test_apk_release.py::…stale` is a real app bug (TASK-R12). The other 7 are test-harness issues

@@ -874,6 +874,20 @@ The created `Player` has no `user_id`, no email, and membership in **this pod on
 record about a person who never agreed to anything, so keep that scope in mind before surfacing
 guests anywhere outside the pod that created them.
 
+**If a guest asks about their data.** They have no account, so there is no self-service path. The
+answer is an administrator acting on their behalf:
+
+- **See it** — `GET /api/players/{player_id}` and `GET /api/players/{player_id}/export`.
+- **Correct it** — `PATCH /api/players/{player_id}` (admin) renames the player.
+- **Erase it** — `DELETE /api/players/{player_id}` works only while they have no recorded games;
+  once they have played it returns `409`, because deleting the row would rewrite other people's
+  game history. The intended answer then is **rename to something non-identifying**, which
+  removes the personal data while leaving the game records intact.
+
+That is a deliberate position, not an oversight: the alternative is either losing other
+participants' game history or keeping a name nobody can remove. Nothing records *who* added a
+given guest, so there is no way to trace a request back to whoever entered the name.
+
 `400` with `field: "name"` when the name is blank or over 100 characters · `403` unless you can
 manage the pod.
 
@@ -883,8 +897,17 @@ manage the pod.
 
 #### `POST /api/games/{game_id}/shares` · auth · 20/hour
 
-Mints an **unauthenticated** URL for one game. Requires access to the game and a verified email
-address.
+Mints an **unauthenticated** URL for one game. Requires a verified email address, and that **you
+actually played in this game** — pod membership is enough to *read* a game, but publishing it is a
+decision about the participants' own data, and someone who was not at the table has no standing to
+make it for the people who were. Administrators are exempt.
+
+```json
+{ "error": "Only someone who played in this game can publish it.", "reason": "not_a_participant" }
+```
+
+`403` with that `reason`. Any participant may publish — not only whoever recorded the game — since
+any device at the table may have submitted the result.
 
 ```json
 { "show_player_names": true, "show_deck_names": true }
@@ -921,6 +944,9 @@ revoke it.
 
 `200` with the updated share. The public URL starts returning `404` immediately.
 
+Revoking needs only access to the game, not participation: taking a link down is never the
+dangerous direction, so anyone in the pod who can see a published recap can also unpublish it.
+
 #### `GET /api/recap/{token}` · public
 
 The JSON twin of the `/r/{token}` web page, shaped by that share's own switches — never richer
@@ -947,6 +973,9 @@ than what the page would show.
 
 Two actions are blocked until the account's address is confirmed, matching the web routes:
 creating a pod invite, and publishing a recap. Both reach people outside the account.
+
+Publishing carries a second, independent gate — see `not_a_participant` above. The two are checked
+in that order, so a bystander who is also unverified is told they did not play.
 
 ```json
 { "error": "Verify your email address first.", "reason": "email_unverified" }

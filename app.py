@@ -447,6 +447,7 @@ POD_INVITE_ROLES = ("member", "podmaster")
 INVITE_UNAVAILABLE_MESSAGE = "That invitation is no longer available."
 
 EMAIL_UNVERIFIED_REASON = "email_unverified"
+NOT_A_PARTICIPANT_REASON = "not_a_participant"
 
 EMAIL_PATTERN = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 
@@ -3900,6 +3901,22 @@ def accessible_pod_ids(user: User | None) -> set[int]:
 
 def can_access_game(user: User | None, game: Game | None) -> bool:
     return bool(user and game and (user.is_admin or game.pod_id in accessible_pod_ids(user)))
+
+
+def played_in_game(user: User | None, game: Game | None) -> bool:
+    """Whether this account actually sat at that table.
+
+    Deliberately narrower than can_access_game(). Pod membership is the right gate
+    for *reading* a game -- that is what a shared scorebook is. Publishing it to the
+    open web is a decision about the participants' own data, and someone who was not
+    there has no standing to make it for the people who were.
+    """
+    if not user or not game or not user.player:
+        return False
+    return (
+        GameParticipant.query.filter_by(game_id=game.id, player_id=user.player.id).first()
+        is not None
+    )
 
 
 def can_access_player(user: User | None, player: Player | None) -> bool:
@@ -10340,6 +10357,13 @@ def api_publish_game_recap(game_id):
     game = db.session.get(Game, game_id)
     if not game or not can_access_game(me, game):
         return jsonify({"error": "Not found"}), 404
+    # Reading is a pod matter; publishing is the participants'. An admin can still
+    # act, since they can already reach everything.
+    if not me.is_admin and not played_in_game(me, game):
+        return jsonify({
+            "error": "Only someone who played in this game can publish it.",
+            "reason": NOT_A_PARTICIPANT_REASON,
+        }), 403
     blocked = _email_verification_required(me)
     if blocked:
         return jsonify(blocked[0]), blocked[1]

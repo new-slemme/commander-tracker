@@ -407,13 +407,98 @@ class GrowthSurfaceTests(unittest.TestCase):
         self.assertEqual(listing.get_json()["shares"][0]["id"], created["id"])
 
     def test_an_unverified_account_may_not_publish(self):
+        # Seated at the table on purpose, so this exercises the verification gate
+        # rather than the participation gate.
         game = self._finished_game()
         unverified = self._make_user("nomail", verified=False)
         app_module.ensure_membership(self.pod.id, unverified.player.id)
+        their_deck = Deck(
+            name="Slivers",
+            commander="Sliver Overlord",
+            commander_name="Sliver Overlord",
+            player_id=unverified.player.id,
+        )
+        db.session.add(their_deck)
+        db.session.flush()
+        db.session.add(
+            GameParticipant(
+                game_id=game.id, player_id=unverified.player.id,
+                deck_id=their_deck.id, seat_position=3,
+            )
+        )
         db.session.commit()
+
         response = self._signed_in(unverified).post(f"/api/games/{game.id}/shares", json={})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.get_json()["reason"], "email_unverified")
+
+    def test_only_someone_who_played_may_publish_the_game(self):
+        """A bystander pod member must not publish a game they were not in.
+
+        Pod membership is the right gate for *reading* a game -- that is how a
+        scorebook works. Publishing is different: it puts the participants' data on
+        the open web, and someone who was not at the table has no standing to make
+        that call for the people who were.
+        """
+        game = self._finished_game()
+        bystander = self._make_user("bystander")
+        app_module.ensure_membership(self.pod.id, bystander.player.id)
+        db.session.commit()
+        client = self._signed_in(bystander)
+
+        # They can see it -- same pod.
+        self.assertEqual(client.get(f"/api/games/{game.id}").status_code, 200)
+        # They cannot publish it.
+        response = client.post(f"/api/games/{game.id}/shares", json={})
+        self.assertEqual(response.status_code, 403, response.get_data(as_text=True))
+        self.assertEqual(response.get_json()["reason"], "not_a_participant")
+        self.assertEqual(GameShare.query.count(), 0)
+
+    def test_a_participant_may_publish_even_without_owning_the_game(self):
+        # Any device at the table may submit the result, so any participant may share.
+        game = self._finished_game()
+        seated = self._make_user("seated")
+        app_module.ensure_membership(self.pod.id, seated.player.id)
+        their_deck = Deck(
+            name="Krenko Goblins",
+            commander="Krenko, Mob Boss",
+            commander_name="Krenko, Mob Boss",
+            player_id=seated.player.id,
+        )
+        db.session.add(their_deck)
+        db.session.flush()
+        db.session.add(
+            GameParticipant(
+                game_id=game.id, player_id=seated.player.id,
+                deck_id=their_deck.id, seat_position=2,
+            )
+        )
+        db.session.commit()
+
+        response = self._signed_in(seated).post(f"/api/games/{game.id}/shares", json={})
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+
+    def test_an_admin_may_publish_without_having_played(self):
+        game = self._finished_game()
+        admin = self._make_user("root", is_admin=True)
+        response = self._signed_in(admin).post(f"/api/games/{game.id}/shares", json={})
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+
+    def test_a_bystander_may_still_revoke_nothing_they_did_not_make(self):
+        # Revoking is the safe direction, so it stays on pod access -- but a
+        # bystander has nothing to revoke unless they somehow made a share.
+        game = self._finished_game()
+        created = self.client.post(f"/api/games/{game.id}/shares", json={}).get_json()
+        bystander = self._make_user("bystander2")
+        app_module.ensure_membership(self.pod.id, bystander.player.id)
+        db.session.commit()
+        response = self._signed_in(bystander).post(
+            f"/api/games/{game.id}/shares/{created['id']}/revoke"
+        )
+        self.assertEqual(
+            response.status_code, 200,
+            "taking a link down is never the dangerous direction",
+        )
 
     def test_a_stranger_cannot_publish_someone_elses_game(self):
         game = self._finished_game()
