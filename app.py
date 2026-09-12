@@ -377,6 +377,10 @@ MAX_LIFE_HISTORY_LIFE = 100_000
 # long game is never rejected; the point is only to bound work a client controls.
 MAX_LIFE_HISTORY_SUBMISSION = MAX_LIFE_HISTORY_SAMPLES * 20
 
+# A deck's MMR history grows by one entry per game, forever. A sparkline only needs a
+# recent trend, so the API serves the newest slice rather than the whole column.
+MAX_MMR_HISTORY_POINTS = 60
+
 # Contract advertised by GET /api/capabilities. Bump when the JSON contract changes
 # in a way a client must branch on; add a feature flag for anything a client would
 # otherwise have to discover by calling an endpoint and interpreting a 404.
@@ -9451,6 +9455,52 @@ def record_game():
 # -------------------------
 
 
+def _serialize_game_participant(
+    gp: GameParticipant,
+    game: Game,
+    *,
+    commander_damage: dict,
+    life_history: list,
+    deck_tags_cache: dict[int, dict[str, bool]] | None = None,
+) -> dict:
+    """One seat in a finished game, as the game detail screen renders it.
+
+    `monarch`, `poison`, `mmr_delta` and `mechanics` are what the web's narrative view
+    shows and the JSON previously withheld. The `*_url` fields are web paths; a native
+    client should navigate by id instead.
+
+    `commander_damage` and `life_history` are passed in because deriving them needs the
+    calling route's validated player set.
+    """
+    flags = participant_flags_snapshot(gp)
+    return {
+        "player_id": gp.player_id,
+        "player_name": gp.player.name,
+        "deck_id": gp.deck_id,
+        "deck_name": gp.deck.name,
+        "commander": gp.deck.commander_name or gp.deck.commander,
+        "art_url": gp.deck.commander_art_url,
+        "won": game.winner_id == gp.player_id,
+        "seat_position": gp.seat_position,
+        "salt_count": gp.salt_count,
+        "mana_fucked": gp.mana_fucked,
+        "misplayed": gp.misplayed,
+        "monarch": bool(flags["monarch"]),
+        "poison": flags["poison"],
+        # None, not 0: a game that was never rated is a different fact from one that
+        # moved the rating by nothing.
+        "mmr_delta": gp.mmr_delta,
+        "mechanics": derive_deck_mechanics(
+            get_deck_parsed_tags(gp.deck, cache=deck_tags_cache)
+        ),
+        "commander_damage": commander_damage,
+        "life_history": life_history,
+        "player_accent": player_id_to_accent(gp.player_id),
+        "player_url": f"/player/{gp.player_id}",
+        "deck_url": f"/deck/{gp.deck_id}",
+    }
+
+
 def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, bool]] | None = None) -> dict:
     wins = (
         GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
@@ -9480,6 +9530,39 @@ def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, 
     }
 
 
+def deck_mmr_history_points(deck: Deck) -> list[dict]:
+    """The deck's rating over its recent games, trimmed for charting.
+
+    Drops the stored timestamp -- a sparkline plots by game order, not wall clock --
+    and keeps only the newest MAX_MMR_HISTORY_POINTS entries. Malformed rows are
+    skipped rather than raising: this is a display nicety, and a decade-old row with a
+    missing key is no reason to fail the whole deck request.
+    """
+    try:
+        raw = json.loads(deck.mmr_history_json or "[]")
+    except (json.JSONDecodeError, TypeError):
+        app.logger.warning("Deck %s has unparseable mmr_history_json", deck.id)
+        return []
+    if not isinstance(raw, list):
+        return []
+
+    points = []
+    for entry in raw[-MAX_MMR_HISTORY_POINTS:]:
+        if not isinstance(entry, dict):
+            continue
+        mmr_after = entry.get("mmr_after")
+        if isinstance(mmr_after, bool) or not isinstance(mmr_after, int):
+            continue
+        delta = entry.get("delta")
+        game_id = entry.get("game_id")
+        points.append({
+            "mmr": mmr_after,
+            "delta": delta if isinstance(delta, int) and not isinstance(delta, bool) else 0,
+            "game_id": game_id if isinstance(game_id, int) and not isinstance(game_id, bool) else None,
+        })
+    return points
+
+
 def _serialize_deck_detail(deck: Deck) -> dict:
     payload = _serialize_deck_summary(deck)
     participations = (
@@ -9501,6 +9584,8 @@ def _serialize_deck_detail(deck: Deck) -> dict:
             "participant_count": GameParticipant.query.filter_by(game_id=game.id).count(),
         })
     payload["recent_games"] = recent_games
+    # Detail only: the deck list renders many tiles and does not draw this chart.
+    payload["mmr_history"] = deck_mmr_history_points(deck)
     payload["decklist_text"] = deck.decklist_text or ""
     payload["card_print_prefs"] = json.loads(deck.card_print_prefs_json) if deck.card_print_prefs_json else {}
     payload["custom_commander_art_url"] = deck.custom_commander_art_url or ""
@@ -11841,6 +11926,8 @@ def api_game_detail(game_id):
             return []
         return loaded if isinstance(loaded, list) else []
 
+    # Shared across seats: several may be playing the same deck.
+    detail_deck_tags_cache: dict[int, dict[str, bool]] = {}
     return jsonify({
         "id": game.id,
         "date": game.date.isoformat(),
@@ -11851,24 +11938,13 @@ def api_game_detail(game_id):
         "starting_player": {"id": game.starting_player_id, "name": game.starting_player.name} if game.starting_player else None,
         "full_page_url": f"/games/{game.id}",
         "participants": [
-            {
-                "player_id": gp.player_id,
-                "player_name": gp.player.name,
-                "deck_id": gp.deck_id,
-                "deck_name": gp.deck.name,
-                "commander": gp.deck.commander_name or gp.deck.commander,
-                "art_url": gp.deck.commander_art_url,
-                "won": game.winner_id == gp.player_id,
-                "seat_position": gp.seat_position,
-                "salt_count": gp.salt_count,
-                "mana_fucked": gp.mana_fucked,
-                "misplayed": gp.misplayed,
-                "commander_damage": commander_damage_for(gp),
-                "life_history": life_history_for(gp),
-                "player_accent": player_id_to_accent(gp.player_id),
-                "player_url": f"/player/{gp.player_id}",
-                "deck_url": f"/deck/{gp.deck_id}",
-            }
+            _serialize_game_participant(
+                gp,
+                game,
+                commander_damage=commander_damage_for(gp),
+                life_history=life_history_for(gp),
+                deck_tags_cache=detail_deck_tags_cache,
+            )
             for gp in parts
         ],
     })

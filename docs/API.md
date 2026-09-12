@@ -661,6 +661,37 @@ endpoint with the single relevant boolean.
 
 ---
 
+#### Deck MMR
+
+Every deck summary carries `mmr` (an integer rating, floor applied) and `mmr_tier`, one of
+`S` `A` `B` `C` `D` with the same boundaries the web uses:
+
+| Tier | Rating |
+|---|---|
+| `S` | ≥ 1300 |
+| `A` | 1200–1299 |
+| `B` | 1100–1199 |
+| `C` | 950–1099 |
+| `D` | < 950 |
+
+`GET /api/decks/{deck_id}` adds `mmr_history`, the rating after each of the deck's recent games,
+oldest first:
+
+```json
+"mmr_history": [
+  { "mmr": 1010, "delta": 10, "game_id": 41 },
+  { "mmr": 1002, "delta": -8, "game_id": 44 }
+]
+```
+
+Intended for a sparkline, so it is plotted by game order rather than by date and carries no
+timestamp. Capped at the **60 most recent** entries — a deck gains one per game forever, and the
+list endpoint omits the field entirely to keep many tiles cheap. An empty array means the deck has
+not played yet. Unparseable or incomplete stored entries are skipped rather than failing the
+request, so treat a shorter array than expected as normal.
+
+---
+
 ### 5.6 Games
 
 #### `GET /api/games` · auth
@@ -713,6 +744,29 @@ is not plausible and validating a list that size is work a client should not be 
 Malformed samples are a `400`.
 
 #### `GET /api/games/{game_id}` · auth
+
+Each entry in `participants` carries the seat's own story, matching what the web game page shows:
+
+| Field | Meaning |
+|---|---|
+| `monarch` | the seat took the monarch at some point |
+| `poison` | poison counters dealt, clamped to 10 |
+| `mmr_delta` | rating change from this game, or `null` when the game was never rated |
+| `mechanics` | the deck's capabilities (`monarch`, `initiative`, `citys_blessing`, `poison`, `energy`, `experience`) |
+| `salt_count`, `mana_fucked`, `misplayed` | the salt flags |
+| `life_history` | `[[unix_timestamp, life], …]`, or `[]` |
+
+`mmr_delta` is `null` rather than `0` when no rating was applied — "played and gained nothing" is a
+different fact from "was never rated", and a client showing `0` for both is wrong.
+
+`mechanics` describes what the **deck can do**, derived from its tags; `monarch` and `poison`
+describe what **happened in this game**. A deck flagged `poison` whose seat dealt `0` did not use
+it. Note that `mechanics.poison` keys off the proliferate tag as well, matching the web.
+
+`player_url` and `deck_url` are web paths. A native client should navigate by `player_id` and
+`deck_id` instead.
+
+
 
 ```json
 {
