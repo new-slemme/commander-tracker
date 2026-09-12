@@ -328,6 +328,10 @@ Validation failures carry a `field` naming what to highlight:
 `field` is one of `username`, `display_name`, `email`, `pod_name`, `password`, `confirm`. It is
 absent on errors that are not about a particular input.
 
+Length limits, enforced before the uniqueness checks: `username` and `display_name` and
+`pod_name` 100 characters, `email` 320, `password` 1024. Exceeding one returns `400` naming
+that field.
+
 #### `POST /api/register` · public · 5/hour
 
 Creates the account, its player, and the pod it owns, with the new account as podmaster.
@@ -356,9 +360,15 @@ it must match.
   "player_id": 12,
   "email": "alice@example.com",
   "email_verified": false,
+  "verification_email_sent": true,
   "pod": { "id": 4, "name": "Friday Crew", "slug": "friday-crew" }
 }
 ```
+
+`verification_email_sent` is `false` when the account was created but the mail relay would
+not take the message. The account and its session are real either way — the request is **not**
+a failure — so treat it as "created, verification pending" and offer Resend rather than telling
+the user to check an inbox nothing was sent to.
 
 **The response sets the session cookie** — unlike the web form, which redirects to a login page, a
 successful registration signs the client in. Do not follow it with `POST /api/login`.
@@ -425,7 +435,10 @@ then call this endpoint.
 
 No body. Mints a new verification token, **invalidating any previous one**, and mails it.
 
-`202 {"email_verified": false, "message": "Verification email sent. Check your inbox."}`
+`202 {"email_verified": false, "verification_email_sent": true, "message": "Verification email sent. Check your inbox."}`
+
+As on registration, `verification_email_sent: false` (still `202`) means the relay refused the
+message; the token was issued and the previous one retired, so a later retry works.
 
 `200 {"email_verified": true, "message": "That address is already verified."}` when there is
 nothing to do — treat it as success and dismiss the banner rather than as an error.
@@ -682,7 +695,9 @@ samples, which the web renders as a chart on the game page. Two ways to supply t
 Explicit `life_history` wins over anything adopted from the token. Both are optional; an older
 client that sends neither still posts normally. Fewer than two samples is treated as no history
 (the life never changed). More than 120 samples per player is capped to the most recent, not
-rejected. Malformed samples are a `400`.
+rejected — but a list longer than 2400 samples is refused with a `400`, since a game that long
+is not plausible and validating a list that size is work a client should not be able to demand.
+Malformed samples are a `400`.
 
 #### `GET /api/games/{game_id}` · auth
 

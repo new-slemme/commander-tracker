@@ -361,6 +361,11 @@ MAX_LIFE_HISTORY_SAMPLES = 120
 MAX_LIFE_HISTORY_TIMESTAMP = 2 ** 31 - 1
 MAX_LIFE_HISTORY_LIFE = 100_000
 
+# A submission longer than this is refused outright rather than validated element by
+# element and then truncated. Generous next to MAX_LIFE_HISTORY_SAMPLES so a genuinely
+# long game is never rejected; the point is only to bound work a client controls.
+MAX_LIFE_HISTORY_SUBMISSION = MAX_LIFE_HISTORY_SAMPLES * 20
+
 # Contract advertised by GET /api/capabilities. Bump when the JSON contract changes
 # in a way a client must branch on; add a feature flag for anything a client would
 # otherwise have to discover by calling an endpoint and interpreting a 404.
@@ -399,6 +404,18 @@ API_FEATURES = {
 EMAIL_VERIFICATION_TTL_HOURS = 24
 PASSWORD_RESET_TTL_HOURS = 1
 
+# Column widths for the registration text fields. SQLite treats db.String(n) as type
+# affinity rather than a constraint, so without these a client can store as much as the
+# request-body cap allows in any of them.
+MAX_USERNAME_LENGTH = 100
+MAX_DISPLAY_NAME_LENGTH = 100
+MAX_EMAIL_LENGTH = 320
+MAX_POD_NAME_LENGTH = 100
+
+# Not a column width. Long passwords are welcome -- this only stops an unauthenticated
+# caller from making the server hash a multi-megabyte string.
+MAX_PASSWORD_LENGTH = 1024
+
 EMAIL_PATTERN = re.compile(r"[^\s@]+@[^\s@]+\.[^\s@]+")
 
 # One wording for "we may or may not have mailed you", and one for "that token is
@@ -408,6 +425,9 @@ PASSWORD_RESET_SENT_MESSAGE = "If that email is registered, a reset link has bee
 PASSWORD_RESET_INVALID_MESSAGE = "That reset link is invalid or expired."
 EMAIL_VERIFICATION_INVALID_MESSAGE = "That verification link is invalid or expired."
 EMAIL_VERIFICATION_SENT_MESSAGE = "Verification email sent. Check your inbox."
+EMAIL_VERIFICATION_UNSENT_MESSAGE = (
+    "We could not send the verification email just now. Please try again shortly."
+)
 
 # Digital Asset Links. Overridable so a fork signing with its own key can point at
 # its own certificate without editing code.
@@ -3647,6 +3667,22 @@ REGISTRATION_INCOMPLETE_MESSAGE = (
 # the web form, which only ever flashes the message, ignores it.
 RegistrationProblem = namedtuple("RegistrationProblem", "field message status")
 
+REGISTRATION_FIELD_LIMITS = {
+    "username": MAX_USERNAME_LENGTH,
+    "display_name": MAX_DISPLAY_NAME_LENGTH,
+    "email": MAX_EMAIL_LENGTH,
+    "pod_name": MAX_POD_NAME_LENGTH,
+    "password": MAX_PASSWORD_LENGTH,
+}
+
+REGISTRATION_FIELD_LABELS = {
+    "username": "Username",
+    "display_name": "Display name",
+    "email": "Email address",
+    "pod_name": "Pod name",
+    "password": "Password",
+}
+
 
 def validate_registration(fields: dict) -> RegistrationProblem | None:
     """Return the first problem with a registration attempt, or None if it is sound.
@@ -3657,6 +3693,13 @@ def validate_registration(fields: dict) -> RegistrationProblem | None:
     for name in REGISTRATION_REQUIRED_FIELDS:
         if not fields.get(name):
             return RegistrationProblem(name, REGISTRATION_INCOMPLETE_MESSAGE, 400)
+    # Before the uniqueness queries and before hashing, so an oversized field costs
+    # neither a database round trip nor a KDF pass.
+    for name, limit in REGISTRATION_FIELD_LIMITS.items():
+        if len(fields[name]) > limit:
+            return RegistrationProblem(
+                name, f"{REGISTRATION_FIELD_LABELS[name]} must be {limit} characters or fewer", 400
+            )
     if not EMAIL_PATTERN.fullmatch(fields["email"]):
         return RegistrationProblem("email", "Enter a valid email address", 400)
     if fields.get("confirm") is not None and fields["password"] != fields["confirm"]:
@@ -3722,12 +3765,28 @@ def issue_email_verification(user: User) -> str:
     return raw_token
 
 
-def send_email_verification(user: User, raw_token: str) -> None:
+def try_send_transactional_email(recipient: str, subject: str, body: str, *, purpose: str) -> bool:
+    """Send, reporting failure instead of raising.
+
+    The account, token, or invite is already committed by the time we get here, so an
+    unreachable relay must not turn a completed write into a 500 and leave the caller
+    believing nothing happened. The error is logged; the token never is.
+    """
+    try:
+        return send_transactional_email(recipient, subject, body)
+    except Exception:
+        app.logger.exception("Failed to send %s email", purpose)
+        return False
+
+
+def send_email_verification(user: User, raw_token: str) -> bool:
+    """Mail the verification link. Returns whether it actually went out."""
     verification_url = url_for("verify_email", token=raw_token, _external=True)
-    send_transactional_email(
+    return try_send_transactional_email(
         user.email,
         "Verify your EDH Son account",
         f"Verify your email within {EMAIL_VERIFICATION_TTL_HOURS} hours:\n\n{verification_url}",
+        purpose="email verification",
     )
 
 
@@ -3765,10 +3824,14 @@ def begin_password_reset(email: str) -> str | None:
     )
     db.session.commit()
     reset_url = url_for("reset_password", token=raw_token, _external=True)
-    send_transactional_email(
+    # Best effort on purpose: the token is committed, and the caller answers
+    # identically either way, so a relay outage must not surface as a 500 that
+    # distinguishes a registered address from an unregistered one.
+    try_send_transactional_email(
         user.email,
         "Reset your EDH Son password",
         f"Reset your password within one hour:\n\n{reset_url}",
+        purpose="password reset",
     )
     return raw_token
 
@@ -5927,10 +5990,11 @@ def accept_pod_invite(token):
             db.session.flush()
             record_funnel_event("account_created", user=me, pod=invite.pod)
             verify_url = url_for("verify_email", token=raw_verify, _external=True)
-            send_transactional_email(
+            try_send_transactional_email(
                 me.email,
                 "Verify your EDH Son account",
                 f"Verify your email within 24 hours:\n\n{verify_url}",
+                purpose="email verification",
             )
 
         ensure_membership(invite.pod_id, me.player.id, role=invite.role)
@@ -9584,6 +9648,13 @@ def _normalize_life_history(raw) -> tuple[list | None, str | None]:
     range_error = "participants.life_history values are out of range"
     if not isinstance(raw, list):
         return None, shape_error
+    # Checked before the loop: a million trivial pairs would otherwise all be
+    # validated and then discarded by the truncation below.
+    if len(raw) > MAX_LIFE_HISTORY_SUBMISSION:
+        return None, (
+            f"participants.life_history must contain at most "
+            f"{MAX_LIFE_HISTORY_SUBMISSION} samples"
+        )
     samples = []
     for item in raw:
         if not isinstance(item, list) or len(item) != 2:
@@ -9884,7 +9955,7 @@ def api_register():
         pod_name=fields["pod_name"],
     )
     db.session.commit()
-    send_email_verification(user, raw_verification_token)
+    email_sent = send_email_verification(user, raw_verification_token)
     _establish_session(user)
     return jsonify({
         "user_id": user.id,
@@ -9893,6 +9964,9 @@ def api_register():
         "player_id": user.player.id if user.player else None,
         "email": user.email,
         "email_verified": False,
+        # False means the account exists but no email went out -- offer Resend rather
+        # than telling the user to go and check their inbox.
+        "verification_email_sent": email_sent,
         "pod": {"id": pod.id, "name": pod.name, "slug": pod.slug},
     }), 201
 
@@ -9957,10 +10031,14 @@ def api_resend_email_verification():
         return jsonify({"error": "This account has no email address.", "field": "email"}), 400
     raw_token = issue_email_verification(user)
     db.session.commit()
-    send_email_verification(user, raw_token)
+    email_sent = send_email_verification(user, raw_token)
     return jsonify({
         "email_verified": False,
-        "message": EMAIL_VERIFICATION_SENT_MESSAGE,
+        "verification_email_sent": email_sent,
+        "message": (
+            EMAIL_VERIFICATION_SENT_MESSAGE if email_sent
+            else EMAIL_VERIFICATION_UNSENT_MESSAGE
+        ),
     }), 202
 
 

@@ -313,7 +313,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - **Do not** relax the documented limits in `docs/API.md` to match the broken behaviour; the
   documented numbers are the intended contract.
 
-### [ ] TASK-R27 — A mail-send failure 500s over an account that was already created  `[sonnet]`
+### [x] TASK-R27 — A mail-send failure 500s over an account that was already created  `[sonnet]`
 - **Where:** `app.py` `api_register` (commit, then `send_email_verification`), `send_transactional_email`.
 - **Defect:** `send_transactional_email` has no `try/except` around `smtplib.SMTP(...)`. In
   `api_register` the order is `db.session.commit()` -> send mail -> `_establish_session(user)`. If the
@@ -332,7 +332,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 - **Verify:** Point `SMTP_HOST` at a closed port, `POST /api/register`, and confirm `201`, a working
   session, `verification_email_sent: false`, and an error in the log with no token in it.
 
-### [ ] TASK-R28 — No length bounds on `username`, `display_name`, `pod_name`  `[sonnet]`
+### [x] TASK-R28 — No length bounds on `username`, `display_name`, `pod_name`  `[sonnet]`
 - **Where:** `app.py` `validate_registration`.
 - **Defect:** Presence, email shape, password rules and uniqueness are all checked, but length never
   is. SQLite treats `db.String(100)` as type affinity, not a constraint, so a client can persist
@@ -343,7 +343,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
   per-field `RegistrationProblem` so both the form and the API report it the same way.
 - **Verify:** A 10,000-character `pod_name` returns `400` with `field: "pod_name"` and writes nothing.
 
-### [ ] TASK-R29 — `_normalize_life_history` validates every sample before truncating  `[sonnet]`
+### [x] TASK-R29 — `_normalize_life_history` validates every sample before truncating  `[sonnet]`
 - **Where:** `app.py` `_normalize_life_history` (the per-participant loop, then the
   `[-MAX_LIFE_HISTORY_SAMPLES:]` slice).
 - **Defect:** Each `[timestamp, life]` pair is type- and bounds-checked before the list is trimmed to
