@@ -278,6 +278,86 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ---
 
+## P1 — Rate limits (added 2026-09-12, from the Phase 3 onboarding security review)
+
+### [ ] TASK-R26 — Rate limits are per-worker, so every advertised limit is ~4x too high  `[opus]`
+- **Where:** `app.py:239` (`limiter = Limiter(..., storage_uri="memory://")`), `Dockerfile` (`gunicorn -w 4`).
+- **Defect:** The limiter stores counters in process memory, and the container runs four gunicorn
+  workers, each with its own independent count. Flask-Limiter's `memory://` backend shares nothing
+  across processes, so a caller whose requests land on different workers — which happens under any
+  concurrency, with no special tooling — gets roughly four times the stated ceiling. The documented
+  `5 / hour` on `POST /api/register`, `/api/password/forgot` and `/api/email/verify/resend` is really
+  about 20/hour; the `10 / hour` on `/api/password/reset` and `/api/email/verify` is about 40/hour.
+  `POST /api/login` at `10 / minute` is likewise about 40/minute.
+- **Why it matters now:** this line predates the JSON API, but Phase 3 made it load-bearing. Three
+  deliberate design decisions lean on these limits being real: `/api/password/forgot` answering
+  identically for known and unknown addresses, unknown and expired tokens being indistinguishable,
+  and `POST /api/register` disclosing username/email collisions (409 with a `field`). The last one
+  was accepted on the grounds that it matches the long-standing web form and is throttled to
+  5/hour — at ~20/hour, collision disclosure becomes a meaningfully cheaper enumeration oracle.
+  Reset-token guessing is not a practical threat either way (256-bit `secrets.token_urlsafe(32)`),
+  so the exposure is enumeration and account-creation spam, not token brute force.
+- **Fix:** Point `storage_uri` at a store shared across workers. Options, in order of preference:
+  1. Redis (`redis://`) — the backend Flask-Limiter is designed around, but adds a service to the
+     compose stack for one feature.
+  2. The existing SQLite file via a limiter table — no new service, but write contention interacts
+     with the `BEGIN IMMEDIATE` serialization from ADR-014; measure before choosing this.
+  3. `gunicorn -w 1 --threads N` — makes the current limits honest with no new dependency, at the
+     cost of losing process-level parallelism. Cheapest correct option if the traffic allows it.
+  Whichever is chosen, re-read the field-disclosure decision on `/api/register` afterwards.
+- **Verify:** With four workers running, hammer `POST /api/password/forgot` from one IP and confirm
+  the 6th request in an hour returns `429`, not the ~21st. A test that asserts this needs to go
+  through the real gunicorn container, not the single-process test client — the in-process suite
+  cannot observe the bug. `tests/test_api_onboarding.py::test_registration_is_rate_limited` proves
+  the decorator is wired up, not that the ceiling holds across workers.
+- **Do not** relax the documented limits in `docs/API.md` to match the broken behaviour; the
+  documented numbers are the intended contract.
+
+### [ ] TASK-R27 — A mail-send failure 500s over an account that was already created  `[sonnet]`
+- **Where:** `app.py` `api_register` (commit, then `send_email_verification`), `send_transactional_email`.
+- **Defect:** `send_transactional_email` has no `try/except` around `smtplib.SMTP(...)`. In
+  `api_register` the order is `db.session.commit()` -> send mail -> `_establish_session(user)`. If the
+  relay is down, times out, or rejects auth, the account, player and pod are already committed, but
+  the handler raises before the session is established. The client gets a 500, is not signed in, and
+  has no way to know an account now exists under the username and email it submitted. An automatic
+  retry then hits the 409 "already taken" path and looks like someone else took the name.
+- **Note:** the ordering is pre-existing — the web `register()` route has always worked this way —
+  but a mobile client retries where a human re-reading a flashed message does not, and "created,
+  but reported as failed" is worse in an API contract than in a form post.
+- **Fix:** Wrap the mail step so a mail outage degrades instead of failing the request: log the
+  exception (never the token), still call `_establish_session`, and return `201` with something the
+  client can act on (e.g. `"verification_email_sent": false`) so the UI can offer Resend rather than
+  claim an email is on its way. Apply the same treatment to the web route and to
+  `accept_pod_invite`, which has the same shape. Document the new field in `docs/API.md`.
+- **Verify:** Point `SMTP_HOST` at a closed port, `POST /api/register`, and confirm `201`, a working
+  session, `verification_email_sent: false`, and an error in the log with no token in it.
+
+### [ ] TASK-R28 — No length bounds on `username`, `display_name`, `pod_name`  `[sonnet]`
+- **Where:** `app.py` `validate_registration`.
+- **Defect:** Presence, email shape, password rules and uniqueness are all checked, but length never
+  is. SQLite treats `db.String(100)` as type affinity, not a constraint, so a client can persist
+  strings up to the global 15 MB `MAX_CONTENT_LENGTH` into these columns. No injection risk (the ORM
+  parameterizes everywhere) — this is storage bloat and rendering cost wherever the values are later
+  displayed. Pre-existing and shared with the web form; the JSON endpoint makes it scriptable.
+- **Fix:** Cap each field in `validate_registration` at the column width, returning the existing
+  per-field `RegistrationProblem` so both the form and the API report it the same way.
+- **Verify:** A 10,000-character `pod_name` returns `400` with `field: "pod_name"` and writes nothing.
+
+### [ ] TASK-R29 — `_normalize_life_history` validates every sample before truncating  `[sonnet]`
+- **Where:** `app.py` `_normalize_life_history` (the per-participant loop, then the
+  `[-MAX_LIFE_HISTORY_SAMPLES:]` slice).
+- **Defect:** Each `[timestamp, life]` pair is type- and bounds-checked before the list is trimmed to
+  120. A payload bounded only by the 15 MB body cap can pack on the order of a million trivial pairs
+  per participant, across six seats, and force the whole validation pass for data that is then thrown
+  away. Bounded work, so denial of service is not really on the table, but it is wasted CPU on a
+  path a client controls.
+- **Fix:** Reject outright when the incoming list is longer than some sane multiple of
+  `MAX_LIFE_HISTORY_SAMPLES` before iterating it.
+- **Verify:** A 100,000-sample submission is rejected without the per-element loop running; a normal
+  submission of a few hundred samples still truncates to the newest 120 as today.
+
+---
+
 ## Notes for whoever picks these up
 - Test suite baseline: `40 passed, 8 failed`. Of the 8 failures, only
   `test_apk_release.py::…stale` is a real app bug (TASK-R12). The other 7 are test-harness issues
