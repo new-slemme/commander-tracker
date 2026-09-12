@@ -210,7 +210,7 @@ def _sqlite_connect_pragmas(dbapi_connection, _connection_record):
 # in AUTOCOMMIT so the api_game_state POST handler can issue an explicit
 # BEGIN IMMEDIATE — taking the SQLite write lock up front — and serialise
 # concurrent updates via that lock. Because it is a *separate* connection pool
-# to the same database file, this locking works across gunicorn -w 4 worker
+# to the same database file, this locking works across both threads and worker
 # processes (an in-process threading.Lock would not) and, crucially, leaves the
 # main ORM session's transaction handling completely untouched. Built lazily
 # from the ORM engine's resolved URL so it always targets the same database.
@@ -263,18 +263,29 @@ OBJECT_STORAGE_BUCKET = (os.getenv("OBJECT_STORAGE_BUCKET") or "").strip()
 OBJECT_STORAGE_ENDPOINT = (os.getenv("OBJECT_STORAGE_ENDPOINT") or "").strip() or None
 OBJECT_STORAGE_REGION = (os.getenv("OBJECT_STORAGE_REGION") or "eu-central-1").strip()
 _object_storage_client = None
+_object_storage_client_init_lock = threading.Lock()
 
 
 def get_object_storage_client():
+    """Return the shared S3 client, constructing it once on first use.
+
+    The lock matters under the threaded worker: two requests racing here would
+    otherwise both build a client, and boto3 client construction is not safe to run
+    concurrently. Double-checked so the common path stays lock-free.
+    """
     global _object_storage_client
     if not OBJECT_STORAGE_BUCKET:
         return None
     if _object_storage_client is None:
-        import boto3
+        with _object_storage_client_init_lock:
+            if _object_storage_client is None:
+                import boto3
 
-        _object_storage_client = boto3.client(
-            "s3", endpoint_url=OBJECT_STORAGE_ENDPOINT, region_name=OBJECT_STORAGE_REGION
-        )
+                _object_storage_client = boto3.client(
+                    "s3",
+                    endpoint_url=OBJECT_STORAGE_ENDPOINT,
+                    region_name=OBJECT_STORAGE_REGION,
+                )
     return _object_storage_client
 
 

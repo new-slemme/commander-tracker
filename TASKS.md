@@ -280,7 +280,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
 
 ## P1 — Rate limits (added 2026-09-12, from the Phase 3 onboarding security review)
 
-### [ ] TASK-R26 — Rate limits are per-worker, so every advertised limit is ~4x too high  `[opus]`
+### [x] TASK-R26 — Rate limits are per-worker, so every advertised limit is ~4x too high  `[opus]`
 - **Where:** `app.py:239` (`limiter = Limiter(..., storage_uri="memory://")`), `Dockerfile` (`gunicorn -w 4`).
 - **Defect:** The limiter stores counters in process memory, and the container runs four gunicorn
   workers, each with its own independent count. Flask-Limiter's `memory://` backend shares nothing
@@ -305,6 +305,10 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done
   3. `gunicorn -w 1 --threads N` — makes the current limits honest with no new dependency, at the
      cost of losing process-level parallelism. Cheapest correct option if the traffic allows it.
   Whichever is chosen, re-read the field-disclosure decision on `/api/register` afterwards.
+- **Resolved with option 3** (2026-09-12): `-w 1 --threads 8`. Measured before and after with
+  12 concurrent requests against the 5/hour `/api/password/forgot` limit — 12/12 accepted on
+  four workers, 5 accepted and 7 rejected on one. The `/api/register` collision disclosure is
+  therefore genuinely throttled as originally assumed and needs no revisiting.
 - **Verify:** With four workers running, hammer `POST /api/password/forgot` from one IP and confirm
   the 6th request in an hour returns `429`, not the ~21st. A test that asserts this needs to go
   through the real gunicorn container, not the single-process test client — the in-process suite
