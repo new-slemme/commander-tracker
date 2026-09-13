@@ -2127,6 +2127,17 @@ with app.app_context():
 
     ensure_indexes()
 
+    # Prune old funnel events to prevent unbounded table growth (L2).
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        db.session.execute(
+            text("DELETE FROM funnel_event WHERE created_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
     if os.getenv("AUTO_CREATE_DB") == "1":
         db.create_all()
 
@@ -4408,6 +4419,7 @@ def login():
                 user.player = Player(name=user.display_name)
                 db.session.commit()
 
+            session.clear()  # prevent session fixation (L3)
             session["user_id"] = user.id
             session["username"] = user.username
             session["display_name"] = user.display_name
