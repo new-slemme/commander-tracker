@@ -9,16 +9,14 @@ import app
 class ComputeDeckTagsTests(unittest.TestCase):
     def test_lookup_failure_does_not_abort_other_tag_detection(self):
         lookup_payloads = {
-            "Good Monarch Card": {"oracle_text": "When this enters, you become the monarch."},
-            "Energy Card": {"oracle_text": "You get {E}{E}."},
+            "good monarch card": {"oracle_text": "When this enters, you become the monarch."},
+            "energy card": {"oracle_text": "You get {E}{E}."},
         }
 
-        def fake_lookup(name: str):
-            if name == "Missing Card":
-                return None
-            return lookup_payloads.get(name)
+        def fake_collection(names):
+            return {n.lower(): lookup_payloads[n.lower()] for n in names if n.lower() in lookup_payloads}
 
-        with patch("app.scryfall_named_exact", side_effect=fake_lookup):
+        with patch("app.scryfall_collection", side_effect=fake_collection):
             tags, diagnostics = app.compute_deck_tags(
                 ["Good Monarch Card", "Missing Card", "Energy Card"]
             )

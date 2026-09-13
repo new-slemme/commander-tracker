@@ -2470,6 +2470,30 @@ def scryfall_named_exact(name: str):
         return None
 
 
+def scryfall_collection(names: list[str]) -> dict[str, dict]:
+    """Batch-fetch up to 75 card names via POST /cards/collection.
+
+    Returns a mapping of lowercased card name → card JSON for every card
+    Scryfall could resolve.  Names that don't match are silently absent.
+    """
+    if not names:
+        return {}
+    identifiers = [{"name": n} for n in names[:75]]
+    try:
+        r = requests.post(
+            "https://api.scryfall.com/cards/collection",
+            json={"identifiers": identifiers},
+            headers={**SCRYFALL_HEADERS, "Content-Type": "application/json"},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return {}
+        data = r.json().get("data") or []
+        return {card.get("name", "").lower(): card for card in data if isinstance(card, dict)}
+    except (requests.RequestException, ValueError):
+        return {}
+
+
 def custommtg_gallery_named_exact(name: str) -> dict | None:
     """Look up a card by exact name in the custom MTG gallery. Returns card dict or None."""
     if not CCAUTO_BASE_URL or not name:
@@ -2611,34 +2635,42 @@ def compute_commander_bracket_from_text(decklist_text: str | None) -> dict:
 
     parsed = parse_plaintext_decklist(raw_text).as_dict()
     return compute_commander_bracket(extract_decklist_card_names(parsed))
+_SCRYFALL_BATCH_SIZE = 75
+
+
 def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
     tags = {key: False for key in KNOWN_DECK_TAG_KEYS}
-    seen_names: set[str] = set()
     unresolved_cards: list[str] = []
 
-    for raw_name in decklist_cards:
-        name = (raw_name or "").strip()
-        if not name:
-            continue
+    # Deduplicate while preserving original casing for fallback lookups.
+    seen: set[str] = set()
+    unique: list[str] = []
+    for raw in decklist_cards:
+        name = (raw or "").strip()
+        if name and name.lower() not in seen:
+            seen.add(name.lower())
+            unique.append(name)
 
-        lowered = name.lower()
-        if lowered in seen_names:
-            continue
-        seen_names.add(lowered)
+    if not unique:
+        return tags, {"unresolved_count": 0, "unresolved_cards": []}
 
-        try:
-            card_json = scryfall_named_exact(name)
-            if not card_json and CCAUTO_BASE_URL:
+    # Fetch in batches of 75 via POST /cards/collection.
+    resolved: dict[str, dict] = {}
+    for i in range(0, len(unique), _SCRYFALL_BATCH_SIZE):
+        batch = unique[i:i + _SCRYFALL_BATCH_SIZE]
+        resolved.update(scryfall_collection(batch))
+
+    for name in unique:
+        card_json = resolved.get(name.lower())
+        if not card_json and CCAUTO_BASE_URL:
+            try:
                 card_json = custommtg_gallery_named_exact(name)
-            if not card_json:
-                unresolved_cards.append(name)
-                continue
-
-            card_tags = analyze_scryfall_card(card_json)
-        except Exception:
+            except Exception:
+                card_json = None
+        if not card_json:
             unresolved_cards.append(name)
             continue
-
+        card_tags = analyze_scryfall_card(card_json)
         for key in tags:
             tags[key] = tags[key] or card_tags.get(key, False)
 
@@ -6488,62 +6520,83 @@ def delete_game(game_id):
 def players():
     players_list = scoped_player_query(get_current_user(), get_active_pod()).order_by(Player.name.asc()).all()
 
-    # Bulk aggregate: avg MMR of active decks per player
+    player_ids = [p.id for p in players_list]
+    pid_in = player_ids if player_ids else [-1]
+
+    # Replace 5N per-player queries with 6 bulk aggregates.
     avg_mmr_by_player = dict(
         db.session.query(Deck.player_id, func.avg(Deck.mmr))
-        .filter(Deck.retired == False, Deck.planned == False)
+        .filter(Deck.player_id.in_(pid_in), Deck.retired == False, Deck.planned == False)  # noqa: E712
         .group_by(Deck.player_id)
         .all()
     )
+    played_by_player = dict(
+        db.session.query(GameParticipant.player_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.player_id.in_(pid_in))
+        .group_by(GameParticipant.player_id)
+        .all()
+    )
+    won_by_player = dict(
+        db.session.query(Game.winner_id, func.count(Game.id))
+        .filter(Game.winner_id.in_(pid_in))
+        .group_by(Game.winner_id)
+        .all()
+    )
+    deck_count_by_player = dict(
+        db.session.query(Deck.player_id, func.count(Deck.id))
+        .filter(Deck.player_id.in_(pid_in))
+        .group_by(Deck.player_id)
+        .all()
+    )
+    deck_used_players = set(
+        pid for (pid,) in db.session.query(Deck.player_id)
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .filter(Deck.player_id.in_(pid_in))
+        .distinct()
+        .all()
+    )
+
+    # Most-played deck per player: aggregate plays per (player, deck), then resolve in Python.
+    plays_rows = (
+        db.session.query(GameParticipant.player_id, GameParticipant.deck_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.player_id.in_(pid_in))
+        .group_by(GameParticipant.player_id, GameParticipant.deck_id)
+        .all()
+    )
+    top_deck_id_by_player: dict[int, int] = {}
+    top_plays: dict[int, int] = {}
+    for r_player_id, r_deck_id, r_plays in plays_rows:
+        if r_plays > top_plays.get(r_player_id, 0):
+            top_plays[r_player_id] = r_plays
+            top_deck_id_by_player[r_player_id] = r_deck_id
+    top_deck_ids = list(set(top_deck_id_by_player.values()))
+    top_decks = {d.id: d for d in Deck.query.filter(Deck.id.in_(top_deck_ids if top_deck_ids else [-1])).all()}
 
     player_can_delete = {}
     player_stats = {}
     for p in players_list:
-        played = GameParticipant.query.filter_by(player_id=p.id).count()
-        won = Game.query.filter_by(winner_id=p.id).count()
-
-        deck_count = Deck.query.filter_by(player_id=p.id).count()
+        played = played_by_player.get(p.id, 0)
+        won = won_by_player.get(p.id, 0)
         disp_won, disp_played = player_totals_with_history(p, won, played)
         winrate = round((disp_won / disp_played) * 100, 1) if disp_played else 0.0
         joined_on = p.user.created_at if p.user else None
-
         raw_avg = avg_mmr_by_player.get(p.id)
         avg_mmr = round(raw_avg) if raw_avg is not None else None
-
-        most_played = (
-            db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
-            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-            .filter(GameParticipant.player_id == p.id)
-            .group_by(Deck.id)
-            .order_by(text("plays DESC"))
-            .first()
-        )
-        card_art = most_played[0].commander_art_url if most_played else None
+        top_deck = top_decks.get(top_deck_id_by_player.get(p.id))
+        card_art = top_deck.commander_art_url if top_deck else None
 
         player_stats[p.id] = {
             "winrate": winrate,
-            "deck_count": deck_count,
+            "deck_count": deck_count_by_player.get(p.id, 0),
             "joined_on": joined_on,
             "won": disp_won,
             "played": disp_played,
             "avg_mmr": avg_mmr,
             "card_art": card_art,
         }
-
-        deck_used = (
-            db.session.query(GameParticipant.id)
-            .join(Deck, GameParticipant.deck_id == Deck.id)
-            .filter(Deck.player_id == p.id)
-            .first()
-            is not None
-        )
-
-        # Only deletable if:
-        # - not linked to a user
-        # - not in any game (played or won)
-        # - none of their decks are used
         player_can_delete[p.id] = (
-            p.user_id is None and played == 0 and won == 0 and not deck_used
+            p.user_id is None and played == 0 and won == 0
+            and p.id not in deck_used_players
             and not player_has_history(p)
         )
 
@@ -6968,25 +7021,33 @@ def decks():
     for d in decks_list:
         get_deck_parsed_tags(d, cache=deck_tags_cache)
 
-    # Stats
-    stats = {}
-    for d in decks_list:
-        wins = (
-            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
-            .count()
-        )
-        uses = GameParticipant.query.filter_by(deck_id=d.id).count()
-        wins, uses = deck_totals_with_history(d, wins, uses)
-        losses = max(0, uses - wins)
-        winrate = round((wins / uses) * 100, 1) if uses else 0.0
-        stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate, "mmr": d.mmr}
+    # Aggregate stats in two queries instead of 3N per-deck COUNT queries.
+    deck_ids = [d.id for d in decks_list]
+    id_filter = GameParticipant.deck_id.in_(deck_ids if deck_ids else [-1])
 
+    raw_uses = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .filter(id_filter)
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+    raw_wins = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(id_filter, Game.winner_id == GameParticipant.player_id)
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+
+    stats = {}
     deck_can_delete = {}
     deck_tags_stale = {}
     for d in decks_list:
-        used = GameParticipant.query.filter_by(deck_id=d.id).count()
-        deck_can_delete[d.id] = (used == 0 and not deck_has_history(d))
+        wins, uses = deck_totals_with_history(d, raw_wins.get(d.id, 0), raw_uses.get(d.id, 0))
+        losses = max(0, uses - wins)
+        winrate = round((wins / uses) * 100, 1) if uses else 0.0
+        stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate, "mmr": d.mmr}
+        deck_can_delete[d.id] = (raw_uses.get(d.id, 0) == 0 and not deck_has_history(d))
         deck_tags_stale[d.id] = bool(d.decklist_text and is_deck_tags_stale(d))
 
     stale_deck_count = sum(1 for stale in deck_tags_stale.values() if stale)
@@ -9606,15 +9667,28 @@ def api_stats():
 
     current_user = get_current_user()
     players = scoped_player_query(current_user, active_pod).all()
+    player_ids = [p.id for p in players]
+    pid_in = player_ids if player_ids else [-1]
+
+    raw_wins_by_player = dict(
+        db.session.query(Game.winner_id, func.count(Game.id))
+        .filter(Game.id.in_(game_ids_subquery), Game.winner_id.in_(pid_in))
+        .group_by(Game.winner_id)
+        .all()
+    )
+    raw_played_by_player = dict(
+        db.session.query(GameParticipant.player_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_ids_subquery), GameParticipant.player_id.in_(pid_in))
+        .group_by(GameParticipant.player_id)
+        .all()
+    )
+
     player_stats = []
     for p in players:
-        wins = game_q.filter_by(winner_id=p.id).count()
-        played = (
-            GameParticipant.query.join(Game)
-            .filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery))
-            .count()
+        wins, played = player_totals_with_history(
+            p, raw_wins_by_player.get(p.id, 0), raw_played_by_player.get(p.id, 0), include=history_ok
         )
-        wins, played = player_totals_with_history(p, wins, played, include=history_ok)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"player_id": p.id, "name": p.name, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
@@ -9652,23 +9726,27 @@ def api_stats():
         })
 
     decks = scoped_deck_query(current_user, active_pod).all()
+    deck_ids = [d.id for d in decks]
+    did_in = deck_ids if deck_ids else [-1]
+
+    raw_deck_wins = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(GameParticipant.deck_id.in_(did_in), Game.winner_id == GameParticipant.player_id, Game.id.in_(game_ids_subquery))
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+    raw_deck_uses = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(GameParticipant.deck_id.in_(did_in), Game.id.in_(game_ids_subquery))
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+
     deck_stats = []
     for d in decks:
-        wins = (
-            GameParticipant.query.join(Game)
-            .filter(
-                GameParticipant.deck_id == d.id,
-                Game.winner_id == GameParticipant.player_id,
-                Game.id.in_(game_ids_subquery),
-            )
-            .count()
-        )
-        uses = (
-            GameParticipant.query.join(Game)
-            .filter(GameParticipant.deck_id == d.id, Game.id.in_(game_ids_subquery))
-            .count()
-        )
-        wins, uses = deck_totals_with_history(d, wins, uses, include=history_ok)
+        wins, uses = deck_totals_with_history(d, raw_deck_wins.get(d.id, 0), raw_deck_uses.get(d.id, 0), include=history_ok)
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({
             "id": d.id,
