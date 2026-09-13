@@ -21,6 +21,8 @@ RUN groupadd --gid 1000 app && useradd --uid 1000 --gid app --home-dir /app --no
 
 USER app
 
-# GUNICORN_WORKER_TIMEOUT_SECS: generous timeout for card-art/deck-import
-# requests that proxy to Scryfall/Moxfield/Archidekt.
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "4", "--timeout", "60", "app:app"]
+# 1 gthread worker with 16 threads:
+#   - P3: threads handle art/static I/O without starving page renders
+#   - P4: single-process memory:// Flask-Limiter is accurate (4 workers gives 4× budget)
+# Flask-SQLAlchemy scoped_session and CARD_ART_CACHE_LOCK are thread-safe.
+CMD ["gunicorn", "-b", "0.0.0.0:5000", "-w", "1", "-k", "gthread", "--threads", "16", "--timeout", "60", "app:app"]

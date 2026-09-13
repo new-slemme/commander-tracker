@@ -10013,11 +10013,7 @@ def api_saltmine():
             "winrate": round((wins / games) * 100, 1) if games else None,
         })
 
-    scoped_participants = (
-        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-        .filter(Game.id.in_(game_q.with_entities(Game.id)))
-        .all()
-    )
+    scoped_participants = participants  # already loaded above; same filter
     deck_tags_cache: dict[int, dict[str, bool]] = {}
     deck_mechanics_by_id = {}
     for deck in Deck.query.all():
