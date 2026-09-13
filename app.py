@@ -2,6 +2,7 @@
 from flask import (
     Flask,
     Response,
+    g,
     jsonify,
     render_template,
     request,
@@ -56,6 +57,8 @@ SCRYFALL_HEADERS = {
     "User-Agent": "CommanderTracker/1.0 (https://github.com/new-slemme/commander-tracker)",
     "Accept": "application/json",
 }
+
+_MISSING = object()  # sentinel for flask.g cache misses
 
 app = Flask(__name__)
 _flask_secret = os.getenv("FLASK_SECRET_KEY", "")
@@ -1263,9 +1266,12 @@ def backup_database_on_startup():
                 return
             backups_dir = os.path.join(os.path.dirname(db_path) or ".", "backups")
             os.makedirs(backups_dir, exist_ok=True)
+            # Use the source DB stem (e.g. "commander" or "commander-test") as prefix so
+            # the stable and test containers each manage their own backup set in the shared dir.
+            db_stem = os.path.splitext(os.path.basename(db_path))[0]
             existing = [
                 os.path.join(backups_dir, f) for f in os.listdir(backups_dir)
-                if f.startswith("commander-") and f.endswith(".db")
+                if f.startswith(db_stem + "-") and f.endswith(".db")
             ]
             newest_age = min(
                 (time.time() - os.path.getmtime(p) for p in existing), default=None
@@ -1274,16 +1280,16 @@ def backup_database_on_startup():
                 # Another worker (or a very recent restart) already snapshotted.
                 return
             stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%SZ")
-            dest = os.path.join(backups_dir, f"commander-{stamp}.db")
+            dest = os.path.join(backups_dir, f"{db_stem}-{stamp}.db")
             dst = sqlite3.connect(dest)
             try:
                 src.backup(dst)  # online backup API — consistent across WAL
             finally:
                 dst.close()
-            # Rotate: keep the newest STARTUP_BACKUP_KEEP snapshots.
+            # Rotate: keep the newest STARTUP_BACKUP_KEEP snapshots for this channel.
             snaps = sorted(
                 (os.path.join(backups_dir, f) for f in os.listdir(backups_dir)
-                 if f.startswith("commander-") and f.endswith(".db")),
+                 if f.startswith(db_stem + "-") and f.endswith(".db")),
                 key=os.path.getmtime,
                 reverse=True,
             )
@@ -2175,9 +2181,21 @@ def _load_json_index(path: Path) -> dict:
 
 
 def _save_json_index(path: Path, payload: dict) -> None:
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True), encoding="utf-8")
-    tmp_path.replace(path)
+    # Use mkstemp for a unique temp path so concurrent workers don't race on the same .tmp file.
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        os.write(fd, json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+        os.close(fd)
+        fd = -1
+        Path(tmp).replace(path)
+    except Exception:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _initialize_card_art_indexes() -> None:
@@ -2882,7 +2900,7 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
     if not (art_url and scryfall_id and commander_name):
         return None
 
-    filename = f"{_safe_filename(commander_name)}_{scryfall_id}.jpg"
+    filename = f"{_safe_filename(commander_name)}_{_safe_filename(scryfall_id)}.jpg"
     out_path = COMMANDER_ART_DIR / filename
     web_path = f"/art/commander_art/{filename}"
 
@@ -3564,9 +3582,15 @@ def _update_deck_from_payload(
 
 def get_current_user():
     uid = session.get("user_id")
-    if not uid:
-        return None
-    return db.session.get(User, uid)
+    # Key by uid so the cache stays valid even when g is reused across requests in tests.
+    cache = getattr(g, "_user_cache", None)
+    if cache is None:
+        g._user_cache = {}
+    elif uid in g._user_cache:
+        return g._user_cache[uid]
+    user = db.session.get(User, uid) if uid else None
+    g._user_cache[uid] = user
+    return user
 
 
 def normalize_email(value: str | None) -> str:
@@ -3742,17 +3766,23 @@ def api_login_required(f):
 
 
 def get_active_pod():
+    uid = session.get("user_id")
+    pod_cache = getattr(g, "_pod_cache", None)
+    if pod_cache is None:
+        g._pod_cache = {}
+    elif uid in g._pod_cache:
+        return g._pod_cache[uid]
     current_user = get_current_user()
     accessible_ids = {p.id for p in get_accessible_pods(current_user)}
 
+    pod = None
     active_pod_id = session.get("active_pod_id")
     if active_pod_id and int(active_pod_id) in accessible_ids:
-        pod = db.session.get(Pod, int(active_pod_id))
-        if pod and pod.is_active:
-            return pod
+        candidate = db.session.get(Pod, int(active_pod_id))
+        if candidate and candidate.is_active:
+            pod = candidate
 
-    pod = None
-    if accessible_ids:
+    if pod is None and accessible_ids:
         pod = Pod.query.filter(Pod.id.in_(accessible_ids), Pod.slug == DEFAULT_POD_SLUG).first()
         if not pod:
             pod = Pod.query.filter(Pod.id.in_(accessible_ids), Pod.is_active == True).order_by(Pod.id.asc()).first()  # noqa: E712
@@ -3760,6 +3790,7 @@ def get_active_pod():
     if pod:
         session["active_pod_id"] = pod.id
         session.modified = True
+    g._pod_cache[uid] = pod
     return pod
 
 
@@ -9216,14 +9247,22 @@ def record_game():
 # -------------------------
 
 
-def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, bool]] | None = None) -> dict:
-    wins = (
-        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-        .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
-        .count()
-    )
-    uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
-    wins, uses = deck_totals_with_history(deck, wins, uses)
+def _serialize_deck_summary(
+    deck: Deck,
+    *,
+    deck_tags_cache: dict[int, dict[str, bool]] | None = None,
+    precomputed_wins: int | None = None,
+    precomputed_uses: int | None = None,
+) -> dict:
+    if precomputed_wins is None:
+        precomputed_wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+    if precomputed_uses is None:
+        precomputed_uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    wins, uses = deck_totals_with_history(deck, precomputed_wins, precomputed_uses)
     winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
     deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
     deck_mechanics = derive_deck_mechanics(deck_tags)
@@ -11081,8 +11120,26 @@ def api_decks():
     decks = q.order_by(Deck.name.asc()).all()
     result = []
     deck_tags_cache: dict[int, dict[str, bool]] = {}
-    for d in decks:
-        result.append(_serialize_deck_summary(d, deck_tags_cache=deck_tags_cache))
+    if decks:
+        deck_ids = [d.id for d in decks]
+        id_filter = GameParticipant.deck_id.in_(deck_ids)
+        raw_uses_api = dict(
+            db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+            .filter(id_filter).group_by(GameParticipant.deck_id).all()
+        )
+        raw_wins_api = dict(
+            db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+            .join(Game, Game.id == GameParticipant.game_id)
+            .filter(id_filter, Game.winner_id == GameParticipant.player_id)
+            .group_by(GameParticipant.deck_id).all()
+        )
+        for d in decks:
+            result.append(_serialize_deck_summary(
+                d,
+                deck_tags_cache=deck_tags_cache,
+                precomputed_wins=raw_wins_api.get(d.id, 0),
+                precomputed_uses=raw_uses_api.get(d.id, 0),
+            ))
     return jsonify(result)
 
 
