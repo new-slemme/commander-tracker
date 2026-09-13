@@ -223,7 +223,7 @@
               {% endif %}
               {% if deck_can_delete.get(d.id) %}
                 <form method="post" action="{{ url_for('delete_deck', deck_id=d.id) }}"
-                      onsubmit="return confirm('Delete deck {{ d.name }}? This cannot be undone.');"
+                      data-confirm-msg="Delete deck {{ d.name|e }}? This cannot be undone."
                       style="display:inline;">
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                   <button type="submit" class="btn btn-sm btn-danger">Delete</button>

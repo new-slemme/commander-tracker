@@ -2298,7 +2298,13 @@ def is_valid_custom_art_url(value: str) -> bool:
         return True
     if not candidate.lower().startswith(("http://", "https://")):
         return False
-    return len(candidate) <= 500
+    if len(candidate) > 500:
+        return False
+    # Reject chars that break CSS url() or HTML attribute contexts.
+    for ch in ('"', "'", '\\', '\n', '\r'):
+        if ch in candidate:
+            return False
+    return True
 
 
 def has_uploaded_custom_art(upload) -> bool:
@@ -4129,7 +4135,6 @@ def require_login():
             "api_game_state",
             "api_join_get",
             "api_join_claim",
-            "api_homepage",
         }
         if request.endpoint not in public_endpoints:
             if request.path.startswith("/api/"):
@@ -4138,8 +4143,10 @@ def require_login():
 
     if session.get("user_id"):
         signed_in_user = get_current_user()
-        if not signed_in_user or signed_in_user.deleted_at:
+        if not signed_in_user or signed_in_user.deleted_at or not signed_in_user.is_active:
             session.clear()
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "Unauthorized"}), 401
             return redirect(url_for("login"))
         session_version = session.get("session_version")
         if session_version is None:
@@ -4350,7 +4357,7 @@ def login():
             get_active_pod()
 
             next_url = request.args.get("next", "")
-            if next_url and (next_url.startswith("//") or "://" in next_url):
+            if not (next_url and next_url.startswith("/") and not next_url.startswith("//") and "\\" not in next_url):
                 next_url = ""
             return redirect(next_url or url_for("index"))
 
@@ -5090,6 +5097,7 @@ def admin_deactivate_user(user_id):
         return redirect(url_for("admin_users"))
 
     u.is_active = False
+    u.session_version = (u.session_version or 0) + 1
     db.session.commit()
     flash(f"Deactivated {u.display_name}")
     return redirect(url_for("admin_users"))
@@ -5279,7 +5287,7 @@ def index():
     history_ok = scope_includes_history(scope, active_pod)
 
     # Player stats — aggregate queries instead of per-player counts
-    players = Player.query.all()
+    players = scoped_player_query(current_user, active_pod).all()
     wins_by_player = dict(
         db.session.query(Game.winner_id, func.count(Game.id))
         .filter(Game.id.in_(game_ids_subquery))
@@ -5335,7 +5343,7 @@ def index():
             row["bg_art"] = None
 
     # Deck stats — aggregate queries instead of per-deck counts
-    decks = Deck.query.all()
+    decks = scoped_deck_query(current_user, active_pod).all()
     uses_by_deck = dict(
         db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
         .join(Game, Game.id == GameParticipant.game_id)
@@ -5901,6 +5909,13 @@ def add_pod_member(pod_id):
     if not player:
         flash("Player not found.")
         return redirect(url_for("pods", pod_id=pod_id))
+
+    # Allow adding players the caller can already see, or free agents (no pod membership).
+    # Blocks enumerating players from other pods by ID guessing.
+    if not scoped_player_query(me).filter(Player.id == player_id).first():
+        has_any_membership = PodMembership.query.filter_by(player_id=player_id).first()
+        if has_any_membership:
+            abort(403)
 
     if role == "podmaster" and not me.is_admin:
         role = "member"
@@ -7613,9 +7628,12 @@ def api_commander_bracket():
 
 
 @app.route("/api/homepage")
+@api_login_required
 def api_homepage():
-    """Public read-only summary for the figurenhome dashboard."""
-    players = Player.query.all()
+    """Pod-scoped summary for the figurenhome dashboard."""
+    current_user = get_current_user()
+    active_pod = get_active_pod()
+    players = scoped_player_query(current_user, active_pod).all()
     # Include recovered pre-wipe games so total_games stays consistent with the
     # history-inflated per-player totals below. Each game has exactly one winner,
     # so summing historical_wins yields the distinct pre-wipe game count.
@@ -8096,6 +8114,12 @@ def start_game():
 @app.route("/api/start_game", methods=["POST"])
 @api_login_required
 def api_start_game():
+    me = get_current_user()
+    active_pod = get_active_pod()
+    allowed_player_ids = {
+        pid for (pid,) in scoped_player_query(me, active_pod).with_entities(Player.id)
+    }
+
     data = request.get_json(silent=True) or {}
     raw_participants = data.get("participants", [])
     if not isinstance(raw_participants, list):
@@ -8113,11 +8137,13 @@ def api_start_game():
 
         if p_id in seen:
             return jsonify({"error": "Duplicate players not allowed"}), 400
+        if p_id not in allowed_player_ids:
+            return jsonify({"error": "Player is not a member of the active pod"}), 403
         seen.add(p_id)
 
         borrowing = bool(entry.get("borrow", False))
         deck = db.session.get(Deck, d_id)
-        if not deck or deck.retired or deck.planned:
+        if not deck or deck.retired or deck.planned or deck.player_id not in allowed_player_ids:
             return jsonify({"error": "Invalid deck"}), 400
         if not borrowing and deck.player_id != p_id:
             return jsonify({"error": "Invalid deck for player"}), 400
@@ -9501,17 +9527,21 @@ def api_login():
     user = User.query.filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid username or password"}), 401
+    if user.deleted_at:
+        return jsonify({"error": "Invalid username or password"}), 401
     if not user.is_active:
         return jsonify({"error": "Account pending approval. Please contact an admin."}), 403
     if not user.player:
         user.player = Player(name=user.display_name)
         db.session.commit()
+    session.clear()
     session["user_id"] = user.id
     session["username"] = user.username
     session["display_name"] = user.display_name
     session["is_admin"] = user.is_admin
     session["use_sigtaara"] = user.use_sigtaara
     session["use_light_theme"] = user.use_light_theme
+    session["session_version"] = user.session_version
     get_active_pod()
     return jsonify({
         "user_id": user.id,
@@ -9574,7 +9604,8 @@ def api_stats():
         scope, active_pod, date_filtered=bool(date_from_raw or date_to_raw)
     )
 
-    players = Player.query.all()
+    current_user = get_current_user()
+    players = scoped_player_query(current_user, active_pod).all()
     player_stats = []
     for p in players:
         wins = game_q.filter_by(winner_id=p.id).count()
@@ -9620,7 +9651,7 @@ def api_stats():
             ],
         })
 
-    decks = Deck.query.all()
+    decks = scoped_deck_query(current_user, active_pod).all()
     deck_stats = []
     for d in decks:
         wins = (
@@ -10078,6 +10109,7 @@ def api_admin_deactivate_user(user_id):
         return jsonify({"error": "You can't deactivate your own account."}), 409
 
     user.is_active = False
+    user.session_version = (user.session_version or 0) + 1
     db.session.commit()
     return jsonify({"ok": True}), 200
 
@@ -10443,6 +10475,13 @@ def api_add_pod_member(pod_id):
     player = db.session.get(Player, player_id)
     if not player:
         return jsonify({"error": "Player not found."}), 404
+
+    # Allow adding players the caller can already see, or free agents (no pod membership).
+    # Blocks enumerating players from other pods by ID guessing.
+    if not scoped_player_query(current_user).filter(Player.id == player_id).first():
+        has_any_membership = PodMembership.query.filter_by(player_id=player_id).first()
+        if has_any_membership:
+            return jsonify({"error": "Forbidden"}), 403
 
     ensure_membership(pod_id, player_id, role=role)
     db.session.commit()

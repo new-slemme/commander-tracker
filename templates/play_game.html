@@ -643,6 +643,12 @@
   });
 
   // ---- MMR Preview ----
+  function escHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str != null ? String(str) : '';
+    return d.innerHTML;
+  }
+
   function updateMmrPreview() {
     const preview = document.getElementById('mmr-preview');
     const rows = document.getElementById('mmr-preview-rows');
@@ -684,10 +690,10 @@
     rows.innerHTML = slots.map(s => {
       const pct = ((s.mmr / total) * 100).toFixed(1);
       return `<div class="d-flex justify-content-between align-items-center">
-        <small class="text-white text-truncate" style="max-width:60%">${s.name}</small>
+        <small class="text-white text-truncate" style="max-width:60%">${escHtml(s.name)}</small>
         <span class="d-flex gap-2 align-items-center">
-          <small class="muted">${s.mmr} MMR</small>
-          <span class="badge bg-primary">${pct}%</span>
+          <small class="muted">${escHtml(s.mmr)} MMR</small>
+          <span class="badge bg-primary">${escHtml(pct)}%</span>
         </span>
       </div>`;
     }).join('');

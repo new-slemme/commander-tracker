@@ -78,7 +78,7 @@
             </form>
           {% else %}
             <form method="post" action="{{ url_for('retire_deck', deck_id=deck.id) }}"
-                  onsubmit="return confirm('Retire {{ deck.name }}?');">
+                  data-confirm-msg="Retire {{ deck.name|e }}?">
               <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="dropdown-item">
                 Retire deck
@@ -90,7 +90,7 @@
         <li>
           {% if not deck.planned %}
             <form method="post" action="{{ url_for('plan_deck', deck_id=deck.id) }}"
-                  onsubmit="return confirm('Mark {{ deck.name }} as planned?');">
+                  data-confirm-msg="Mark {{ deck.name|e }} as planned?">
               <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="dropdown-item">
                 Plan deck
@@ -102,7 +102,7 @@
         {% if deck.decklist_text %}
         <li>
           <form method="post" action="{{ url_for('remove_deck_decklist', deck_id=deck.id) }}"
-                onsubmit="return confirm('Remove the saved decklist from {{ deck.name }}? This cannot be undone.');">
+                data-confirm-msg="Remove the saved decklist from {{ deck.name|e }}? This cannot be undone.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="dropdown-item text-warning">
               Remove decklist
@@ -113,7 +113,7 @@
 
         <li>
           <form method="post" action="{{ url_for('delete_deck', deck_id=deck.id) }}"
-                onsubmit="return confirm('Delete {{ deck.name }} permanently?');">
+                data-confirm-msg="Delete {{ deck.name|e }} permanently?">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="dropdown-item text-danger">
               Delete deck
