@@ -205,7 +205,7 @@ class ApiDecksWriteTests(unittest.TestCase):
                 return {"oracle_text": ""}
 
             with patch("app.resolve_commander_metadata", side_effect=self._fake_commander_metadata), patch(
-                "app.scryfall_named_exact", side_effect=fake_lookup
+                "app.scryfall_collection", side_effect=lambda names: {n.lower(): fake_lookup(n) for n in names}
             ):
                 response = client.post(
                     "/api/decks",

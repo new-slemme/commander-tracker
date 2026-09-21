@@ -358,7 +358,7 @@ MAX_PER_PLAYER_TURN_STATS = 500
 # sample per actual life change, capped per player so state_json stays bounded.
 MAX_LIFE_HISTORY_SAMPLES = 120
 
-DECK_TAGS_VERSION = 2
+DECK_TAGS_VERSION = 3
 KNOWN_DECK_TAG_KEYS = (
     "monarch",
     "initiative",
@@ -371,6 +371,13 @@ KNOWN_DECK_TAG_KEYS = (
     "misplayed",
 )
 TRUST_LEGACY_DECK_TAGS = False
+STRATEGY_TAG_LABELS = {
+    "tokens": "Tokens", "sacrifice": "Sacrifice", "reanimator": "Reanimator",
+    "lifegain": "Lifegain", "spellslinger": "Spellslinger", "artifacts": "Artifacts",
+    "enchantments": "Enchantments", "equipment": "Equipment", "lands": "Lands",
+    "counters": "+1/+1 counters", "mill": "Mill", "tribal": "Tribal",
+}
+
 
 STARTING_MMR = 1000
 K_FACTOR = 48
@@ -963,6 +970,10 @@ class Deck(db.Model):
     # winrates reflect true all-time totals. See Player.historical_* above.
     historical_wins = db.Column(db.Integer, nullable=False, default=0, server_default="0")
     historical_games = db.Column(db.Integer, nullable=False, default=0, server_default="0")
+
+    @property
+    def tag_summary(self):
+        return get_deck_tag_summary(self)
 
     @property
     def commander_art_url(self):
@@ -2500,27 +2511,43 @@ def scryfall_named_exact(name: str):
 
 
 def scryfall_collection(names: list[str]) -> dict[str, dict]:
-    """Batch-fetch up to 75 card names via POST /cards/collection.
-
-    Returns a mapping of lowercased card name → card JSON for every card
-    Scryfall could resolve.  Names that don't match are silently absent.
-    """
+    """Resolve up to 75 names, including full split/DFC names and face aliases."""
+    names = names[:75]
     if not names:
         return {}
-    identifiers = [{"name": n} for n in names[:75]]
-    try:
-        r = requests.post(
-            "https://api.scryfall.com/cards/collection",
-            json={"identifiers": identifiers},
-            headers={**SCRYFALL_HEADERS, "Content-Type": "application/json"},
-            timeout=15,
-        )
-        if r.status_code != 200:
-            return {}
-        data = r.json().get("data") or []
-        return {card.get("name", "").lower(): card for card in data if isinstance(card, dict)}
-    except (requests.RequestException, ValueError):
-        return {}
+    # The collection endpoint accepts front-face names reliably for split/DFC cards.
+    identifiers = [{"name": name.split(" // ", 1)[0]} for name in names]
+    for attempt in range(2):
+        try:
+            response = requests.post(
+                "https://api.scryfall.com/cards/collection",
+                json={"identifiers": identifiers}, headers=SCRYFALL_HEADERS, timeout=15,
+            )
+            if response.status_code != 200:
+                if response.status_code == 429 or response.status_code >= 500:
+                    if attempt == 0:
+                        time.sleep(0.2)
+                        continue
+                return {}
+            by_name = {}
+            for card in response.json().get("data") or []:
+                if not isinstance(card, dict):
+                    continue
+                aliases = [card.get("name", "")] + [
+                    face.get("name", "") for face in card.get("card_faces") or []
+                    if isinstance(face, dict)
+                ]
+                for alias in aliases:
+                    if alias:
+                        by_name[alias.casefold()] = card
+            return {
+                name.lower(): by_name[name.split(" // ", 1)[0].casefold()]
+                for name in names if name.split(" // ", 1)[0].casefold() in by_name
+            }
+        except (requests.RequestException, ValueError):
+            if attempt == 0:
+                time.sleep(0.2)
+    return {}
 
 
 def custommtg_gallery_named_exact(name: str) -> dict | None:
@@ -2592,11 +2619,12 @@ def extract_oracle_text(card_json: dict) -> str:
 
 def analyze_scryfall_card(card_json: dict) -> dict:
     oracle_text = extract_oracle_text(card_json)
+    keywords = {str(k).casefold() for k in card_json.get("keywords", [])}
     return {
         "monarch": "monarch" in oracle_text,
         "initiative": "initiative" in oracle_text,
-        "citys_blessing": ("city's blessing" in oracle_text) or ("city’s blessing" in oracle_text),
-        "poison": "poison" in oracle_text,
+        "citys_blessing": "ascend" in keywords or ("city's blessing" in oracle_text) or ("city’s blessing" in oracle_text),
+        "poison": "poison" in oracle_text or bool(keywords & {"infect", "toxic"}),
         "proliferate": "proliferate" in oracle_text,
         "energy": "{e}" in oracle_text,
         "experience": "experience counter" in oracle_text,
@@ -2667,7 +2695,7 @@ def compute_commander_bracket_from_text(decklist_text: str | None) -> dict:
 _SCRYFALL_BATCH_SIZE = 75
 
 
-def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
+def compute_deck_tags(decklist_cards: list[str], *, card_cache: dict | None = None) -> tuple[dict, dict]:
     tags = {key: False for key in KNOWN_DECK_TAG_KEYS}
     unresolved_cards: list[str] = []
 
@@ -2684,11 +2712,15 @@ def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
         return tags, {"unresolved_count": 0, "unresolved_cards": []}
 
     # Fetch in batches of 75 via POST /cards/collection.
-    resolved: dict[str, dict] = {}
-    for i in range(0, len(unique), _SCRYFALL_BATCH_SIZE):
-        batch = unique[i:i + _SCRYFALL_BATCH_SIZE]
-        resolved.update(scryfall_collection(batch))
+    resolved: dict[str, dict] = dict(card_cache or {})
+    if card_cache is None:
+        for i in range(0, len(unique), _SCRYFALL_BATCH_SIZE):
+            batch = unique[i:i + _SCRYFALL_BATCH_SIZE]
+            resolved.update(scryfall_collection(batch))
+            if i + _SCRYFALL_BATCH_SIZE < len(unique):
+                time.sleep(0.1)
 
+    resolved_cards = []
     for name in unique:
         card_json = resolved.get(name.lower())
         if not card_json and CCAUTO_BASE_URL:
@@ -2699,6 +2731,7 @@ def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
         if not card_json:
             unresolved_cards.append(name)
             continue
+        resolved_cards.append({**card_json, "name": name})
         card_tags = analyze_scryfall_card(card_json)
         for key in tags:
             tags[key] = tags[key] or card_tags.get(key, False)
@@ -2706,17 +2739,63 @@ def compute_deck_tags(decklist_cards: list[str]) -> tuple[dict, dict]:
     diagnostics = {
         "unresolved_count": len(unresolved_cards),
         "unresolved_cards": unresolved_cards,
+        "resolved_count": len(resolved_cards),
+        "strategies": infer_deck_strategies(resolved_cards),
     }
     return tags, diagnostics
 
 
 def extract_decklist_card_names(parsed: dict) -> list[str]:
-    parsed_sections = parsed.get("sections", {}) or {}
-    return [
-        entry.get("name", "")
-        for entries in parsed_sections.values()
-        for entry in (entries or [])
-    ]
+    # Sideboards and maybeboards are not part of the deck being played.
+    sections = parsed.get("sections", {}) or {}
+    return [entry.get("name", "") for section in ("commander", "mainboard")
+            for entry in sections.get(section, []) or []]
+
+
+def infer_deck_strategies(cards: list[dict]) -> dict:
+    """Conservative, explainable suggestions from several supporting cards.
+
+    Counts are distinct card names, not quantities. A staple or commander alone
+    cannot establish a strategy. Owners can override suggestions independently.
+    """
+    evidence = {key: set() for key in STRATEGY_TAG_LABELS}
+    tribes = {}
+    creatures = set()
+    for card in cards:
+        name = card.get("name") or ""
+        text = extract_oracle_text(card)
+        front = (card.get("card_faces") or [card])[0]
+        type_line = front.get("type_line") or card.get("type_line") or ""
+        lower_type = type_line.lower()
+        checks = {
+            "tokens": bool(re.search(r"create[^.\n]*token", text)),
+            "sacrifice": bool(re.search(r"sacrifice (?:a|another|one or more|any number of|\w+ target) (?:\w+ )?(?:creature|permanent)|whenever[^.\n]*(?:sacrifice|creature[^.\n]*dies)", text)),
+            "reanimator": bool(re.search(r"(?:return|put)[^.\n]*graveyard[^.\n]*battlefield|cast[^.\n]*(?:creature|permanent)[^.\n]*graveyard", text)),
+            "lifegain": bool(re.search(r"gain(?:s)? (?:\d+|x|that much) life|whenever you gain life", text)),
+            "spellslinger": bool(re.search(r"(?:whenever|if)[^.\n]*cast[^.\n]*(?:instant|sorcery|noncreature)|copy target (?:instant|sorcery)", text)),
+            "artifacts": "artifact" in lower_type,
+            "enchantments": "enchantment" in lower_type,
+            "equipment": "equipment" in lower_type,
+            "lands": "landfall" in text or bool(re.search(r"additional land|land[^.\n]*from your graveyard", text)),
+            "counters": bool(re.search(r"(?:put|distribute|enters?)[^.\n]*\+1/\+1 counter|\+1/\+1 counters? (?:on|are|would)", text)),
+            "mill": bool(re.search(r"\bmill(?:s)?\b|(?:target|each) (?:player|opponent)[^.\n]*top[^.\n]*graveyard", text)),
+        }
+        for key, hit in checks.items():
+            if hit:
+                evidence[key].add(name)
+        if "creature" in lower_type:
+            creatures.add(name)
+            if "—" in type_line:
+                for tribe in type_line.split("—", 1)[1].strip().split():
+                    tribes.setdefault(tribe, set()).add(name)
+    thresholds = {"artifacts": 12, "enchantments": 10, "equipment": 6}
+    result = {key: {"cards": sorted(names), "threshold": thresholds.get(key, 5)}
+              for key, names in evidence.items() if len(names) >= thresholds.get(key, 5)}
+    if tribes:
+        tribe, names = max(sorted(tribes.items()), key=lambda item: len(item[1]))
+        if len(names) >= 10 and len(names) >= len(creatures) * 0.4:
+            result["tribal"] = {"cards": sorted(names), "tribe": tribe, "threshold": 10}
+    return result
 
 
 def compute_deck_tags_from_text(decklist_text: str | None) -> tuple[dict, dict]:
@@ -2795,14 +2874,93 @@ def derive_deck_mechanics(tags: dict) -> dict:
     }
 
 
-def apply_deck_tags(deck: "Deck", tags: dict) -> None:
-    deck.tags_json = json.dumps(tags, separators=(",", ":"), sort_keys=True)
-    deck.tags_version = DECK_TAGS_VERSION
+def _deck_tag_data(deck: "Deck") -> dict:
+    try:
+        value = json.loads(deck.tags_json or "{}")
+        return value if isinstance(value, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _decklist_hash(deck: "Deck") -> str:
+    return hashlib.sha256((deck.decklist_text or "").strip().encode("utf-8")).hexdigest()
+
+
+def apply_deck_tags(deck: "Deck", tags: dict, diagnostics: dict | None = None,
+                    *, preserve_existing: bool = False) -> None:
+    diagnostics = diagnostics or {}
+    previous = _deck_tag_data(deck)
+    old_analysis = previous.get("_analysis") or {}
+    if not isinstance(old_analysis, dict):
+        old_analysis = {}
+    unresolved = diagnostics.get("unresolved_cards") or []
+    incomplete = bool(unresolved or diagnostics.get("unresolved_count"))
+    result = {key: bool(tags.get(key)) for key in KNOWN_DECK_TAG_KEYS}
+    strategies = diagnostics.get("strategies") or {}
+    if incomplete and preserve_existing and old_analysis.get("list_hash", _decklist_hash(deck)) == _decklist_hash(deck):
+        # An outage must not erase known mechanics on an unchanged list.
+        result = {key: value or bool(previous.get(key)) for key, value in result.items()}
+        strategies = {**(old_analysis.get("strategies") or {}), **strategies}
+    parsed = parse_plaintext_decklist(deck.decklist_text).as_dict() if (deck.decklist_text or "").strip() else {}
+    sections = parsed.get("sections") or {}
+    card_count = sum(entry.get("quantity", 1) for section in ("commander", "mainboard")
+                     for entry in sections.get(section, []))
+    result["_analysis"] = {
+        "list_hash": _decklist_hash(deck), "strategies": strategies,
+        "unresolved_cards": unresolved, "incomplete": incomplete, "card_count": card_count,
+    }
+    result["_strategy_overrides"] = previous.get("_strategy_overrides") or {}
+    deck.tags_json = json.dumps(result, separators=(",", ":"), sort_keys=True)
+    deck.tags_version = None if incomplete else DECK_TAGS_VERSION
     deck.tags_computed_at = datetime.utcnow()
+    deck._parsed_tags = {key: result[key] for key in KNOWN_DECK_TAG_KEYS}
 
 
 def is_deck_tags_stale(deck: "Deck") -> bool:
-    return (deck.tags_version is None) or (deck.tags_version < DECK_TAGS_VERSION)
+    data = _deck_tag_data(deck)
+    analysis = data.get("_analysis") or {}
+    return bool(
+        deck.tags_version is None or deck.tags_version < DECK_TAGS_VERSION
+        or not isinstance(analysis, dict) or analysis.get("incomplete")
+        or analysis.get("list_hash") != _decklist_hash(deck)
+        or any(key not in data for key in KNOWN_DECK_TAG_KEYS)
+    )
+
+
+def get_deck_tag_summary(deck: "Deck") -> dict:
+    data = _deck_tag_data(deck)
+    analysis = data.get("_analysis")
+    analysis = analysis if isinstance(analysis, dict) else {}
+    overrides = data.get("_strategy_overrides")
+    overrides = overrides if isinstance(overrides, dict) else {}
+    has_list = bool((deck.decklist_text or "").strip())
+    same_list = analysis.get("list_hash") == _decklist_hash(deck)
+    suggestions = analysis.get("strategies") if same_list else {}
+    suggestions = suggestions if isinstance(suggestions, dict) else {}
+    rows = []
+    for key, label in STRATEGY_TAG_LABELS.items():
+        suggestion = suggestions.get(key) or {}
+        suggestion = suggestion if isinstance(suggestion, dict) else {}
+        enabled = overrides.get(key, bool(suggestion))
+        if enabled:
+            rows.append({"key": key, "label": label, "source": "manual" if key in overrides else "suggested",
+                         "cards": suggestion.get("cards") or [], "tribe": suggestion.get("tribe")})
+    if not has_list:
+        status = "no_list"
+    elif analysis.get("incomplete") and same_list:
+        status = "partial"
+    elif is_deck_tags_stale(deck):
+        status = "stale"
+    elif analysis.get("card_count", 0) < 100:
+        status = "limited_list"
+    else:
+        status = "current"
+    labels = {"no_list": "Decklist needed", "partial": "Card lookups incomplete",
+              "stale": "Tag refresh needed", "limited_list": "Partial decklist", "current": "Tags current"}
+    return {"status": status, "label": labels[status], "strategies": rows,
+            "unresolved_cards": analysis.get("unresolved_cards") or [],
+            "card_count": analysis.get("card_count", 0), "overrides": overrides,
+            "options": STRATEGY_TAG_LABELS}
 
 
 def _split_commander_names(value: str) -> list[str]:
@@ -3522,7 +3680,7 @@ def _apply_deck_payload(deck: "Deck", prepared: dict, diagnostics: dict) -> None
     if parsed_import:
         deck.decklist_text = _render_decklist_text(parsed_import)
         tags, tag_diagnostics = compute_deck_tags(extract_decklist_card_names(parsed_import))
-        apply_deck_tags(deck, tags)
+        apply_deck_tags(deck, tags, tag_diagnostics)
         diagnostics["tag_diagnostics"] = tag_diagnostics
 
     commander_to_set = prepared["commander_to_set"]
@@ -6931,11 +7089,7 @@ def player_export(player_id):
         deck_wins, deck_games = deck_totals_with_history(d, deck_wins, deck_games)
         deck_losses = max(0, deck_games - deck_wins)
         deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
-        tags = {}
-        try:
-            tags = json.loads(d.tags_json or "{}")
-        except (ValueError, TypeError):
-            pass
+        tags = parse_tags_json(d.tags_json)
         decks_data.append({
             "id": d.id,
             "name": d.name,
@@ -7268,6 +7422,7 @@ def deck_detail(deck_id):
         decklist_data=decklist_data,
         commander_bracket=commander_bracket,
         deck_mechanics=deck_mechanics,
+        can_edit_tags=bool(u and (u.is_admin or (u.player and u.player.id == deck.player_id))),
         is_admin=bool(u and u.is_admin),
         players=(Player.query.order_by(Player.name.asc()).all() if (u and u.is_admin) else []),
         card_print_prefs=card_print_prefs,
@@ -7691,19 +7846,24 @@ def retag_deck(deck_id):
     if not (u and u.is_admin) and (not u or not u.player or deck.player_id != u.player.id):
         return "Forbidden", 403
 
-    next_url = request.form.get("next") or request.referrer or url_for("decks")
+    next_url = url_for("deck_detail", deck_id=deck.id)
 
     if not (deck.decklist_text or "").strip():
         flash("Cannot retag deck without a decklist.")
         return redirect(next_url)
 
+    source_text = deck.decklist_text
     try:
-        tags, tag_diagnostics = compute_deck_tags_from_text(deck.decklist_text)
+        tags, tag_diagnostics = compute_deck_tags_from_text(source_text)
     except DeckParserError as exc:
         flash(f"Retag failed: {exc}")
         return redirect(next_url)
 
-    apply_deck_tags(deck, tags)
+    db.session.refresh(deck)
+    if deck.decklist_text != source_text:
+        flash("The decklist changed during tag refresh. Please try again.")
+        return redirect(next_url)
+    apply_deck_tags(deck, tags, tag_diagnostics, preserve_existing=True)
     try:
         db.session.commit()
     except Exception as exc:
@@ -7714,6 +7874,30 @@ def retag_deck(deck_id):
     flash(f"Retagged deck: {deck.name}")
     flash_unresolved_tag_warning(tag_diagnostics)
     return redirect(next_url)
+
+
+@app.route("/deck/<int:deck_id>/strategy-tags", methods=["POST"])
+@login_required
+def update_deck_strategy_tags(deck_id):
+    user = get_current_user()
+    deck = db.session.get(Deck, deck_id)
+    if not deck or not can_access_deck(user, deck):
+        abort(404)
+    if not user.is_admin and (not user.player or deck.player_id != user.player.id):
+        abort(403)
+    overrides = {}
+    for key in STRATEGY_TAG_LABELS:
+        value = request.form.get(key, "auto")
+        if value not in ("auto", "yes", "no"):
+            abort(400)
+        if value != "auto":
+            overrides[key] = value == "yes"
+    data = _deck_tag_data(deck)
+    data["_strategy_overrides"] = overrides
+    deck.tags_json = json.dumps(data, separators=(",", ":"), sort_keys=True)
+    db.session.commit()
+    flash("Strategy tags updated.")
+    return redirect(url_for("deck_detail", deck_id=deck.id))
 
 
 @app.route("/api/commander-bracket", methods=["POST"])
@@ -7981,7 +8165,8 @@ def remove_deck_decklist(deck_id):
         return redirect(url_for("deck_detail", deck_id=deck_id))
 
     deck.decklist_text = None
-    deck.tags_json = "{}"
+    deck.tags_json = json.dumps({"_strategy_overrides": _deck_tag_data(deck).get("_strategy_overrides", {})})
+    deck._parsed_tags = {}
     deck.tags_version = None
     deck.tags_computed_at = None
 
@@ -9291,6 +9476,8 @@ def _serialize_deck_summary(
         "winrate": winrate,
         "art_url": deck.commander_art_url,
         "mechanics": deck_mechanics,
+        "tag_status": deck.tag_summary["status"],
+        "strategies": deck.tag_summary["strategies"],
         "mmr": deck.mmr,
         "mmr_tier": mmr_tier(deck.mmr),
     }
@@ -10792,11 +10979,7 @@ def api_player_export(player_id):
         deck_wins, deck_games = deck_totals_with_history(d, deck_wins, deck_games)
         deck_losses = max(0, deck_games - deck_wins)
         deck_winrate = round((deck_wins / deck_games) * 100, 1) if deck_games else 0.0
-        tags = {}
-        try:
-            tags = json.loads(d.tags_json or "{}")
-        except (ValueError, TypeError):
-            pass
+        tags = parse_tags_json(d.tags_json)
         decks_data.append({
             "id": d.id,
             "name": d.name,

@@ -126,8 +126,8 @@
     <div class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2" role="alert">
       <div>
         <strong>Deck tags refresh recommended:</strong>
-        {{ stale_deck_count }} deck{{ '' if stale_deck_count == 1 else 's' }} use older tag rules (target version {{ deck_tags_version }}).
-        Consider bulk retagging to keep life-counter mechanics accurate.
+        {{ stale_deck_count }} deck{{ '' if stale_deck_count == 1 else 's' }} have missing, incomplete, or outdated tags.
+        Refresh their tags to update life-counter mechanics and strategy suggestions.
       </div>
       <form method="post" action="{{ url_for('dismiss_deck_tags_banner') }}" class="m-0">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -191,9 +191,13 @@
                 {% if d.decklist_text %}
                   <span class="deck-list-pill">Decklist</span>
                 {% endif %}
-                {% if deck_tags_stale.get(d.id) %}
-                  <span class="deck-retired-pill" title="Deck tags are missing or stale for the current rules version">Retag recommended</span>
+                {% set tag_summary = d.tag_summary %}
+                {% if tag_summary.status != 'current' %}
+                  <span class="deck-list-pill">ⓘ {{ tag_summary.label }}</span>
                 {% endif %}
+                {% for tag in tag_summary.strategies %}
+                  <span class="app-badge" title="{{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">{{ tag.label }}</span>
+                {% endfor %}
                 <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
                 <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
