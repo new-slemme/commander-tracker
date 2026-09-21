@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 61,
-  "versionName": "2.1.0.0",
+  "versionCode": 62,
+  "versionName": "2.1.1",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-2.1.0.0+61.apk",
-  "artifactPath": "apk/edh-son-2.1.0.0+61.apk",
-  "sha256": "98a89a0947eb7ac319192e74b7cb48cc941ed47f089e8bcbe56342f2dd18cb99",
-  "publishedAt": "2026-09-21T18:46:15.983265341Z",
-  "notes": "Version 2.1.0.0 updates the deck UI to match the web app.\n\nThe deck editor has Details and Cards tabs, a persistent Save button, admin owner\nselection, a commander summary with partner support, and expandable artwork and\nstatus controls. Add cards, import a list, or search within your deck from Cards.\n\nChoose images or URLs for commander and card artwork, or remove custom art.\nUploads use the corrected server format and preserve your editing draft.\n\nDecks show strategy icons, clearer rating badges, and tag status. Deck details\nshow mechanics, suggested/manual strategies and supporting cards below the\ndecklist, with a working Refresh tags action."
+  "artifactFileName": "edh-son-2.1.1+62.apk",
+  "artifactPath": "apk/edh-son-2.1.1+62.apk",
+  "sha256": "15f35b8dc99bcd0843221c54edcd1791879c61dec05d73f49968e5c00970e342",
+  "publishedAt": "2026-09-21T18:55:47.602287551Z",
+  "notes": "Version 2.1.1 — GIF Support\n\nAnimated GIF artwork now plays in deck previews, deck lists and details, and\ncommander backgrounds in the life counter. Supports both uploaded GIFs and\nGIF image URLs. Includes a GIF decoder fallback for Android 8.\n\nExisting authenticated image loading and offline image caching are preserved."
 }
