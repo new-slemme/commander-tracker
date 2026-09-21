@@ -625,7 +625,7 @@
       if (data.strategies && data.strategies.length) {
         html += '<div class="drawer-section-label">Strategies</div><div class="d-flex flex-wrap gap-2 mb-3">';
         data.strategies.forEach(function (tag) {
-          html += '<span class="app-badge">' + esc(tag.label) + ' · ' + (tag.source === 'manual' ? 'Manual' : 'Suggested') + '</span>';
+          html += '<span class="app-badge deck-info-badge">' + esc(tag.label) + ' · ' + (tag.source === 'manual' ? 'Manual' : 'Suggested') + '</span>';
         });
         html += '</div>';
       }
