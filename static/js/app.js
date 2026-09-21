@@ -620,6 +620,16 @@
       html += '<div class="drawer-row-meta">Owner: <a href="/player/' + esc(data.player_id) + '">' + esc(data.player_name) + '</a></div>';
       html += '</div></div>';
 
+      var tagStatuses = {no_list: 'Decklist needed', partial: 'Card lookups incomplete', stale: 'Tag refresh needed', limited_list: 'Partial decklist', current: 'Tags current'};
+      if (data.tag_status) html += '<div class="drawer-row-meta">' + esc(tagStatuses[data.tag_status] || data.tag_status) + '</div>';
+      if (data.strategies && data.strategies.length) {
+        html += '<div class="drawer-section-label">Strategies</div><div class="d-flex flex-wrap gap-2 mb-3">';
+        data.strategies.forEach(function (tag) {
+          html += '<span class="app-badge">' + esc(tag.label) + ' · ' + (tag.source === 'manual' ? 'Manual' : 'Suggested') + '</span>';
+        });
+        html += '</div>';
+      }
+
       if (data.recent_games && data.recent_games.length) {
         html += '<div class="drawer-section-label">Recent Games</div>';
         html += '<div class="drawer-list">';

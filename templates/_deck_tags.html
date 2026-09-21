@@ -1,0 +1,65 @@
+{% set summary = deck.tag_summary %}
+<section class="card p-4 mb-4" aria-labelledby="deck-tags-heading" id="deck-tags">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h2 class="h5 mb-0" id="deck-tags-heading">Deck tags</h2>
+    <span class="muted">{{ '✓' if summary.status == 'current' else 'ⓘ' }} {{ summary.label }}</span>
+  </div>
+  {% if summary.status == 'no_list' %}
+    <p class="muted">Add a decklist to detect mechanics and suggest strategies. You can set strategy tags manually below.</p>
+  {% elif summary.status == 'partial' %}
+    <p class="muted">Some cards could not be checked. Detected tags are shown, but this result is incomplete. Retry the refresh when card lookups are available.</p>
+    <details class="mb-3"><summary>Unresolved cards ({{ summary.unresolved_cards|length }})</summary>
+      <p>{{ summary.unresolved_cards|join(', ') }}</p>
+    </details>
+  {% elif summary.status == 'stale' %}
+    <p class="muted">Refresh tags to analyze the saved decklist with the latest rules.</p>
+  {% elif summary.status == 'limited_list' %}
+    <p class="muted">Only {{ summary.card_count }} cards are saved. Tags describe this list and may miss mechanics or strategies from the rest of the deck.</p>
+  {% endif %}
+  <h3 class="h6">Life-counter mechanics</h3>
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    {% for key, label in [('monarch', 'Monarch'), ('initiative', 'Initiative'), ('citys_blessing', "City's blessing"), ('poison', 'Poison / proliferate'), ('energy', 'Energy'), ('experience', 'Experience')] %}
+      {% if deck_mechanics.get(key) %}<span class="app-badge">{{ label }}</span>{% endif %}
+    {% endfor %}
+    {% if not deck_mechanics.values()|select|list %}<span class="muted">No mechanics detected{% if summary.status != 'current' %} in the available results{% endif %}.</span>{% endif %}
+  </div>
+  <h3 class="h6">Strategies</h3>
+  <p class="muted small">Suggestions require several supporting cards. They describe themes, not a definitive classification or power rating.</p>
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    {% for tag in summary.strategies %}
+      <span class="app-badge">{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %} · {{ 'Manual' if tag.source == 'manual' else 'Suggested' }}</span>
+    {% else %}<span class="muted">No strategy tags yet.</span>{% endfor %}
+  </div>
+  {% for tag in summary.strategies if tag.cards %}
+    <details class="mb-2"><summary>{{ tag.label }}: {{ tag.cards|length }} supporting cards</summary>
+      <p class="small mt-2">{{ tag.cards|join(', ') }}</p>
+    </details>
+  {% endfor %}
+  {% if can_edit_tags %}
+    {% if deck.decklist_text %}
+      <form method="post" action="{{ url_for('retag_deck', deck_id=deck.id) }}" class="mt-3">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-outline-info">Refresh tags</button>
+      </form>
+    {% endif %}
+    <details class="mt-3"><summary>Correct strategy tags</summary>
+      <form method="post" action="{{ url_for('update_deck_strategy_tags', deck_id=deck.id) }}" class="mt-3">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <p class="muted small">Choose Auto to use the suggestion, Include to add a tag, or Exclude to hide it. Your choices survive tag refreshes.</p>
+        <div class="row g-3">
+          {% for key, label in summary.options.items() %}
+            <div class="col-6 col-md-4">
+              <label for="strategy-{{ key }}" class="form-label">{{ label }}</label>
+              <select id="strategy-{{ key }}" name="{{ key }}" class="form-select">
+                <option value="auto"{% if key not in summary.overrides %} selected{% endif %}>Auto</option>
+                <option value="yes"{% if summary.overrides.get(key) is sameas true %} selected{% endif %}>Include</option>
+                <option value="no"{% if summary.overrides.get(key) is sameas false %} selected{% endif %}>Exclude</option>
+              </select>
+            </div>
+          {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary mt-3">Save strategy tags</button>
+      </form>
+    </details>
+  {% endif %}
+</section>
