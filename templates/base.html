@@ -186,6 +186,13 @@
         {% endif %}
         <a class="drawer-item" href="{{ url_for('logout') }}">Logout</a>
       </div>
+    {% else %}
+      <div class="drawer-list">
+        <a class="drawer-item" href="{{ url_for('pricing') }}">Pricing</a>
+        <a class="drawer-item" href="{{ url_for('privacy') }}">Privacy</a>
+        <a class="drawer-item" href="{{ url_for('login') }}">Sign in</a>
+        <a class="drawer-item" href="{{ url_for('register') }}">Create a pod</a>
+      </div>
     {% endif %}
   </div>
 </aside>
