@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 60,
-  "versionName": "2.0.0",
+  "versionCode": 61,
+  "versionName": "2.1.0.0",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-2.0.0+60.apk",
-  "artifactPath": "apk/edh-son-2.0.0+60.apk",
-  "sha256": "6a3daad97434e963e10700cfa6e844109d724f477019b086cc23ea1c5fb8715c",
-  "publishedAt": "2026-09-12T18:46:59.825086197Z",
-  "notes": "Version 2.0.0 brings the app back in step with the server.\n\nLive games no longer lose life changes. A tap that failed to reach the server used\nto leave the wrong total on screen; life is now tracked as committed and pending\nchanges, retried properly, and sent as an absolute value so a retry cannot\ndouble-apply it.\n\nLife over the course of a game is recorded and drawn as a chart on game detail.\n\nYou can create an account, reset a forgotten password and verify your email\nwithout leaving the app. Emailed links open here directly.\n\nPod invites, guest players for people without an account, and shareable public\ngame recaps — with per-recap control over whether names and decks are shown.\n\nDeck rating tiers with a trend sparkline, global search over players and decks,\nper-seat game details including monarch, poison and MMR change, and a rematch\nbutton that carries the table into a new game.\n\nPod settings for your flavour name, accent colour, sharing and which mechanics\nyour group plays. Switch one off and it disappears from the life counter.\n\nYou can download everything the server holds about your account from Profile."
+  "artifactFileName": "edh-son-2.1.0.0+61.apk",
+  "artifactPath": "apk/edh-son-2.1.0.0+61.apk",
+  "sha256": "98a89a0947eb7ac319192e74b7cb48cc941ed47f089e8bcbe56342f2dd18cb99",
+  "publishedAt": "2026-09-21T18:46:15.983265341Z",
+  "notes": "Version 2.1.0.0 updates the deck UI to match the web app.\n\nThe deck editor has Details and Cards tabs, a persistent Save button, admin owner\nselection, a commander summary with partner support, and expandable artwork and\nstatus controls. Add cards, import a list, or search within your deck from Cards.\n\nChoose images or URLs for commander and card artwork, or remove custom art.\nUploads use the corrected server format and preserve your editing draft.\n\nDecks show strategy icons, clearer rating badges, and tag status. Deck details\nshow mechanics, suggested/manual strategies and supporting cards below the\ndecklist, with a working Refresh tags action."
 }
