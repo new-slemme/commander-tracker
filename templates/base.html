@@ -306,5 +306,20 @@
       .catch(function () {});
   }
 </script>
+<script>
+  // Global handler for data-confirm-msg on buttons and forms.
+  // Names arrive pre-HTML-encoded from Jinja; dataset reads decode them safely,
+  // so the string passed to confirm() is plain text — no injection possible.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-confirm-msg]');
+    if (!btn) return;
+    if (!confirm(btn.dataset.confirmMsg)) e.preventDefault();
+  });
+  document.addEventListener('submit', function (e) {
+    var form = e.target.closest('form[data-confirm-msg]');
+    if (!form) return;
+    if (!confirm(form.dataset.confirmMsg)) e.preventDefault();
+  });
+</script>
 </body>
 </html>

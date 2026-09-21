@@ -78,7 +78,7 @@
                 {% if can_delete %}
                   <form method="post"
                         action="{{ url_for('delete_player', player_id=p.id) }}"
-                        onsubmit="return confirm('Delete {{ p.name }}? This cannot be undone.');"
+                        data-confirm-msg="Delete {{ p.name|e }}? This cannot be undone."
                         class="m-0">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="pcard__delete-btn">✕</button>

@@ -19,3 +19,12 @@ docs/qa/*.png
 apk/*
 !apk/android-latest.json
 !apk/app-release.apk
+
+# Large unreferenced blobs (P6)
+static/mumei.jpg
+static/saltmine-logo.png
+static/bootstrap.zip
+static/mtg-svg.zip
+static/*.map
+static/css/*.map
+static/js/*.map

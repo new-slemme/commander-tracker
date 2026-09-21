@@ -537,7 +537,7 @@
     function esc(str) {
       var d = document.createElement('div');
       d.textContent = str != null ? String(str) : '';
-      return d.innerHTML;
+      return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function renderPlayer(data) {
@@ -831,7 +831,7 @@
     function esc(s) {
       var d = document.createElement('div');
       d.appendChild(document.createTextNode(String(s)));
-      return d.innerHTML;
+      return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function renderSection(label, items, makeRow) {

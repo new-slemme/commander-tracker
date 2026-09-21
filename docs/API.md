@@ -151,7 +151,7 @@ Complete and machine-checked. `auth` values:
 | `POST` | `/api/password/reset` | public |
 | `POST` | `/api/email/verify` | public |
 | `POST` | `/api/email/verify/resend` | auth |
-| `GET` | `/api/homepage` | public |
+| `GET` | `/api/homepage` | auth |
 | `GET` | `/api/mobile/releases/android/latest` | auth |
 | `GET` | `/api/stats` | auth |
 | `GET` | `/api/saltmine` | auth |
@@ -556,9 +556,9 @@ Query: `q`. Pod-scoped, each group bounded.
 { "players": [], "decks": [], "actions": [] }
 ```
 
-#### `GET /api/homepage` · public
+#### `GET /api/homepage` · auth
 
-Public summary for the marketing site. Sends
+Authenticated summary scoped to the active pod. Sends
 `Access-Control-Allow-Origin: https://figurensohn.de`.
 
 ```json

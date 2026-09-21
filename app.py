@@ -2,6 +2,7 @@
 from flask import (
     Flask,
     Response,
+    g,
     jsonify,
     render_template,
     request,
@@ -58,6 +59,8 @@ SCRYFALL_HEADERS = {
     "User-Agent": "CommanderTracker/1.0 (https://github.com/new-slemme/commander-tracker)",
     "Accept": "application/json",
 }
+
+_MISSING = object()  # sentinel for flask.g cache misses
 
 app = Flask(__name__)
 _flask_secret = os.getenv("FLASK_SECRET_KEY", "")
@@ -1411,9 +1414,12 @@ def backup_database_on_startup():
                 return
             backups_dir = os.path.join(os.path.dirname(db_path) or ".", "backups")
             os.makedirs(backups_dir, exist_ok=True)
+            # Use the source DB stem (e.g. "commander" or "commander-test") as prefix so
+            # the stable and test containers each manage their own backup set in the shared dir.
+            db_stem = os.path.splitext(os.path.basename(db_path))[0]
             existing = [
                 os.path.join(backups_dir, f) for f in os.listdir(backups_dir)
-                if f.startswith("commander-") and f.endswith(".db")
+                if f.startswith(db_stem + "-") and f.endswith(".db")
             ]
             newest_age = min(
                 (time.time() - os.path.getmtime(p) for p in existing), default=None
@@ -1422,16 +1428,16 @@ def backup_database_on_startup():
                 # Another worker (or a very recent restart) already snapshotted.
                 return
             stamp = datetime.utcnow().strftime("%Y%m%d-%H%M%SZ")
-            dest = os.path.join(backups_dir, f"commander-{stamp}.db")
+            dest = os.path.join(backups_dir, f"{db_stem}-{stamp}.db")
             dst = sqlite3.connect(dest)
             try:
                 src.backup(dst)  # online backup API — consistent across WAL
             finally:
                 dst.close()
-            # Rotate: keep the newest STARTUP_BACKUP_KEEP snapshots.
+            # Rotate: keep the newest STARTUP_BACKUP_KEEP snapshots for this channel.
             snaps = sorted(
                 (os.path.join(backups_dir, f) for f in os.listdir(backups_dir)
-                 if f.startswith("commander-") and f.endswith(".db")),
+                 if f.startswith(db_stem + "-") and f.endswith(".db")),
                 key=os.path.getmtime,
                 reverse=True,
             )
@@ -2269,6 +2275,17 @@ with app.app_context():
 
     ensure_indexes()
 
+    # Prune old funnel events to prevent unbounded table growth (L2).
+    try:
+        cutoff = datetime.utcnow() - timedelta(days=90)
+        db.session.execute(
+            text("DELETE FROM funnel_event WHERE created_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
     if os.getenv("AUTO_CREATE_DB") == "1":
         db.create_all()
 
@@ -2323,9 +2340,21 @@ def _load_json_index(path: Path) -> dict:
 
 
 def _save_json_index(path: Path, payload: dict) -> None:
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, separators=(",", ":"), sort_keys=True), encoding="utf-8")
-    tmp_path.replace(path)
+    # Use mkstemp for a unique temp path so concurrent workers don't race on the same .tmp file.
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        os.write(fd, json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8"))
+        os.close(fd)
+        fd = -1
+        Path(tmp).replace(path)
+    except Exception:
+        if fd >= 0:
+            os.close(fd)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _initialize_card_art_indexes() -> None:
@@ -2446,7 +2475,13 @@ def is_valid_custom_art_url(value: str) -> bool:
         return True
     if not candidate.lower().startswith(("http://", "https://")):
         return False
-    return len(candidate) <= 500
+    if len(candidate) > 500:
+        return False
+    # Reject chars that break CSS url() or HTML attribute contexts.
+    for ch in ('"', "'", '\\', '\n', '\r'):
+        if ch in candidate:
+            return False
+    return True
 
 
 def has_uploaded_custom_art(upload) -> bool:
@@ -3171,7 +3206,7 @@ def download_art_crop(art_url: str, scryfall_id: str, commander_name: str) -> st
     if not (art_url and scryfall_id and commander_name):
         return None
 
-    filename = f"{_safe_filename(commander_name)}_{scryfall_id}.jpg"
+    filename = f"{_safe_filename(commander_name)}_{_safe_filename(scryfall_id)}.jpg"
     out_path = COMMANDER_ART_DIR / filename
     web_path = f"/art/commander_art/{filename}"
 
@@ -3853,9 +3888,15 @@ def _update_deck_from_payload(
 
 def get_current_user():
     uid = session.get("user_id")
-    if not uid:
-        return None
-    return db.session.get(User, uid)
+    # Key by uid so the cache stays valid even when g is reused across requests in tests.
+    cache = getattr(g, "_user_cache", None)
+    if cache is None:
+        g._user_cache = {}
+    elif uid in g._user_cache:
+        return g._user_cache[uid]
+    user = db.session.get(User, uid) if uid else None
+    g._user_cache[uid] = user
+    return user
 
 
 def normalize_email(value: str | None) -> str:
@@ -4255,17 +4296,23 @@ def api_login_required(f):
 
 
 def get_active_pod():
+    uid = session.get("user_id")
+    pod_cache = getattr(g, "_pod_cache", None)
+    if pod_cache is None:
+        g._pod_cache = {}
+    elif uid in g._pod_cache:
+        return g._pod_cache[uid]
     current_user = get_current_user()
     accessible_ids = {p.id for p in get_accessible_pods(current_user)}
 
+    pod = None
     active_pod_id = session.get("active_pod_id")
     if active_pod_id and int(active_pod_id) in accessible_ids:
-        pod = db.session.get(Pod, int(active_pod_id))
-        if pod and pod.is_active:
-            return pod
+        candidate = db.session.get(Pod, int(active_pod_id))
+        if candidate and candidate.is_active:
+            pod = candidate
 
-    pod = None
-    if accessible_ids:
+    if pod is None and accessible_ids:
         pod = Pod.query.filter(Pod.id.in_(accessible_ids), Pod.slug == DEFAULT_POD_SLUG).first()
         if not pod:
             pod = Pod.query.filter(Pod.id.in_(accessible_ids), Pod.is_active == True).order_by(Pod.id.asc()).first()  # noqa: E712
@@ -4273,6 +4320,7 @@ def get_active_pod():
     if pod:
         session["active_pod_id"] = pod.id
         session.modified = True
+    g._pod_cache[uid] = pod
     return pod
 
 
@@ -4704,7 +4752,6 @@ def require_login():
             "api_game_state",
             "api_join_get",
             "api_join_claim",
-            "api_homepage",
         }
         if request.endpoint not in public_endpoints:
             if request.path.startswith("/api/"):
@@ -4713,7 +4760,7 @@ def require_login():
 
     if session.get("user_id"):
         signed_in_user = get_current_user()
-        if not signed_in_user or signed_in_user.deleted_at:
+        if not signed_in_user or signed_in_user.deleted_at or not signed_in_user.is_active:
             session.clear()
             return _revoked_session_response()
         session_version = session.get("session_version")
@@ -4846,6 +4893,7 @@ def login():
                 user.player = Player(name=user.display_name)
                 db.session.commit()
 
+            session.clear()  # prevent session fixation (L3)
             session["user_id"] = user.id
             session["username"] = user.username
             session["display_name"] = user.display_name
@@ -4858,7 +4906,7 @@ def login():
             get_active_pod()
 
             next_url = request.args.get("next", "")
-            if next_url and (next_url.startswith("//") or "://" in next_url):
+            if not (next_url and next_url.startswith("/") and not next_url.startswith("//") and "\\" not in next_url):
                 next_url = ""
             return redirect(next_url or url_for("index"))
 
@@ -5642,6 +5690,7 @@ def admin_deactivate_user(user_id):
         return redirect(url_for("admin_users"))
 
     u.is_active = False
+    u.session_version = (u.session_version or 0) + 1
     db.session.commit()
     flash(f"Deactivated {u.display_name}")
     return redirect(url_for("admin_users"))
@@ -5831,7 +5880,7 @@ def index():
     history_ok = scope_includes_history(scope, active_pod)
 
     # Player stats — aggregate queries instead of per-player counts
-    players = Player.query.all()
+    players = scoped_player_query(current_user, active_pod).all()
     wins_by_player = dict(
         db.session.query(Game.winner_id, func.count(Game.id))
         .filter(Game.id.in_(game_ids_subquery))
@@ -5887,7 +5936,7 @@ def index():
             row["bg_art"] = None
 
     # Deck stats — aggregate queries instead of per-deck counts
-    decks = Deck.query.all()
+    decks = scoped_deck_query(current_user, active_pod).all()
     uses_by_deck = dict(
         db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
         .join(Game, Game.id == GameParticipant.game_id)
@@ -6454,6 +6503,13 @@ def add_pod_member(pod_id):
     if not player:
         flash("Player not found.")
         return redirect(url_for("pods", pod_id=pod_id))
+
+    # Allow adding players the caller can already see, or free agents (no pod membership).
+    # Blocks enumerating players from other pods by ID guessing.
+    if not scoped_player_query(me).filter(Player.id == player_id).first():
+        has_any_membership = PodMembership.query.filter_by(player_id=player_id).first()
+        if has_any_membership:
+            abort(403)
 
     if role == "podmaster" and not me.is_admin:
         role = "member"
@@ -7026,62 +7082,83 @@ def delete_game(game_id):
 def players():
     players_list = scoped_player_query(get_current_user(), get_active_pod()).order_by(Player.name.asc()).all()
 
-    # Bulk aggregate: avg MMR of active decks per player
+    player_ids = [p.id for p in players_list]
+    pid_in = player_ids if player_ids else [-1]
+
+    # Replace 5N per-player queries with 6 bulk aggregates.
     avg_mmr_by_player = dict(
         db.session.query(Deck.player_id, func.avg(Deck.mmr))
-        .filter(Deck.retired == False, Deck.planned == False)
+        .filter(Deck.player_id.in_(pid_in), Deck.retired == False, Deck.planned == False)  # noqa: E712
         .group_by(Deck.player_id)
         .all()
     )
+    played_by_player = dict(
+        db.session.query(GameParticipant.player_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.player_id.in_(pid_in))
+        .group_by(GameParticipant.player_id)
+        .all()
+    )
+    won_by_player = dict(
+        db.session.query(Game.winner_id, func.count(Game.id))
+        .filter(Game.winner_id.in_(pid_in))
+        .group_by(Game.winner_id)
+        .all()
+    )
+    deck_count_by_player = dict(
+        db.session.query(Deck.player_id, func.count(Deck.id))
+        .filter(Deck.player_id.in_(pid_in))
+        .group_by(Deck.player_id)
+        .all()
+    )
+    deck_used_players = set(
+        pid for (pid,) in db.session.query(Deck.player_id)
+        .join(GameParticipant, GameParticipant.deck_id == Deck.id)
+        .filter(Deck.player_id.in_(pid_in))
+        .distinct()
+        .all()
+    )
+
+    # Most-played deck per player: aggregate plays per (player, deck), then resolve in Python.
+    plays_rows = (
+        db.session.query(GameParticipant.player_id, GameParticipant.deck_id, func.count(GameParticipant.id))
+        .filter(GameParticipant.player_id.in_(pid_in))
+        .group_by(GameParticipant.player_id, GameParticipant.deck_id)
+        .all()
+    )
+    top_deck_id_by_player: dict[int, int] = {}
+    top_plays: dict[int, int] = {}
+    for r_player_id, r_deck_id, r_plays in plays_rows:
+        if r_plays > top_plays.get(r_player_id, 0):
+            top_plays[r_player_id] = r_plays
+            top_deck_id_by_player[r_player_id] = r_deck_id
+    top_deck_ids = list(set(top_deck_id_by_player.values()))
+    top_decks = {d.id: d for d in Deck.query.filter(Deck.id.in_(top_deck_ids if top_deck_ids else [-1])).all()}
 
     player_can_delete = {}
     player_stats = {}
     for p in players_list:
-        played = GameParticipant.query.filter_by(player_id=p.id).count()
-        won = Game.query.filter_by(winner_id=p.id).count()
-
-        deck_count = Deck.query.filter_by(player_id=p.id).count()
+        played = played_by_player.get(p.id, 0)
+        won = won_by_player.get(p.id, 0)
         disp_won, disp_played = player_totals_with_history(p, won, played)
         winrate = round((disp_won / disp_played) * 100, 1) if disp_played else 0.0
         joined_on = p.user.created_at if p.user else None
-
         raw_avg = avg_mmr_by_player.get(p.id)
         avg_mmr = round(raw_avg) if raw_avg is not None else None
-
-        most_played = (
-            db.session.query(Deck, func.count(GameParticipant.id).label("plays"))
-            .join(GameParticipant, GameParticipant.deck_id == Deck.id)
-            .filter(GameParticipant.player_id == p.id)
-            .group_by(Deck.id)
-            .order_by(text("plays DESC"))
-            .first()
-        )
-        card_art = most_played[0].commander_art_url if most_played else None
+        top_deck = top_decks.get(top_deck_id_by_player.get(p.id))
+        card_art = top_deck.commander_art_url if top_deck else None
 
         player_stats[p.id] = {
             "winrate": winrate,
-            "deck_count": deck_count,
+            "deck_count": deck_count_by_player.get(p.id, 0),
             "joined_on": joined_on,
             "won": disp_won,
             "played": disp_played,
             "avg_mmr": avg_mmr,
             "card_art": card_art,
         }
-
-        deck_used = (
-            db.session.query(GameParticipant.id)
-            .join(Deck, GameParticipant.deck_id == Deck.id)
-            .filter(Deck.player_id == p.id)
-            .first()
-            is not None
-        )
-
-        # Only deletable if:
-        # - not linked to a user
-        # - not in any game (played or won)
-        # - none of their decks are used
         player_can_delete[p.id] = (
-            p.user_id is None and played == 0 and won == 0 and not deck_used
+            p.user_id is None and played == 0 and won == 0
+            and p.id not in deck_used_players
             and not player_has_history(p)
         )
 
@@ -7502,25 +7579,33 @@ def decks():
     for d in decks_list:
         get_deck_parsed_tags(d, cache=deck_tags_cache)
 
-    # Stats
-    stats = {}
-    for d in decks_list:
-        wins = (
-            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-            .filter(GameParticipant.deck_id == d.id, Game.winner_id == GameParticipant.player_id)
-            .count()
-        )
-        uses = GameParticipant.query.filter_by(deck_id=d.id).count()
-        wins, uses = deck_totals_with_history(d, wins, uses)
-        losses = max(0, uses - wins)
-        winrate = round((wins / uses) * 100, 1) if uses else 0.0
-        stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate, "mmr": d.mmr}
+    # Aggregate stats in two queries instead of 3N per-deck COUNT queries.
+    deck_ids = [d.id for d in decks_list]
+    id_filter = GameParticipant.deck_id.in_(deck_ids if deck_ids else [-1])
 
+    raw_uses = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .filter(id_filter)
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+    raw_wins = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(id_filter, Game.winner_id == GameParticipant.player_id)
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+
+    stats = {}
     deck_can_delete = {}
     deck_tags_stale = {}
     for d in decks_list:
-        used = GameParticipant.query.filter_by(deck_id=d.id).count()
-        deck_can_delete[d.id] = (used == 0 and not deck_has_history(d))
+        wins, uses = deck_totals_with_history(d, raw_wins.get(d.id, 0), raw_uses.get(d.id, 0))
+        losses = max(0, uses - wins)
+        winrate = round((wins / uses) * 100, 1) if uses else 0.0
+        stats[d.id] = {"wins": wins, "uses": uses, "losses": losses, "winrate": winrate, "mmr": d.mmr}
+        deck_can_delete[d.id] = (raw_uses.get(d.id, 0) == 0 and not deck_has_history(d))
         deck_tags_stale[d.id] = bool(d.decklist_text and is_deck_tags_stale(d))
 
     stale_deck_count = sum(1 for stale in deck_tags_stale.values() if stale)
@@ -8192,9 +8277,12 @@ def api_commander_bracket():
 
 
 @app.route("/api/homepage")
+@api_login_required
 def api_homepage():
-    """Public read-only summary for the figurenhome dashboard."""
-    players = Player.query.all()
+    """Pod-scoped summary for the figurenhome dashboard."""
+    current_user = get_current_user()
+    active_pod = get_active_pod()
+    players = scoped_player_query(current_user, active_pod).all()
     # Include recovered pre-wipe games so total_games stays consistent with the
     # history-inflated per-player totals below. Each game has exactly one winner,
     # so summing historical_wins yields the distinct pre-wipe game count.
@@ -8676,6 +8764,12 @@ def start_game():
 @app.route("/api/start_game", methods=["POST"])
 @api_login_required
 def api_start_game():
+    me = get_current_user()
+    active_pod = get_active_pod()
+    allowed_player_ids = {
+        pid for (pid,) in scoped_player_query(me, active_pod).with_entities(Player.id)
+    }
+
     data = request.get_json(silent=True) or {}
     raw_participants = data.get("participants", [])
     if not isinstance(raw_participants, list):
@@ -8693,11 +8787,13 @@ def api_start_game():
 
         if p_id in seen:
             return jsonify({"error": "Duplicate players not allowed"}), 400
+        if p_id not in allowed_player_ids:
+            return jsonify({"error": "Player is not a member of the active pod"}), 403
         seen.add(p_id)
 
         borrowing = bool(entry.get("borrow", False))
         deck = db.session.get(Deck, d_id)
-        if not deck or deck.retired or deck.planned:
+        if not deck or deck.retired or deck.planned or deck.player_id not in allowed_player_ids:
             return jsonify({"error": "Invalid deck"}), 400
         if not borrowing and deck.player_id != p_id:
             return jsonify({"error": "Invalid deck for player"}), 400
@@ -9758,14 +9854,22 @@ def _serialize_game_participant(
     }
 
 
-def _serialize_deck_summary(deck: Deck, *, deck_tags_cache: dict[int, dict[str, bool]] | None = None) -> dict:
-    wins = (
-        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-        .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
-        .count()
-    )
-    uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
-    wins, uses = deck_totals_with_history(deck, wins, uses)
+def _serialize_deck_summary(
+    deck: Deck,
+    *,
+    deck_tags_cache: dict[int, dict[str, bool]] | None = None,
+    precomputed_wins: int | None = None,
+    precomputed_uses: int | None = None,
+) -> dict:
+    if precomputed_wins is None:
+        precomputed_wins = (
+            GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
+            .filter(GameParticipant.deck_id == deck.id, Game.winner_id == GameParticipant.player_id)
+            .count()
+        )
+    if precomputed_uses is None:
+        precomputed_uses = GameParticipant.query.filter_by(deck_id=deck.id).count()
+    wins, uses = deck_totals_with_history(deck, precomputed_wins, precomputed_uses)
     winrate = round((wins / uses) * 100, 1) if uses > 0 else 0.0
     deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
     deck_mechanics = derive_deck_mechanics(deck_tags)
@@ -10387,17 +10491,21 @@ def api_login():
     user = User.query.filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid username or password"}), 401
+    if user.deleted_at:
+        return jsonify({"error": "Invalid username or password"}), 401
     if not user.is_active:
         return jsonify({"error": "Account pending approval. Please contact an admin."}), 403
     if not user.player:
         user.player = Player(name=user.display_name)
         db.session.commit()
+    session.clear()
     session["user_id"] = user.id
     session["username"] = user.username
     session["display_name"] = user.display_name
     session["is_admin"] = user.is_admin
     session["use_sigtaara"] = user.use_sigtaara
     session["use_light_theme"] = user.use_light_theme
+    session["session_version"] = user.session_version
     get_active_pod()
     return jsonify({
         "user_id": user.id,
@@ -11006,16 +11114,30 @@ def api_stats():
         scope, active_pod, date_filtered=bool(date_from_raw or date_to_raw)
     )
 
-    players = Player.query.all()
+    current_user = get_current_user()
+    players = scoped_player_query(current_user, active_pod).all()
+    player_ids = [p.id for p in players]
+    pid_in = player_ids if player_ids else [-1]
+
+    raw_wins_by_player = dict(
+        db.session.query(Game.winner_id, func.count(Game.id))
+        .filter(Game.id.in_(game_ids_subquery), Game.winner_id.in_(pid_in))
+        .group_by(Game.winner_id)
+        .all()
+    )
+    raw_played_by_player = dict(
+        db.session.query(GameParticipant.player_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(Game.id.in_(game_ids_subquery), GameParticipant.player_id.in_(pid_in))
+        .group_by(GameParticipant.player_id)
+        .all()
+    )
+
     player_stats = []
     for p in players:
-        wins = game_q.filter_by(winner_id=p.id).count()
-        played = (
-            GameParticipant.query.join(Game)
-            .filter(GameParticipant.player_id == p.id, Game.id.in_(game_ids_subquery))
-            .count()
+        wins, played = player_totals_with_history(
+            p, raw_wins_by_player.get(p.id, 0), raw_played_by_player.get(p.id, 0), include=history_ok
         )
-        wins, played = player_totals_with_history(p, wins, played, include=history_ok)
         winrate = round(wins / played * 100, 1) if played > 0 else 0.0
         player_stats.append({"player_id": p.id, "name": p.name, "wins": wins, "played": played, "winrate": winrate})
     player_stats.sort(key=lambda x: (-x["wins"], -x["winrate"]))
@@ -11052,24 +11174,28 @@ def api_stats():
             ],
         })
 
-    decks = Deck.query.all()
+    decks = scoped_deck_query(current_user, active_pod).all()
+    deck_ids = [d.id for d in decks]
+    did_in = deck_ids if deck_ids else [-1]
+
+    raw_deck_wins = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(GameParticipant.deck_id.in_(did_in), Game.winner_id == GameParticipant.player_id, Game.id.in_(game_ids_subquery))
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+    raw_deck_uses = dict(
+        db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(GameParticipant.deck_id.in_(did_in), Game.id.in_(game_ids_subquery))
+        .group_by(GameParticipant.deck_id)
+        .all()
+    )
+
     deck_stats = []
     for d in decks:
-        wins = (
-            GameParticipant.query.join(Game)
-            .filter(
-                GameParticipant.deck_id == d.id,
-                Game.winner_id == GameParticipant.player_id,
-                Game.id.in_(game_ids_subquery),
-            )
-            .count()
-        )
-        uses = (
-            GameParticipant.query.join(Game)
-            .filter(GameParticipant.deck_id == d.id, Game.id.in_(game_ids_subquery))
-            .count()
-        )
-        wins, uses = deck_totals_with_history(d, wins, uses, include=history_ok)
+        wins, uses = deck_totals_with_history(d, raw_deck_wins.get(d.id, 0), raw_deck_uses.get(d.id, 0), include=history_ok)
         winrate = round(wins / uses * 100, 1) if uses > 0 else 0.0
         deck_stats.append({
             "id": d.id,
@@ -11297,11 +11423,7 @@ def api_saltmine():
             "winrate": round((wins / games) * 100, 1) if games else None,
         })
 
-    scoped_participants = (
-        GameParticipant.query.join(Game, GameParticipant.game_id == Game.id)
-        .filter(Game.id.in_(game_q.with_entities(Game.id)))
-        .all()
-    )
+    scoped_participants = participants  # already loaded above; same filter
     deck_tags_cache: dict[int, dict[str, bool]] = {}
     deck_mechanics_by_id = {}
     for deck in Deck.query.all():
@@ -11510,6 +11632,7 @@ def api_admin_deactivate_user(user_id):
         return jsonify({"error": "You can't deactivate your own account."}), 409
 
     user.is_active = False
+    user.session_version = (user.session_version or 0) + 1
     db.session.commit()
     return jsonify({"ok": True}), 200
 
@@ -11880,6 +12003,13 @@ def api_add_pod_member(pod_id):
     player = db.session.get(Player, player_id)
     if not player:
         return jsonify({"error": "Player not found."}), 404
+
+    # Allow adding players the caller can already see, or free agents (no pod membership).
+    # Blocks enumerating players from other pods by ID guessing.
+    if not scoped_player_query(current_user).filter(Player.id == player_id).first():
+        has_any_membership = PodMembership.query.filter_by(player_id=player_id).first()
+        if has_any_membership:
+            return jsonify({"error": "Forbidden"}), 403
 
     ensure_membership(pod_id, player_id, role=role)
     db.session.commit()
@@ -12417,8 +12547,26 @@ def api_decks():
     decks = q.order_by(Deck.name.asc()).all()
     result = []
     deck_tags_cache: dict[int, dict[str, bool]] = {}
-    for d in decks:
-        result.append(_serialize_deck_summary(d, deck_tags_cache=deck_tags_cache))
+    if decks:
+        deck_ids = [d.id for d in decks]
+        id_filter = GameParticipant.deck_id.in_(deck_ids)
+        raw_uses_api = dict(
+            db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+            .filter(id_filter).group_by(GameParticipant.deck_id).all()
+        )
+        raw_wins_api = dict(
+            db.session.query(GameParticipant.deck_id, func.count(GameParticipant.id))
+            .join(Game, Game.id == GameParticipant.game_id)
+            .filter(id_filter, Game.winner_id == GameParticipant.player_id)
+            .group_by(GameParticipant.deck_id).all()
+        )
+        for d in decks:
+            result.append(_serialize_deck_summary(
+                d,
+                deck_tags_cache=deck_tags_cache,
+                precomputed_wins=raw_wins_api.get(d.id, 0),
+                precomputed_uses=raw_uses_api.get(d.id, 0),
+            ))
     return jsonify(result)
 
 

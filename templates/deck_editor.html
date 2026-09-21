@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link href="{{ url_for('static', filename='css/deck_editor.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/deck_editor.css', v='mobile-details-1') }}" rel="stylesheet">
 
 {# Split commander into primary + optional partner #}
 {% set _full_cmd = deck.commander_name or deck.commander or '' %}
@@ -46,7 +46,8 @@
 </script>
 
 {# ── Top bar ── #}
-<div class="editor-topbar">
+<div class="deck-editor-page">
+<div class="editor-topbar" id="editorTopbarHome">
   <a class="editor-topbar-back" href="{{ url_for('decks') if create_mode else url_for('deck_detail', deck_id=deck.id) }}">‹ Back</a>
   <button id="toggleSearchBtn" class="editor-sidebar-toggle" title="Toggle Search panel">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -54,12 +55,17 @@
       <rect x="7" y="1" width="8" height="14" rx="1" opacity="0.35"/>
     </svg>
   </button>
-  <div class="editor-topbar-title">
+  <h1 class="editor-mobile-only editor-page-title">{{ 'Create deck' if create_mode else 'Edit deck' }}</h1>
+  <div class="editor-topbar-title" id="editorNameHome">
+   <div id="editorNameField">
+    <label class="editor-field-label" for="editorNameInput">Deck Name</label>
     <input id="editorNameInput" class="editor-name-input" type="text"
            value="{{ deck.name }}" autocomplete="off" spellcheck="false"
-           placeholder="{{ 'New deck name' if create_mode else '' }}">
+           placeholder="Give your deck a name" required>
+   </div>
   </div>
-  <div class="editor-topbar-actions">
+  <div class="editor-topbar-actions" id="editorActions">
+    <span id="editorSaveStatus" class="editor-mobile-only" role="status">No unsaved changes</span>
     <span id="editorBracketBadge" class="editor-bracket-badge" hidden></span>
     <span id="editorCountBadge" class="editor-count-badge count-low">0 cards</span>
     <span id="editorUnsavedDot" class="editor-unsaved-dot" title="Unsaved changes">● Unsaved</span>
@@ -77,37 +83,41 @@
 <div class="editor-shell">
 
   {# Tab bar (mobile only) #}
-  <div class="editor-tab-bar">
-    <button class="editor-tab-btn" id="tabBtnDeck" data-panel="deck">
-      My Deck <span id="tabDeckCount"></span>
-    </button>
-    <button class="editor-tab-btn active" id="tabBtnSearch" data-panel="search">
-      Search Cards
-    </button>
-    <button class="editor-tab-btn" id="tabBtnSettings" data-panel="settings">
-      Settings
-    </button>
+  <div class="editor-tab-bar" role="tablist" aria-label="Deck editor sections">
+    <button type="button" class="editor-tab-btn active" id="tabBtnDetails" role="tab" aria-selected="true" aria-controls="panelDetails">Details</button>
+    <button type="button" class="editor-tab-btn" id="tabBtnDeck" role="tab" aria-selected="false" aria-controls="panelDeck panelSearch" tabindex="-1">Cards <span id="tabDeckCount"></span></button>
   </div>
 
   <div class="editor-panels">
+    <section class="editor-details-panel panel-active" id="panelDetails" role="tabpanel" aria-labelledby="tabBtnDetails">
+      <div id="editorIdentityFields"></div>
+      <div id="editorCommanderMobileHome"></div>
+      <details class="editor-mobile-options" id="editorMobileOptions">
+        <summary>Artwork &amp; deck status</summary>
+        <div id="editorSettingsMobileHome"></div>
+      </details>
+    </section>
 
     {# ── Search panel ── #}
-    <div class="editor-search-panel panel-active" id="panelSearch">
+    <div class="editor-search-panel" id="panelSearch" role="region" aria-label="Add cards">
+      <div class="editor-mobile-only editor-search-heading"><button type="button" id="editorBackToDeck">‹ Back to cards</button><h2>Add cards</h2></div>
       <div class="editor-search-inner">
 
         <div class="editor-search-controls">
           <div class="editor-search-input-wrap">
+            <label for="editorSearchInput" class="editor-mobile-only editor-field-label">Search cards</label>
             <input id="editorSearchInput" class="form-control bg-dark text-light border-secondary"
                    type="search" placeholder="Search cards…" autocomplete="off" autocorrect="off"
                    autocapitalize="off" spellcheck="false">
             <div id="editorAutocompleteMenu" class="editor-autocomplete-menu" style="display:none;"></div>
           </div>
           {% if has_ccauto %}
+          <details class="editor-search-options" id="editorSearchOptions" open><summary>Search source</summary>
           <div class="editor-source-pills">
             <button class="editor-source-pill active" data-source="all">All</button>
             <button class="editor-source-pill" data-source="scryfall">Scryfall</button>
             <button class="editor-source-pill" data-source="custom">Custom</button>
-          </div>
+          </div></details>
           {% endif %}
         </div>
 
@@ -131,7 +141,14 @@
     </div>
 
     {# ── Deck panel ── #}
-    <div class="editor-deck-panel" id="panelDeck">
+    <div class="editor-deck-panel" id="panelDeck" role="tabpanel" aria-labelledby="tabBtnDeck">
+      <div class="editor-mobile-only editor-card-tools">
+        <div class="editor-card-heading"><h2>Your decklist</h2><span id="editorDeckTotal"></span></div>
+        <div class="editor-card-actions"><button type="button" id="editorAddCardsBtn">+ Add cards</button><button type="button" id="editorOpenImport" aria-expanded="false" aria-controls="editorImportDetails">Import list</button></div>
+        <label class="editor-field-label" for="editorDeckFilter">Find in this deck</label>
+        <input type="search" id="editorDeckFilter" placeholder="Card name…" autocomplete="off">
+      </div>
+      <details class="editor-import-disclosure" id="editorImportDetails" open><summary>Import decklist</summary>
 
       <div class="editor-import-card">
         <div class="editor-import-head">
@@ -164,9 +181,12 @@
         </div>
       </div>
 
+      </details>
+      <div id="editorCommanderHome"><div id="editorCommanderFields">
+      <div class="editor-mobile-only editor-commander-summary"><span class="editor-field-label">Commander</span><div class="editor-commander-summary-row"><span id="editorCommanderSummary"></span><button type="button" id="editorChangeCommander" aria-controls="editorCommanderField" aria-expanded="false">Change</button></div></div>
       {# Primary commander #}
-      <div class="editor-commander-wrap">
-        <div class="editor-commander-label">Commander</div>
+      <div class="editor-commander-wrap" id="editorCommanderField">
+        <label class="editor-commander-label" for="editorCommanderInput">Commander name</label>
         <div style="position:relative;">
           <input id="editorCommanderInput" class="editor-commander-input form-control"
                  type="text" autocomplete="off" autocorrect="off"
@@ -186,7 +206,7 @@
         <a href="#" id="editorShowPartner" class="editor-partner-toggle-link">+ Add partner / background commander</a>
       </div>
       <div class="editor-commander-wrap" id="editorPartnerWrap" {% if not _partner_cmd %}style="display:none;"{% endif %}>
-        <div class="editor-commander-label">Partner / Background</div>
+        <label class="editor-commander-label" for="editorPartnerInput">Partner / Background</label>
         <div style="position:relative;">
           <input id="editorPartnerInput" class="editor-commander-input form-control"
                  type="text" autocomplete="off" autocorrect="off"
@@ -198,6 +218,7 @@
         <a href="#" id="editorHidePartner" class="editor-partner-remove-link">− Remove partner</a>
       </div>
 
+      </div></div>
       {# Card list #}
       <div class="editor-deck-inner" id="editorDeckInner">
         {# Sections rendered by JS #}
@@ -206,64 +227,45 @@
 
     {# ── Settings panel ── #}
     <div class="editor-settings-panel" id="panelSettings">
-      <div class="editor-settings-inner">
-
-        <div class="editor-settings-section">
-          <div class="editor-settings-label">Custom Commander Art</div>
-          <input id="settingsCommanderArtUrl" type="text" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input"
-                 placeholder="https://… or leave blank to clear"
-                 value="{{ deck.custom_commander_art_url or '' }}">
-          {% if create_mode %}
-          <div class="editor-settings-help">Save the deck once before uploading a local art file.</div>
-          {% else %}
-          <div class="editor-settings-file-row">
-            <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
-              Choose file
-              <input type="file" id="settingsCommanderArtFile" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" style="display:none;">
-            </label>
-            <span id="settingsCommanderArtFilename" class="editor-settings-filename">No file chosen</span>
-          </div>
-          <div class="editor-settings-help">Animated GIFs are supported (max 15 MB).</div>
-          {% endif %}
-        </div>
-
-        <div class="editor-settings-section">
-          <div class="editor-settings-label">Custom Card Art</div>
-          <input id="settingsCardArtUrl" type="text" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input"
-                 placeholder="https://… or leave blank to clear"
-                 value="{{ deck.custom_card_art_url or '' }}">
-          {% if create_mode %}
-          <div class="editor-settings-help">Save the deck once before uploading a local art file.</div>
-          {% else %}
-          <div class="editor-settings-file-row">
-            <label class="btn btn-outline-secondary btn-sm editor-settings-file-btn">
-              Choose file
-              <input type="file" id="settingsCardArtFile" accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" style="display:none;">
-            </label>
-            <span id="settingsCardArtFilename" class="editor-settings-filename">No file chosen</span>
-          </div>
-          {% endif %}
-        </div>
-
-        {% if owner_name and not is_admin %}
-        <div class="editor-settings-section">
-          <div class="editor-settings-label">Owner</div>
-          <div class="editor-settings-value">{{ owner_name }}</div>
-        </div>
-        {% endif %}
-
-        {% if is_admin %}
-        <div class="editor-settings-section">
-          <div class="editor-settings-label">Owner</div>
-          <select id="editorOwnerSelect" class="form-select form-select-sm bg-dark text-light border-secondary editor-settings-input">
+      <div id="editorOwnerHome">
+        <div class="editor-settings-section" id="editorOwnerField">
+          <label class="editor-field-label" for="{{ 'editorOwnerSelect' if is_admin else 'editorOwnerDisplay' }}">Deck Owner</label>
+          {% if is_admin %}
+          <select id="editorOwnerSelect" class="form-select form-select-sm bg-dark text-light border-secondary editor-settings-input" required>
             <option value="">Select owner…</option>
-            {% for p in players %}
-            <option value="{{ p.id }}" {% if editor_owner_player_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-            {% endfor %}
+            {% for p in players %}<option value="{{ p.id }}" {% if editor_owner_player_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
           </select>
+          {% else %}
+          <input id="editorOwnerDisplay" class="form-control editor-settings-input" value="{{ owner_name or 'Unassigned' }}" readonly aria-describedby="editorOwnerHelp">
+          <div class="editor-settings-help" id="editorOwnerHelp">Only an admin can change the owner.</div>
+          {% endif %}
         </div>
-        {% endif %}
-
+      </div>
+      <div class="editor-settings-inner" id="editorSettingsFields">
+        {% for prefix, field, title, current_art in [
+          ('settingsCommanderArt', 'commander', 'Custom commander art', deck.commander_local_art_custom or deck.custom_commander_art_url or ''),
+          ('settingsCardArt', 'card', 'Custom card art', deck.custom_card_art_local or deck.custom_card_art_url or '')
+        ] %}
+        <div class="editor-settings-section editor-art-settings">
+          <h2 class="editor-settings-label">{{ title }}</h2>
+          {% if create_mode %}
+          <div class="editor-settings-help">Save the deck once before uploading an image.</div>
+          {% else %}
+          <label class="editor-field-label" for="{{ prefix }}File">Upload image</label>
+          <input type="file" id="{{ prefix }}File" class="editor-art-file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif" aria-describedby="{{ prefix }}Help">
+          <div id="{{ prefix }}Help" class="editor-settings-help">PNG, JPG, WebP, GIF or AVIF · Max 15 MB. Uploads are applied immediately.</div>
+          <div id="{{ prefix }}Filename" class="editor-settings-filename" role="status"></div>
+          {% endif %}
+          <img id="{{ prefix }}Preview" class="editor-custom-art-preview" {% if current_art %}src="{{ current_art }}"{% else %}hidden{% endif %} alt="{{ title }} preview">
+          <details class="editor-art-url-option" {% if current_art.startswith('http') %}open{% endif %}>
+            <summary>Use an image URL instead</summary>
+            <label class="editor-field-label" for="{{ prefix }}Url">{{ title }} URL</label>
+            <input id="{{ prefix }}Url" type="url" class="form-control form-control-sm bg-dark text-light border-secondary editor-settings-input" placeholder="https://…" value="{{ (deck.custom_commander_art_url if field == 'commander' else deck.custom_card_art_url) or '' }}">
+          </details>
+          <button type="button" id="{{ prefix }}Remove" class="editor-art-remove" {% if not current_art %}hidden{% endif %}>Remove custom art</button>
+          <div id="{{ prefix }}Error" class="editor-art-error" role="alert" hidden></div>
+        </div>
+        {% endfor %}
         <div class="editor-settings-section editor-settings-toggles">
           <div class="form-check form-switch mb-2">
             <input class="form-check-input" type="checkbox" id="editorRetiredToggle" {% if deck.retired %}checked{% endif %}>
@@ -280,6 +282,8 @@
 
   </div>{# /editor-panels #}
 </div>{# /editor-shell #}
+<div class="editor-mobile-only editor-mobile-footer" id="editorMobileFooter"></div>
+</div>{# /deck-editor-page #}
 
 {# ── Print picker modal ── #}
 <div class="print-picker-overlay" id="printPickerOverlay"></div>
@@ -312,7 +316,7 @@
 </div>
 
 {# ── Save toast ── #}
-<div class="editor-toast" id="editorToast"></div>
+<div class="editor-toast" id="editorToast" role="status"></div>
 
 <script>
 /* ============================================================
@@ -406,8 +410,14 @@
   }
 
   function updateCommanderArt(name) {
+    if (state.customCommanderArt) {
+      artImg.src = state.customCommanderArt;
+      artPreview.style.display = '';
+      return;
+    }
     if (!name) { artPreview.style.display = 'none'; return; }
     fetchArt(name).then(src => {
+      if (state.customCommanderArt || state.commander !== name) return;
       if (src) { artImg.src = src; artPreview.style.display = ''; }
       else { artPreview.style.display = 'none'; }
     });
@@ -417,11 +427,14 @@
   function markDirty() {
     state.dirty = true;
     unsavedDot.classList.add('visible');
+    document.getElementById('editorSaveStatus').textContent = 'Unsaved changes';
+    updateCommanderSummary();
   }
 
   function markClean() {
     state.dirty = false;
     unsavedDot.classList.remove('visible');
+    document.getElementById('editorSaveStatus').textContent = 'All changes saved';
   }
 
   window.addEventListener('beforeunload', e => {
@@ -440,6 +453,7 @@
     countBadge.className = 'editor-count-badge ' +
       (n === 100 ? 'count-ok' : n > 100 ? 'count-high' : 'count-low');
     if (tabDeckCount) tabDeckCount.textContent = `(${n})`;
+    document.getElementById('editorDeckTotal').textContent = `${n} / 100 cards`;
     scheduleBracketPreview();
   }
 
@@ -585,6 +599,7 @@
   function renderDeck() {
     deckInner.innerHTML = '';
     const isDesktop = window.innerWidth >= 992;
+    const filter = isDesktop ? '' : document.getElementById('editorDeckFilter').value.trim().toLowerCase();
 
     for (const sec of SECTIONS) {
       const cards = state.sections[sec] || [];
@@ -641,7 +656,7 @@
         body.appendChild(empty);
       }
 
-      for (const card of cards) {
+      for (const card of cards.filter(card => !filter || card.name.toLowerCase().includes(filter))) {
         if (view === 'grid') {
           body.appendChild(renderGridCard(sec, card));
         } else {
@@ -667,6 +682,7 @@
           const minus = document.createElement('button');
           minus.className = 'deck-qty-btn';
           minus.textContent = '−';
+          minus.setAttribute('aria-label', `Remove one ${card.name}`);
           minus.addEventListener('click', () => setQty(sec, card.name, card.qty - 1));
 
           const qtyEl = document.createElement('span');
@@ -676,6 +692,7 @@
           const plus = document.createElement('button');
           plus.className = 'deck-qty-btn';
           plus.textContent = '+';
+          plus.setAttribute('aria-label', `Add one ${card.name}`);
           plus.addEventListener('click', () => setQty(sec, card.name, card.qty + 1));
 
           qtyControls.append(minus, qtyEl, plus);
@@ -684,6 +701,7 @@
           removeBtn.className = 'deck-remove-btn';
           removeBtn.textContent = '×';
           removeBtn.title = 'Remove';
+          removeBtn.setAttribute('aria-label', `Remove ${card.name}`);
           removeBtn.addEventListener('click', () => removeCard(sec, card.name));
 
           row.append(thumb, nameEl, qtyControls, removeBtn);
@@ -1120,91 +1138,128 @@
     markDirty();
   });
 
-  /* ── Custom art (settings panel) ── */
-  if (cmdArtUrlInput) {
-    cmdArtUrlInput.addEventListener('input', () => {
-      state.customCommanderArt = cmdArtUrlInput.value.trim();
-      state.customCommanderArtDirty = true;
-      markDirty();
-    });
-  }
-
-  if (cmdArtFile) {
-    cmdArtFile.addEventListener('change', () => {
-      const file = cmdArtFile.files[0];
-      if (!file) return;
-      cmdArtFilename.textContent = file.name;
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('field', 'commander');
-      fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => {
-          if (d.error) { showToast('⚠ ' + d.error, true); return; }
-          state.customCommanderArt = d.url;
-          state.customCommanderArtDirty = true;
-          cmdArtUrlInput.value = '';
-          markDirty();
-          showToast('Commander art uploaded', false);
-        })
-        .catch(() => showToast('⚠ Upload failed', true));
-    });
-  }
-
-  if (cardArtUrlInput) {
-    cardArtUrlInput.addEventListener('input', () => {
-      state.customCardArt = cardArtUrlInput.value.trim();
-      state.customCardArtDirty = true;
-      markDirty();
-    });
-  }
-
-  if (cardArtFile) {
-    cardArtFile.addEventListener('change', () => {
-      const file = cardArtFile.files[0];
-      if (!file) return;
-      cardArtFilename.textContent = file.name;
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('field', 'card');
-      fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => {
-          if (d.error) { showToast('⚠ ' + d.error, true); return; }
-          state.customCardArt = d.url;
-          state.customCardArtDirty = true;
-          cardArtUrlInput.value = '';
-          markDirty();
-          showToast('Card art uploaded', false);
-        })
-        .catch(() => showToast('⚠ Upload failed', true));
-    });
-  }
-
-  /* ── Tab switching ── */
-  function switchTab(which) {
-    const panels = {
-      search:   document.getElementById('panelSearch'),
-      deck:     document.getElementById('panelDeck'),
-      settings: document.getElementById('panelSettings'),
-    };
-    const tabs = {
-      search:   document.getElementById('tabBtnSearch'),
-      deck:     document.getElementById('tabBtnDeck'),
-      settings: document.getElementById('tabBtnSettings'),
-    };
-    for (const [key, el] of Object.entries(panels)) {
-      el.classList.toggle('panel-active', key === which);
+  /* Artwork uses the existing upload endpoint; keep save and upload from racing. */
+  let pendingArtUploads = 0;
+  let saving = false;
+  for (const [prefix, field, key] of [
+    ['settingsCommanderArt', 'commander', 'customCommanderArt'],
+    ['settingsCardArt', 'card', 'customCardArt'],
+  ]) {
+    const urlInput = document.getElementById(prefix + 'Url');
+    const fileInput = document.getElementById(prefix + 'File');
+    const filename = document.getElementById(prefix + 'Filename');
+    const preview = document.getElementById(prefix + 'Preview');
+    const remove = document.getElementById(prefix + 'Remove');
+    const error = document.getElementById(prefix + 'Error');
+    function refreshArt() {
+      const src = state[key];
+      preview.hidden = !src;
+      if (src) preview.src = src; else preview.removeAttribute('src');
+      remove.hidden = !src;
+      if (field === 'commander') {
+        if (src) { artImg.src = src; artPreview.style.display = ''; }
+        else updateCommanderArt(state.commander);
+      }
     }
-    for (const [key, el] of Object.entries(tabs)) {
-      el.classList.toggle('active', key === which);
+    preview.addEventListener('error', () => { preview.hidden = true; });
+    urlInput.addEventListener('input', () => {
+      state[key] = urlInput.value.trim();
+      state[key + 'Dirty'] = true;
+      if (fileInput) fileInput.value = '';
+      if (filename) filename.textContent = '';
+      error.hidden = true;
+      markDirty();
+    });
+    urlInput.addEventListener('change', refreshArt);
+    remove.addEventListener('click', () => {
+      state[key] = '';
+      state[key + 'Dirty'] = true;
+      urlInput.value = '';
+      if (fileInput) fileInput.value = '';
+      if (filename) filename.textContent = '';
+      error.hidden = true;
+      refreshArt();
+      markDirty();
+    });
+    if (fileInput) fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+      error.hidden = true;
+      if (!/\.(png|jpe?g|webp|gif|avif)$/i.test(file.name) || file.size > 15 * 1024 * 1024) {
+        error.textContent = 'Choose a PNG, JPG, WebP, GIF or AVIF image up to 15 MB.';
+        error.hidden = false;
+        fileInput.value = '';
+        return;
+      }
+      pendingArtUploads++;
+      saveBtn.disabled = true;
+      fileInput.disabled = urlInput.disabled = remove.disabled = true;
+      filename.textContent = 'Uploading ' + file.name + '…';
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('field', field);
+      try {
+        const res = await fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.url) throw new Error(data.error || 'Upload failed. Try again.');
+        state[key] = data.url;
+        state[key + 'Dirty'] = true;
+        urlInput.value = '';
+        filename.textContent = file.name + ' · Uploaded';
+        refreshArt();
+        markDirty();
+      } catch (err) {
+        filename.textContent = '';
+        error.textContent = err.message || 'Upload failed. Try again.';
+        error.hidden = false;
+      } finally {
+        pendingArtUploads--;
+        fileInput.value = '';
+        fileInput.disabled = urlInput.disabled = remove.disabled = false;
+        saveBtn.disabled = saving || pendingArtUploads > 0;
+      }
+    });
+  }
+
+  /* Two mobile destinations; card search is a subview of Cards. */
+  let activeMobilePanel = 'details';
+  function switchTab(which) {
+    activeMobilePanel = which;
+    for (const key of ['details', 'deck', 'search']) {
+      const id = { details: 'panelDetails', deck: 'panelDeck', search: 'panelSearch' }[key];
+      document.getElementById(id).classList.toggle('panel-active', key === which);
+    }
+    for (const [key, id] of [['details', 'tabBtnDetails'], ['deck', 'tabBtnDeck']]) {
+      const selected = key === (which === 'search' ? 'deck' : which);
+      const tab = document.getElementById(id);
+      tab.classList.toggle('active', selected);
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
     }
     if (which === 'search') searchInput.focus();
   }
-
-  document.getElementById('tabBtnSearch').addEventListener('click', () => switchTab('search'));
+  document.getElementById('tabBtnDetails').addEventListener('click', () => switchTab('details'));
   document.getElementById('tabBtnDeck').addEventListener('click', () => switchTab('deck'));
-  document.getElementById('tabBtnSettings').addEventListener('click', () => switchTab('settings'));
+  document.querySelector('.editor-tab-bar').addEventListener('keydown', e => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const details = e.key === 'Home' || (e.key !== 'End' && activeMobilePanel !== 'details');
+    switchTab(details ? 'details' : 'deck');
+    document.getElementById(details ? 'tabBtnDetails' : 'tabBtnDeck').focus();
+  });
+  document.getElementById('editorAddCardsBtn').addEventListener('click', () => switchTab('search'));
+  document.getElementById('editorBackToDeck').addEventListener('click', () => {
+    switchTab('deck');
+    document.getElementById('editorAddCardsBtn').focus();
+  });
+  document.getElementById('editorDeckFilter').addEventListener('input', renderDeck);
+  const importDisclosure = document.getElementById('editorImportDetails');
+  const importOpen = document.getElementById('editorOpenImport');
+  importOpen.addEventListener('click', () => {
+    importDisclosure.open = !importDisclosure.open;
+    if (importDisclosure.open) importUrlInput.focus();
+  });
+  importDisclosure.addEventListener('toggle', () => importOpen.setAttribute('aria-expanded', String(importDisclosure.open)));
 
   importTabs.forEach(tab => {
     tab.addEventListener('click', () => switchImportTab(tab.dataset.importTab));
@@ -1345,6 +1400,17 @@
   }
 
   saveBtn.addEventListener('click', async () => {
+    if (pendingArtUploads || saving) return;
+    const invalid = !state.name.trim() ? nameInput : ownerSelect && !Number.isInteger(state.ownerId) ? ownerSelect : null;
+    if (invalid) {
+      if (window.innerWidth < 992) switchTab('details');
+      else if (invalid === ownerSelect) document.getElementById('panelSettings').classList.remove('sidebar-collapsed');
+      showToast(invalid === nameInput ? 'Enter a Deck Name.' : 'Choose a Deck Owner.', true);
+      invalid.focus();
+      return;
+    }
+    saving = true;
+    for (const input of document.querySelectorAll('.editor-art-file')) input.disabled = true;
     saveBtn.disabled = true;
     saveBtn.textContent = CREATE_MODE ? 'Creating…' : 'Saving…';
 
@@ -1353,7 +1419,7 @@
       : state.commander.trim();
 
     const payload = {
-      name: state.name.trim() || INIT.deckName,
+      name: state.name.trim(),
       commander: fullCommander,
       retired: state.retired,
       planned: state.planned,
@@ -1365,6 +1431,7 @@
     if (state.customCommanderArtDirty) payload.custom_commander_art_url = state.customCommanderArt;
     if (state.customCardArtDirty)      payload.custom_card_art_url = state.customCardArt;
 
+    const submittedState = JSON.stringify(state);
     try {
       const url = CREATE_MODE ? '/api/decks' : `/api/decks/${DECK_ID}`;
       const method = CREATE_MODE ? 'POST' : 'PATCH';
@@ -1377,9 +1444,11 @@
       if (!res.ok) {
         showToast('⚠ ' + (data.error || 'Save failed'), true);
       } else {
-        state.customCommanderArtDirty = false;
-        state.customCardArtDirty = false;
-        markClean();
+        if (JSON.stringify(state) === submittedState) {
+          state.customCommanderArtDirty = false;
+          state.customCardArtDirty = false;
+          markClean();
+        }
         if (CREATE_MODE && data.id) {
           window.location = `/deck/${data.id}/edit`;
           return;
@@ -1389,8 +1458,10 @@
     } catch (err) {
       showToast('⚠ Network error', true);
     } finally {
-      saveBtn.disabled = false;
-      saveBtn.textContent = CREATE_MODE ? 'Create Deck' : 'Save';
+      saving = false;
+      for (const input of document.querySelectorAll('.editor-art-file')) input.disabled = false;
+      saveBtn.disabled = pendingArtUploads > 0;
+      saveBtn.textContent = CREATE_MODE ? 'Create Deck' : window.innerWidth < 992 ? 'Save changes' : 'Save';
     }
   });
 
@@ -1427,16 +1498,39 @@
   document.getElementById('toggleSearchBtn')  ?.addEventListener('click', () => toggleSidebar('search'));
   document.getElementById('toggleSettingsBtn')?.addEventListener('click', () => toggleSidebar('settings'));
 
-  // On desktop: show deck + settings panels too
-  if (window.innerWidth >= 992) {
-    document.getElementById('panelDeck').classList.add('panel-active');
-    document.getElementById('panelSettings').classList.add('panel-active');
-    if (localStorage.getItem('editorSearchOpen')   === 'false') document.getElementById('panelSearch').classList.add('sidebar-collapsed');
-    if (localStorage.getItem('editorSettingsOpen') === 'false') document.getElementById('panelSettings').classList.add('sidebar-collapsed');
-    updateSidebarToggleUI();
-  } else if (CREATE_MODE) {
-    switchTab('deck');
+  // Move the same live controls at the breakpoint, retaining values and handlers.
+  const mobileQuery = window.matchMedia('(max-width: 991px)');
+  const commanderFields = document.getElementById('editorCommanderFields');
+  function updateCommanderSummary() {
+    document.getElementById('editorCommanderSummary').textContent = state.commander || 'Choose a commander';
+    document.getElementById('editorChangeCommander').textContent = state.commander ? 'Change' : 'Choose';
   }
+  document.getElementById('editorChangeCommander').addEventListener('click', () => {
+    const editing = commanderFields.classList.toggle('commander-editing');
+    document.getElementById('editorChangeCommander').setAttribute('aria-expanded', String(editing));
+    if (editing) cmdInput.focus();
+  });
+  function arrangeEditor() {
+    const mobile = mobileQuery.matches;
+    if (!saving) saveBtn.textContent = CREATE_MODE ? 'Create Deck' : mobile ? 'Save changes' : 'Save';
+    const move = (id, home) => document.getElementById(home).appendChild(document.getElementById(id));
+    move('editorNameField', mobile ? 'editorIdentityFields' : 'editorNameHome');
+    move('editorOwnerField', mobile ? 'editorIdentityFields' : 'editorOwnerHome');
+    move('editorCommanderFields', mobile ? 'editorCommanderMobileHome' : 'editorCommanderHome');
+    move('editorSettingsFields', mobile ? 'editorSettingsMobileHome' : 'panelSettings');
+    move('editorActions', mobile ? 'editorMobileFooter' : 'editorTopbarHome');
+    importDisclosure.open = !mobile;
+    const searchOptions = document.getElementById('editorSearchOptions');
+    if (searchOptions) searchOptions.open = !mobile;
+    if (mobile) switchTab(activeMobilePanel);
+    renderDeck();
+    updateCommanderSummary();
+  }
+  if (localStorage.getItem('editorSearchOpen') === 'false') document.getElementById('panelSearch').classList.add('sidebar-collapsed');
+  if (localStorage.getItem('editorSettingsOpen') === 'false') document.getElementById('panelSettings').classList.add('sidebar-collapsed');
+  updateSidebarToggleUI();
+  mobileQuery.addEventListener('change', arrangeEditor);
+  arrangeEditor();
 
 })();
 </script>
