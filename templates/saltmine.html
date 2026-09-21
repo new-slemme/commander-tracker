@@ -216,7 +216,7 @@
                 </td>
                 <td class="text-end fw-bold text-white">{{ mmr }}</td>
                 <td class="text-end">
-                  <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}">{{ tier }}</span>
+                  <span class="app-badge deck-info-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">Tier {{ tier }}</span>
                 </td>
                 <td class="text-end fw-bold {% if row.winrate >= 50 %}text-success{% else %}text-white{% endif %}">
                   {{ "%.1f"|format(row.winrate) }}%

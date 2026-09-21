@@ -19,7 +19,7 @@
   <h3 class="h6">Life-counter mechanics</h3>
   <div class="d-flex flex-wrap gap-2 mb-3">
     {% for key, label in [('monarch', 'Monarch'), ('initiative', 'Initiative'), ('citys_blessing', "City's blessing"), ('poison', 'Poison / proliferate'), ('energy', 'Energy'), ('experience', 'Experience')] %}
-      {% if deck_mechanics.get(key) %}<span class="app-badge">{{ label }}</span>{% endif %}
+      {% if deck_mechanics.get(key) %}<span class="app-badge deck-info-badge">{{ label }}</span>{% endif %}
     {% endfor %}
     {% if not deck_mechanics.values()|select|list %}<span class="muted">No mechanics detected{% if summary.status != 'current' %} in the available results{% endif %}.</span>{% endif %}
   </div>
@@ -27,7 +27,7 @@
   <p class="muted small">Suggestions require several supporting cards. They describe themes, not a definitive classification or power rating.</p>
   <div class="d-flex flex-wrap gap-2 mb-3">
     {% for tag in summary.strategies %}
-      <span class="app-badge">{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %} · {{ 'Manual' if tag.source == 'manual' else 'Suggested' }}</span>
+      <span class="app-badge deck-info-badge">{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %} · {{ 'Manual' if tag.source == 'manual' else 'Suggested' }}</span>
     {% else %}<span class="muted">No strategy tags yet.</span>{% endfor %}
   </div>
   {% for tag in summary.strategies if tag.cards %}

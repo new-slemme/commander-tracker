@@ -189,17 +189,17 @@
                   <span class="deck-planned-pill">Planned</span>
                 {% endif %}
                 {% if d.decklist_text %}
-                  <span class="deck-list-pill">Decklist</span>
+                  <span class="deck-list-pill deck-info-badge">Decklist</span>
                 {% endif %}
                 {% set tag_summary = d.tag_summary %}
                 {% if tag_summary.status != 'current' %}
-                  <span class="deck-list-pill">ⓘ {{ tag_summary.label }}</span>
+                  <span class="deck-list-pill deck-info-badge">ⓘ {{ tag_summary.label }}</span>
                 {% endif %}
                 {% for tag in tag_summary.strategies %}
-                  <span class="app-badge" title="{{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">{{ tag.label }}</span>
+                  <span class="app-badge deck-info-badge" title="{{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">{{ tag.label }}</span>
                 {% endfor %}
-                <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
-                <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
+                <span class="app-badge deck-info-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">Tier {{ tier }}</span>
+                <span class="deck-mmr-badge deck-info-badge" title="Deck MMR">{{ mmr }} MMR</span>
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
               </div>
             </div>

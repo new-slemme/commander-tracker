@@ -266,8 +266,8 @@
                   {% if d.retired %}
                     <span class="deck-retired-pill">Retired</span>
                   {% endif %}
-                  <span class="app-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">{{ tier }}</span>
-                  <span class="deck-mmr-badge" title="Deck MMR">{{ mmr }} MMR</span>
+                  <span class="app-badge deck-info-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">Tier {{ tier }}</span>
+                  <span class="deck-mmr-badge deck-info-badge" title="Deck MMR">{{ mmr }} MMR</span>
                   <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>
                 </div>
               </div>
