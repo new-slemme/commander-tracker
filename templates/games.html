@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% from '_player_picture.html' import avatar with context %}
     <link href="{{ url_for('static', filename='css/games.css') }}" rel="stylesheet">
 
 {# Mana symbol SVG helper #}
@@ -313,7 +314,7 @@
                          href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
                          aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name }})"
                          title="Open deck: {{ gp.deck.name }}">
-                        <span class="deck-mini__player">{{ gp.player.name }}</span>
+                        <span class="deck-mini__player player-summary">{{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}<span>{{ gp.player.name }}</span></span>
                         <span class="deck-mini__deck">{{ gp.deck.name }}</span>
                       </a>
                     {% endfor %}
@@ -330,7 +331,7 @@
                              href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
                              aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name }})"
                              title="Open deck: {{ gp.deck.name }}">
-                            <span class="deck-mini__player">{{ gp.player.name }}</span>
+                            <span class="deck-mini__player player-summary">{{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}<span>{{ gp.player.name }}</span></span>
                             <span class="deck-mini__deck">{{ gp.deck.name }}</span>
                           </a>
                         {% endfor %}
@@ -396,6 +397,7 @@
                          title="Open deck: {{ gp.deck.name }}"
                          {% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
                         <span class="ppill-top">
+                          {{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}
                           {% if gp.player_id == g.winner_id %}
                             <span class="wmark">W</span>
                           {% endif %}

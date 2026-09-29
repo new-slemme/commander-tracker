@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% from '_player_picture.html' import avatar with context %}
     <link href="{{ url_for('static', filename='css/game_detail.css') }}" rel="stylesheet">
 
 <div class="container pb-4 game-detail-page">
@@ -249,6 +250,7 @@
           <div class="p-3">
             <div class="player-header-row">
               <div class="fw-bold text-white d-flex align-items-center gap-2 player-name-row">
+                {{ avatar(gp.player, 'player-avatar--small', decorative=true) }}
                 {% if gp.player_id == game.winner_id %}
                   <span class="winner-mark">W</span>
                 {% endif %}

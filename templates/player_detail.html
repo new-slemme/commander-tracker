@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% from '_player_picture.html' import avatar, picture_editor with context %}
 <link href="{{ url_for('static', filename='css/player_detail.css') }}" rel="stylesheet">
 
 <div class="container pb-4 player-detail-page">
@@ -14,7 +15,10 @@
       </a>
     </div>
     <p class="eyebrow mb-2">Player Details</p>
-    <h1 class="m-0 fw-bold">{{ player.name }}</h1>
+    <div class="d-flex align-items-center gap-3">
+      {{ avatar(player, 'player-avatar--large') }}
+      <h1 class="m-0 fw-bold">{{ player.name }}</h1>
+    </div>
     <div class="muted2 mt-1">
       {% if player.user_id %}
         Linked account player
@@ -46,6 +50,10 @@
       </article>
     </div>
   </div>
+
+  {% if can_edit_picture %}
+    {{ picture_editor(player, picture_choices) }}
+  {% endif %}
 
   <div class="mb-4">
     <div class="section-head">

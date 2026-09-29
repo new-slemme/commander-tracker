@@ -49,6 +49,8 @@ body.sigtaara-ui .h4 {
     .life-wrapper{
       position:fixed;
       inset:0;
+      /* Follow the visible viewport as mobile browser controls appear/disappear. */
+      height:100dvh;
     }
 
     /* -------- Grid -------- */
@@ -112,6 +114,8 @@ body.sigtaara-ui .h4 {
       .life-grid{
         width:100vh;
         height:100vw;
+        width:100dvh;
+        height:100dvw;
         top:50%;
         left:50%;
         transform:translate(-50%,-50%) rotate(90deg);
@@ -382,6 +386,7 @@ body.sigtaara-ui .h4 {
       position:relative;
       font-family:'Beleren', Arial, sans-serif;
       font-size:clamp(3.25rem, 18vh, 11rem);
+      line-height:1;
       font-weight:900;
       letter-spacing:0.02em;
       color:#fff;
@@ -927,6 +932,33 @@ body.sigtaara-ui .h4 {
     /* Rotate each player's UI to face them */
     .life-card .card-inner{ transform:rotate(var(--card-rotation)); transform-origin:center; }
 
+    /* Side-facing seats need swapped dimensions before their quarter turn.
+       Size against the tile itself so portrait, landscape and fullscreen agree. */
+    @supports (width:1cqw){
+      .life-card[data-orientation="left"] .life-display,
+      .life-card[data-orientation="right"] .life-display{
+        font-size:clamp(2.5rem, 28cqw, 7.5rem);
+        line-height:1;
+      }
+
+      .life-card[data-orientation="left"],
+      .life-card[data-orientation="right"]{ container-type:size; }
+
+      .life-card[data-orientation="left"] .card-inner,
+      .life-card[data-orientation="right"] .card-inner,
+      .life-card[data-orientation="left"]::before,
+      .life-card[data-orientation="right"]::before{
+        position:absolute;
+        inset:auto;
+        top:50%;
+        left:50%;
+        width:100cqh;
+        height:100cqw;
+        transform:translate(-50%,-50%) rotate(var(--card-rotation));
+      }
+    }
+
+
 
 
 .player-timer{
@@ -1295,6 +1327,7 @@ body.sigtaara-ui .h4 {
 
 #quickMenuModal .modal-content.quick-menu-sheet{
   width:min(460px, calc(100vw - 16px));
+  max-height:calc(100dvh - max(8px, var(--safe-top)) - max(8px, var(--safe-bottom)));
   margin:0 auto max(8px, var(--safe-bottom));
   padding:8px 12px 12px;
   border:1px solid var(--border-color-strong);
@@ -1304,7 +1337,35 @@ body.sigtaara-ui .h4 {
   overflow:hidden;
 }
 
-.quick-menu-sheet__body{ margin-top:10px; }
+.quick-menu-sheet__body{ margin-top:10px; overflow-y:auto; }
+
+.quick-menu-fullscreen{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  width:100%;
+  min-height:44px;
+  margin-top:8px;
+  padding:8px 12px;
+  border:1px solid var(--border-color-strong);
+  border-radius:var(--radius-sm);
+  background:var(--darkest-trans);
+  color:var(--font-base);
+  font-size:.85rem;
+  font-weight:800;
+}
+
+.quick-menu-fullscreen:focus-visible{
+  outline:2px solid currentColor;
+  outline-offset:-4px;
+}
+
+.fullscreen-help{
+  margin:8px 0 0;
+  color:var(--font-base);
+  font-size:.8rem;
+}
 
 .quick-menu-action-grid{
   display:grid;
@@ -1776,3 +1837,18 @@ body.sigtaara-ui .h4 {
       vector-effect:non-scaling-stroke;
       color:var(--font-base);
     }
+
+/* A browser tab needs a user gesture before it can request landscape fullscreen.
+   Keep the table behind an explicit entry screen while a phone is upright. */
+.landscape-modal .modal-content{
+  background:var(--darkest);
+  color:var(--font-base);
+  align-items:center;
+  justify-content:center;
+  padding:max(24px, var(--safe-top)) max(24px, var(--safe-right)) max(24px, var(--safe-bottom)) max(24px, var(--safe-left));
+}
+.landscape-intro{ max-width:360px; text-align:center; }
+.landscape-intro__icon{ margin-bottom:24px; }
+.landscape-intro h1{ font-size:1.8rem; margin-bottom:16px; }
+.landscape-intro p{ line-height:1.6; margin-bottom:24px; }
+.landscape-intro .btn{ min-height:48px; width:100%; }

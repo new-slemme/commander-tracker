@@ -1,0 +1,62 @@
+{% macro avatar(player, size='', decorative=false) -%}
+  {% if player.profile_picture_url %}
+    <img class="player-avatar {{ size }}" src="{{ player.profile_picture_url }}" alt="{{ '' if decorative else player.name ~ "'s profile picture" }}" title="{{ player.name }}" width="64" height="64" style="--avatar-accent: {{ player_accent(player.id) }};">
+  {% else %}
+    <span class="player-avatar {{ size }} player-avatar--initial" aria-hidden="true" title="{{ player.name }}" style="--avatar-accent: {{ player_accent(player.id) }};">{{ player.name[:1]|upper }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro picture_editor(player, choices, return_to='player') -%}
+<section class="picture-editor mb-4" aria-labelledby="picture-heading">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <div data-picture-preview>{{ avatar(player, 'player-avatar--large') }}</div>
+    <div>
+      <h2 class="h4 mb-1" id="picture-heading">Profile picture</h2>
+      <p class="muted2 mb-0">Choose one of your commanders or upload an image.</p>
+    </div>
+  </div>
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('player_profile_picture', player_id=player.id) }}" class="picture-upload">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+    <input type="hidden" name="action" value="upload">
+    <label for="profile-picture-file" class="form-label">Upload an image</label>
+    <div class="d-flex flex-wrap gap-2">
+      <input class="form-control" id="profile-picture-file" type="file" name="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" aria-describedby="picture-help" required>
+      <button class="btn btn-primary" type="submit">Save uploaded picture</button>
+    </div>
+    <p class="muted2 small mt-2" id="picture-help">PNG, JPG, WebP, AVIF or GIF, up to 15 MB. Animated GIFs stay animated.</p>
+    <p class="small" data-picture-status role="status"></p>
+  </form>
+  {% if choices %}
+    <h3 class="h6 mt-3">Your commanders</h3>
+    <div class="picture-choices">
+      {% for choice in choices %}
+        <form method="post" action="{{ url_for('player_profile_picture', player_id=player.id) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="return_to" value="{{ return_to }}">
+          <input type="hidden" name="action" value="commander">
+          <input type="hidden" name="commander_index" value="{{ choice.commander_index }}">
+          <button class="picture-choice" name="deck_id" value="{{ choice.deck_id }}" type="submit" title="Use {{ choice.name }} as profile picture">
+            {% if choice.url %}
+              <img src="{{ choice.url }}" alt="" loading="lazy" width="64" height="64">
+            {% else %}
+              <span class="player-avatar player-avatar--initial" aria-hidden="true">{{ choice.name[:1]|upper }}</span>
+            {% endif %}
+            <span><strong>{{ choice.name }}</strong><small>{{ choice.deck_name }}</small></span>
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted2 small">Add a deck to choose its commander as your picture.</p>
+  {% endif %}
+  {% if player.profile_picture_url %}
+    <form method="post" action="{{ url_for('player_profile_picture', player_id=player.id) }}" class="mt-3">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_to" value="{{ return_to }}">
+      <button class="btn btn-outline-secondary btn-sm" name="action" value="remove" type="submit">Remove picture</button>
+    </form>
+  {% endif %}
+</section>
+<script src="{{ url_for('static', filename='js/player_picture.js') }}" defer></script>
+{%- endmacro %}

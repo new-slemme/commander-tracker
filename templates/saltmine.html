@@ -1,6 +1,7 @@
 {# templates/saltmine.html #}
 {% extends "base.html" %}
 {% block content %}
+{% from '_player_picture.html' import avatar with context %}
     <link href="{{ url_for('static', filename='css/saltmine.css') }}" rel="stylesheet">
 
 <div class="container pb-4">
@@ -101,7 +102,7 @@
               {% set gcount = row[3] %}
               <tr>
                 <td><span class="app-badge alert">#{{ loop.index }}</span></td>
-                <td class="fw-bold text-white">{{ p.name }}</td>
+                <td class="fw-bold text-white"><span class="player-summary">{{ avatar(p, 'player-avatar--small', decorative=true) }}<span>{{ p.name }}</span></span></td>
                 <td class="text-end fw-bold text-white">
                   {{ "%.1f"|format(avg) }}%
                 </td>

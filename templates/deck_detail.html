@@ -33,7 +33,9 @@
   {# NEW: Top bar with Go Back + actions (keeps your old actions, just relocates for mobile sanity) #}
   <div class="position-absolute top-0 start-0 end-0 d-flex align-items-center justify-content-between banner-topbar"
        style="padding: 14px; padding-top: calc(env(safe-area-inset-top) + 14px);">
-    {% set back_fallback_url = url_for('decks') %}
+    {% set back_fallback_url = url_for('decks',
+         player_id=(request.args.get('player_id')|int or none) if is_admin else none,
+         show_retired=request.args.get('show_retired')|int or none) %}
     {% include '_detail_back_button.html' %}
 
     <div class="banner-actions">

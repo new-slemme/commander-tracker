@@ -90,6 +90,7 @@ class SearchEndpointTests(unittest.TestCase):
         with flask_app.test_client() as client:
             with flask_app.app_context():
                 u, p = _make_user("findable_player", is_admin=True)
+                p.profile_picture_url = "/art/custom_search_player.gif"
                 db.session.commit()
                 uid, pid = u.id, p.id
             _login(client, uid, is_admin=True)
@@ -98,6 +99,8 @@ class SearchEndpointTests(unittest.TestCase):
             data = resp.get_json()
             ids = [r["id"] for r in data.get("players", [])]
             self.assertIn(pid, ids, "Player not found by uppercase query")
+            player = next(r for r in data["players"] if r["id"] == pid)
+            self.assertEqual(player["profile_picture_url"], "/art/custom_search_player.gif")
 
     def test_deck_search_returns_deck(self):
         with flask_app.test_client() as client:

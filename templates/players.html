@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% from '_player_picture.html' import avatar with context %}
     <link href="{{ url_for('static', filename='css/players.css') }}" rel="stylesheet">
 
 <div class="container pb-4">
@@ -90,6 +91,7 @@
             </div>
 
             <!-- Name -->
+            {{ avatar(p) }}
             <a class="pcard__name" href="{{ url_for('player_detail', player_id=p.id) }}">{{ p.name }}</a>
             {% if p.user and p.user.display_name and p.user.display_name != p.name %}
               <div class="pcard__username">{{ p.user.display_name }}</div>

@@ -143,7 +143,11 @@
     .stats-table thead th:nth-child(3),
     .stats-table tbody td:nth-child(3) { display:none; } /* Wins column */
     .stats-table thead th:nth-child(6),
-    .stats-table tbody td:nth-child(6) { display:none; } /* Progress column */
+    .stats-table tbody td:nth-child(6) { display:none; } /* Win percentage column */
+    .stats-table .wr-progress { display: none; }
+    .stats-table th:first-child { width: 40px !important; }
+    .stats-table th:last-child { width: 40px !important; }
+    .stats-table .player-name { min-width: 140px; }
 
     .stats-card-head { padding: 12px 12px; }
     .stats-card { border-radius: var(--radius-lg); }

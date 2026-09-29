@@ -1060,6 +1060,7 @@ class Player(db.Model):
 
     # Stats display name (mirrors user.display_name for accounts)
     name = db.Column(db.String(100), nullable=False, index=True)
+    profile_picture_url = db.Column(db.String(500), nullable=True)
 
     # Nullable to allow guest/manual players
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), unique=True, nullable=True)
@@ -2223,6 +2224,16 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('027_saas_foundation')")
             )
 
+        if "028_player_profile_picture" not in applied:
+            player_cols = {
+                row[1] for row in db.session.execute(text("PRAGMA table_info(player)")).fetchall()
+            }
+            if "profile_picture_url" not in player_cols:
+                db.session.execute(text("ALTER TABLE player ADD COLUMN profile_picture_url VARCHAR(500)"))
+            db.session.execute(
+                text("INSERT INTO schema_migrations(version) VALUES ('028_player_profile_picture')")
+            )
+
         default_pod = Pod.query.filter_by(slug=DEFAULT_POD_SLUG).first()
         if not default_pod:
             default_pod = Pod(name=DEFAULT_POD_NAME, slug=DEFAULT_POD_SLUG, is_active=True)
@@ -2575,6 +2586,10 @@ def prune_custom_art_file(old_path: str | None) -> None:
     if not old_path:
         return
     old_path = old_path.strip()
+    # A player may have selected a deck's uploaded commander art. Keep shared
+    # files alive when either the deck or the player changes their picture.
+    if Player.query.filter_by(profile_picture_url=old_path).first():
+        return
     if old_path.startswith("/media/") and get_object_storage_client():
         still_referenced = (
             db.session.query(Deck.id)
@@ -4190,6 +4205,56 @@ def can_access_deck(user: User | None, deck: Deck | None) -> bool:
     return bool(deck and can_access_player(user, deck.owner))
 
 
+def can_edit_player_picture(user: User | None, player: Player | None) -> bool:
+    return bool(user and player and (user.is_admin or player.user_id == user.id))
+
+
+def player_picture_choices(player: Player) -> list[dict]:
+    return [
+        {"deck_id": deck.id, "commander_index": index, "name": name,
+         "deck_name": deck.name, "url": deck.commander_art_url if index == 0 else None}
+        for deck in Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
+        for index, name in enumerate(_split_commander_names(deck.commander_name or deck.commander))
+    ]
+
+
+def update_player_picture(player: Player, action: str, deck_id=None, upload=None, commander_index=0) -> None:
+    """Validate a picture choice and commit it before pruning the previous file."""
+    old_picture = player.profile_picture_url
+    new_picture = None
+    if action == "upload":
+        new_picture = _store_custom_art_upload(upload, "profile", f"player_{player.id}")
+        if not new_picture:
+            raise DeckParserError("Choose an image to upload.")
+    elif action == "commander":
+        if not re.fullmatch(r"[0-9]{1,18}", str(deck_id or "")):
+            raise DeckParserError("Choose one of this player's commanders.")
+        deck = Deck.query.filter_by(id=int(deck_id), player_id=player.id).first()
+        if not deck:
+            raise DeckParserError("Choose one of this player's commanders.")
+        names = _split_commander_names(deck.commander_name or deck.commander)
+        if not re.fullmatch(r"[0-9]{1,3}", str(commander_index)) or int(commander_index) >= len(names):
+            raise DeckParserError("Choose one of this player's commanders.")
+        commander_index = int(commander_index)
+        new_picture = deck.commander_art_url if commander_index == 0 else None
+        if not new_picture:
+            metadata = resolve_commander_metadata(names[commander_index])
+            new_picture = metadata.get("commander_local_art_crop") or metadata.get("commander_art_crop_url")
+        if not new_picture:
+            raise DeckParserError("Art for this commander is unavailable. Try again or upload an image.")
+    elif action != "remove":
+        raise DeckParserError("Choose a commander, upload an image, or remove the picture.")
+    player.profile_picture_url = new_picture
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        if action == "upload":
+            prune_custom_art_file(new_picture)
+        raise
+    prune_custom_art_file(old_picture)
+
+
 def scoped_player_query(user: User | None, pod: Pod | None = None):
     if user and user.is_admin and pod is None:
         return Player.query
@@ -5030,7 +5095,9 @@ def profile():
                 flash("Current password is required to delete your account.")
                 return redirect(url_for("profile"))
 
+            old_picture = u.player.profile_picture_url if u.player else None
             if u.player:
+                u.player.profile_picture_url = None
                 for membership in list(u.player.pod_memberships):
                     if membership.role != "podmaster":
                         continue
@@ -5069,6 +5136,7 @@ def profile():
             u.anonymized_at = now
             u.session_version += 1
             db.session.commit()
+            prune_custom_art_file(old_picture)
             session.clear()
             flash("Your account was anonymized and signed out.")
             return redirect(url_for("index"))
@@ -5076,7 +5144,10 @@ def profile():
         flash("Unknown profile action.")
         return redirect(url_for("profile"))
 
-    return render_template("profile.html", user=u)
+    return render_template(
+        "profile.html", user=u,
+        picture_choices=player_picture_choices(u.player) if u.player else [],
+    )
 
 
 def build_account_export(u: User) -> dict:
@@ -5104,6 +5175,7 @@ def build_account_export(u: User) -> dict:
         "account": {
             "username": u.username,
             "display_name": u.display_name,
+            "profile_picture_url": player.profile_picture_url if player else None,
             "email": u.email,
             "created_at": u.created_at.isoformat(),
             "email_verified_at": u.email_verified_at.isoformat() if u.email_verified_at else None,
@@ -6717,8 +6789,10 @@ def delete_player(player_id):
     # Remove pod memberships before deleting the player to satisfy FK constraints
     PodMembership.query.filter_by(player_id=player_id).delete()
 
+    old_picture = player.profile_picture_url
     db.session.delete(player)
     db.session.commit()
+    prune_custom_art_file(old_picture)
     flash("Player deleted.")
     return redirect(url_for("players"))
 
@@ -7232,6 +7306,8 @@ def player_detail(player_id):
     return render_template(
         "player_detail.html",
         player=player,
+        can_edit_picture=can_edit_player_picture(me, player),
+        picture_choices=player_picture_choices(player) if can_edit_player_picture(me, player) else [],
         decks=decks,
         deck_stats=deck_stats,
         recent_games=recent_games,
@@ -7240,6 +7316,55 @@ def player_detail(player_id):
         games_started=games_started,
         winrate=winrate,
     )
+
+
+@app.route("/player/<int:player_id>/profile-picture", methods=["POST"])
+@login_required
+def player_profile_picture(player_id):
+    player = db.session.get(Player, player_id)
+    user = get_current_user()
+    if not can_access_player(user, player):
+        abort(404)
+    if not can_edit_player_picture(user, player):
+        abort(403)
+    destination = url_for("profile") if request.form.get("return_to") == "profile" else url_for("player_detail", player_id=player.id)
+    try:
+        update_player_picture(
+            player, request.form.get("action"), request.form.get("deck_id"),
+            request.files.get("file"), request.form.get("commander_index", 0),
+        )
+    except DeckParserError as exc:
+        flash(str(exc), "danger")
+    else:
+        flash("Profile picture updated.", "success")
+    return redirect(destination)
+
+
+@app.route("/api/players/<int:player_id>/profile-picture", methods=["POST", "DELETE"])
+@api_login_required
+def api_player_profile_picture(player_id):
+    player = db.session.get(Player, player_id)
+    user = get_current_user()
+    if not can_access_player(user, player):
+        return jsonify({"error": "Not found"}), 404
+    if not can_edit_player_picture(user, player):
+        return jsonify({"error": "Forbidden"}), 403
+    payload = request.get_json(silent=True) if request.is_json else request.form
+    if request.method == "DELETE":
+        action, deck_id = "remove", None
+    else:
+        if request.is_json and not isinstance(payload, dict):
+            return jsonify({"error": "Invalid request body"}), 400
+        action = payload.get("action", "upload" if request.files.get("file") else "commander")
+        deck_id = payload.get("deck_id")
+    try:
+        update_player_picture(
+            player, action, deck_id, request.files.get("file"),
+            payload.get("commander_index", 0) if request.method != "DELETE" else 0,
+        )
+    except DeckParserError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify({"id": player.id, "profile_picture_url": player.profile_picture_url})
 
 
 @app.route("/compare")
@@ -7499,6 +7624,7 @@ def player_export(player_id):
         "player": {
             "id": player.id,
             "name": player.name,
+            "profile_picture_url": player.profile_picture_url,
             "linked_account": player.user_id is not None,
         },
         "stats": {
@@ -9829,6 +9955,7 @@ def _serialize_game_participant(
     return {
         "player_id": gp.player_id,
         "player_name": gp.player.name,
+        "profile_picture_url": gp.player.profile_picture_url,
         "deck_id": gp.deck_id,
         "deck_name": gp.deck.name,
         "commander": gp.deck.commander_name or gp.deck.commander,
@@ -11074,6 +11201,7 @@ def api_me():
         "display_name": u.display_name,
         "is_admin": u.is_admin,
         "player_id": u.player.id if u.player else None,
+        "profile_picture_url": u.player.profile_picture_url if u.player else None,
         "can_access_registration_requests": can_access_registration_request_queue(u),
         "email": u.email,
         "email_verified": bool(u.email_verified_at),
@@ -11807,6 +11935,7 @@ def api_players():
         result.append({
             "id": p.id,
             "name": p.name,
+            "profile_picture_url": p.profile_picture_url,
             "wins": won,
             "played": played,
             "winrate": winrate,
@@ -12105,8 +12234,10 @@ def api_player_detail(player_id):
         for d in list(player.decks):
             db.session.delete(d)
         PodMembership.query.filter_by(player_id=player_id).delete()
+        old_picture = player.profile_picture_url
         db.session.delete(player)
         db.session.commit()
+        prune_custom_art_file(old_picture)
         return jsonify({"ok": True}), 200
 
     decks = Deck.query.filter_by(player_id=player.id).order_by(Deck.name.asc()).all()
@@ -12158,6 +12289,9 @@ def api_player_detail(player_id):
     return jsonify({
         "id": player.id,
         "name": player.name,
+        "profile_picture_url": player.profile_picture_url,
+        "can_edit_picture": can_edit_player_picture(current_user, player),
+        "picture_choices": player_picture_choices(player) if can_edit_player_picture(current_user, player) else [],
         "games_played": games_played,
         "games_won": games_won,
         "winrate": winrate,
@@ -12241,6 +12375,7 @@ def api_player_export(player_id):
         "player": {
             "id": player.id,
             "name": player.name,
+            "profile_picture_url": player.profile_picture_url,
             "linked_account": player.user_id is not None,
         },
         "stats": {
@@ -12450,7 +12585,7 @@ def api_game_detail(game_id):
     return jsonify({
         "id": game.id,
         "date": game.date.isoformat(),
-        "winner": {"id": game.winner_id, "name": game.winner.name},
+        "winner": {"id": game.winner_id, "name": game.winner.name, "profile_picture_url": game.winner.profile_picture_url},
         "win_type": game.win_type,
         "ending_turn": game.ending_turn,
         "note": game.note,
@@ -12816,6 +12951,7 @@ def api_search():
             "name": p.name,
             "url": f"/player/{p.id}",
             "accent": player_id_to_accent(p.id),
+            "profile_picture_url": p.profile_picture_url,
         }
         for p in player_rows
     ]

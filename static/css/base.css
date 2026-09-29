@@ -2623,9 +2623,6 @@ html[data-bs-theme="light"] .compare-chip {
 
 .entity-drawer__loading {
   padding: 24px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
 .entity-drawer__error {
@@ -2638,16 +2635,10 @@ html[data-bs-theme="light"] .compare-chip {
   padding: 0 0 32px;
 }
 
-.drawer-skeleton {
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.08);
-  animation: skeletonPulse 1.4s ease-in-out infinite alternate;
-}
-
-@keyframes skeletonPulse {
-  from { opacity: 0.5; }
-  to   { opacity: 1; }
+.entity-drawer__loading[aria-hidden="true"],
+.entity-drawer__error[aria-hidden="true"],
+.entity-drawer__body[aria-hidden="true"] {
+  display: none;
 }
 
 .drawer-hero {
@@ -2659,6 +2650,8 @@ html[data-bs-theme="light"] .compare-chip {
 }
 
 .drawer-avatar {
+  object-fit: cover;
+  object-position: center 25%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2804,10 +2797,6 @@ html[data-bs-theme="light"] .drawer-row:hover {
   background: rgba(232,215,184,0.2);
 }
 
-html[data-bs-theme="light"] .drawer-skeleton {
-  background: rgba(88,72,49,0.1);
-}
-
 /* ── Command palette ─────────────────────────────────────────── */
 .palette-trigger {
   display: flex;
@@ -2924,6 +2913,8 @@ html[data-bs-theme="light"] .drawer-skeleton {
 .palette-row.is-active { background: var(--base); color: var(--font-base); text-decoration: none; }
 .palette-row--action { opacity: 0.8; }
 .palette-row__avatar {
+  object-fit: cover;
+  object-position: center 25%;
   width: 28px;
   height: 28px;
   border-radius: 50%;

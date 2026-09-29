@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-    <link href="{{ url_for('static', filename='css/index.css', v='p2') }}" rel="stylesheet">
+{% from '_player_picture.html' import avatar with context %}
+    <link href="{{ url_for('static', filename='css/index.css', v='pfp2') }}" rel="stylesheet">
 
 <div class="app-hero mb-4">
   <div class="app-hero__head">
@@ -16,11 +17,7 @@
   <div class="roster home-roster" aria-label="Current pod roster">
     <div class="roster-stack" aria-hidden="true">
       {% for s in top_players[:3] %}
-        <span class="persona-avatar"
-              title="{{ s.player.name }}"
-              style="--agent: {{ player_accent(s.player.id) }}; --agent-trans: {{ player_accent_trans(s.player.id) }};">
-          {{ s.player.name[:1]|upper }}
-        </span>
+        {{ avatar(s.player, 'persona-avatar player-avatar--medium', decorative=true) }}
       {% endfor %}
     </div>
     <span class="roster-count">{{ player_stats|length }} ranked players</span>
@@ -74,9 +71,7 @@
             <div class="podium-body">
               <div class="d-flex align-items-center gap-3 mb-2">
                 <span class="rank-badge">#{{ loop.index }}</span>
-                <div class="entity-avatar" style="--player-accent: {{ player_accent(s.player.id) }};">
-                  {{ s.player.name[:1]|upper }}
-                </div>
+                {{ avatar(s.player, 'player-avatar--medium', decorative=true) }}
               </div>
               <div class="podium-name">{{ s.player.name }}</div>
               {% if s.most_played_deck %}
@@ -138,7 +133,10 @@
                     style="--player-accent: {{ player_accent(s.player.id) }}; --player-accent-trans: {{ player_accent_trans(s.player.id) }};">
                   <td><span class="rank-pill">{{ loop.index }}</span></td>
                   <td>
-                    <a class="player-name" href="{{ url_for('player_detail', player_id=s.player.id) }}">{{ s.player.name }}</a>
+                    <a class="player-name player-summary" href="{{ url_for('player_detail', player_id=s.player.id) }}">
+                      {{ avatar(s.player, 'player-avatar--small', decorative=true) }}
+                      <span class="player-summary__name">{{ s.player.name }}</span>
+                    </a>
                     <div class="stat-mini mt-1 d-sm-none">
                       <div><b>{{ s.wins }}</b> W</div>
                       <div><b>{{ s.played }}</b> games</div>
@@ -217,7 +215,7 @@
             </div>
             <h3 class="text-white mb-1">{{ featured.name }}</h3>
             <div class="muted mb-1">{{ featured.commander_name or featured.commander }}</div>
-            <div class="muted mb-3">Owner: <span class="text-white">{{ featured.owner.name }}</span></div>
+            <div class="muted mb-3">Owner: <span class="player-summary text-white">{{ avatar(featured.owner, 'player-avatar--tiny', decorative=true) }}<span>{{ featured.owner.name }}</span></span></div>
             <a class="btn btn-primary" href="{{ url_for('deck_detail', deck_id=featured.id) }}">View Deck</a>
           </div>
         </div>
@@ -258,7 +256,7 @@
                   <div class="deck-meta">
                     <span class="strong">{{ d.commander_name or d.commander }}</span>
                     <span class="muted"> · </span>
-                    <span>Owner: <span class="strong">{{ d.owner.name }}</span></span>
+                    <span class="player-summary">{{ avatar(d.owner, 'player-avatar--tiny', decorative=true) }}<span>Owner: <span class="strong">{{ d.owner.name }}</span></span></span>
                   </div>
                 </div>
 
@@ -353,7 +351,7 @@
                     </div>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                       <div class="winner-pill">
-                        <span class="dot"></span>
+                        {{ avatar(g.winner, 'player-avatar--tiny', decorative=true) }}
                         Winner: {{ g.winner.name }}{% if g.ending_turn is not none %} · Turn {{ g.ending_turn }}{% endif %}
                       </div>
                       <a class="game-full-link" href="{{ url_for('game_detail', game_id=g.id) }}">Full page</a>
@@ -371,6 +369,7 @@
                             data-entity-type="player"
                             data-entity-id="{{ gp.player_id }}">
                         <span style="display:flex; align-items:center; gap:8px; min-width:0;">
+                          {{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}
                           {% if gp.player_id == g.winner_id %}
                             <span class="wmark">W</span>
                           {% endif %}
@@ -396,7 +395,7 @@
                          data-entity-type="player"
                          data-entity-id="{{ gp.player_id }}"
                          style="--player-accent: {{ player_accent(gp.player_id) }};">
-                      <div class="game-detail-avatar">{{ gp.player.name[:1]|upper }}</div>
+                      {{ avatar(gp.player, 'player-avatar--small', decorative=true) }}
                       <div class="game-detail-body">
                         <div class="game-detail-player">
                           <a href="{{ url_for('player_detail', player_id=gp.player_id) }}"

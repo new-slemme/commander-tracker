@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-    <link href="{{ url_for('static', filename='css/decks.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/decks.css', v='tag-icons-2') }}" rel="stylesheet">
 
 {# =========================
    NEW: compute summary stats
@@ -159,7 +159,7 @@
         {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
 
         <a class="deck-tile {% if art %}has-bg{% endif %}"
-           href="{{ url_for('deck_detail', deck_id=d.id) }}"
+           href="{{ url_for('deck_detail', deck_id=d.id, player_id=selected_player_id if is_admin else none, show_retired=show_retired or none) }}"
            data-deck-id="{{ d.id }}"
            data-deck-name="{{ d.name|e }}"
            data-deck-commander="{{ (d.commander_name or d.commander)|e }}"
@@ -169,6 +169,18 @@
            {% if art %}style="background-image:url('{{ art }}'); --deck-art-scale: {{ d.commander_art_scale }};"{% endif %}>
 
           <div class="deck-tile-inner">
+            {% set tag_summary = d.tag_summary %}
+            {% if tag_summary.strategies %}
+              <div class="deck-tag-icons" role="group" aria-label="Deck strategies">
+                {% for tag in tag_summary.strategies %}
+                  {% set icon_key = 'plus1plus1_counters' if tag.key == 'counters' else tag.key %}
+                  <span class="deck-tag-icon" title="{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %} — {{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">
+                    <img src="{{ url_for('static', filename='icons/tag_icons/' ~ icon_key ~ '.png') }}"
+                         alt="{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %}" width="34" height="34" loading="lazy">
+                  </span>
+                {% endfor %}
+              </div>
+            {% endif %}
 
             <div class="deck-title">
               <div>
@@ -191,13 +203,9 @@
                 {% if d.decklist_text %}
                   <span class="deck-list-pill deck-info-badge">Decklist</span>
                 {% endif %}
-                {% set tag_summary = d.tag_summary %}
                 {% if tag_summary.status != 'current' %}
                   <span class="deck-list-pill deck-info-badge">ⓘ {{ tag_summary.label }}</span>
                 {% endif %}
-                {% for tag in tag_summary.strategies %}
-                  <span class="app-badge deck-info-badge" title="{{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">{{ tag.label }}</span>
-                {% endfor %}
                 <span class="app-badge deck-info-badge{% if tier_cls %} {{ tier_cls }}{% endif %}" title="MMR tier">Tier {{ tier }}</span>
                 <span class="deck-mmr-badge deck-info-badge" title="Deck MMR">{{ mmr }} MMR</span>
                 <span class="deck-win-badge {{ badge_class }}">{{ wr }}%</span>

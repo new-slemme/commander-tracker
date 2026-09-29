@@ -353,6 +353,12 @@
   white-space: nowrap;
 }
 
+.deck-mini__player > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .deck-more-toggle {
   display: inline-flex;
   align-items: center;
@@ -1073,4 +1079,3 @@ html[data-bs-theme="light"] .scope-indicator {
   border-color: var(--border-color);
   box-shadow: var(--shadow-sm);
 }
-

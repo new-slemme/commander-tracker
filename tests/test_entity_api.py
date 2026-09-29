@@ -322,6 +322,18 @@ class GameApiDrawerFieldsTests(unittest.TestCase):
                               f"participant {part.get('player_id')} missing player_accent")
                 self.assertIn("player_url", part)
 
+    def test_game_pictures_belong_to_players_including_winner(self):
+        uid, pid, gid, other_pid = self._setup_game()
+        with flask_app.app_context():
+            db.session.get(Player, pid).profile_picture_url = "/art/custom_winner.gif"
+            db.session.commit()
+        with flask_app.test_client() as client:
+            _login(client, uid, is_admin=True)
+            data = client.get(f"/api/games/{gid}").get_json()
+        self.assertEqual(data["winner"]["profile_picture_url"], "/art/custom_winner.gif")
+        pictures = {p["player_id"]: p["profile_picture_url"] for p in data["participants"]}
+        self.assertEqual(pictures, {pid: "/art/custom_winner.gif", other_pid: None})
+
     def test_missing_game_returns_404(self):
         uid, pid, gid, _ = self._setup_game()
         with flask_app.test_client() as client:

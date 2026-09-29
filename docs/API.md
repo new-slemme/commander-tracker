@@ -163,6 +163,8 @@ Complete and machine-checked. `auth` values:
 | `PATCH` | `/api/players/{player_id}` | admin |
 | `DELETE` | `/api/players/{player_id}` | admin |
 | `GET` | `/api/players/{player_id}/export` | auth |
+| `POST` | `/api/players/{player_id}/profile-picture` | owner or admin |
+| `DELETE` | `/api/players/{player_id}/profile-picture` | owner or admin |
 | `GET` | `/api/decks` | auth |
 | `POST` | `/api/decks` | auth |
 | `GET` | `/api/decks/{deck_id}` | auth |
@@ -551,6 +553,7 @@ Query: `a`, `b` — player ids.
 #### `GET /api/search` · auth
 
 Query: `q`. Pod-scoped, each group bounded.
+Player results include nullable `profile_picture_url` for the search palette.
 
 ```json
 { "players": [], "decks": [], "actions": [] }
@@ -596,6 +599,29 @@ Pod-scoped list.
 
 `recent_games` capped at 10. `accent` and `full_page_url` exist for the web entity drawer; clients
 may ignore them.
+
+Player list/detail responses and `/api/me` include nullable `profile_picture_url`.
+The detail response also includes `can_edit_picture` and, for an owner or admin,
+`picture_choices`: entries with `deck_id`, zero-based `commander_index`, commander
+`name`, `deck_name`, and nullable preview `url`. Partner commanders are separate choices.
+
+#### `POST /api/players/{player_id}/profile-picture` · owner or admin
+
+Choose a commander with JSON `{"deck_id": 12, "commander_index": 0}` (index defaults to 0),
+or upload multipart form data with a `file` field. Only commanders belonging to the
+target player's decks are accepted. Uploads support PNG, JPEG, WebP, AVIF, and GIF;
+the entire request must fit the existing 15 MB limit. GIF bytes and animation are preserved.
+
+Returns `{"id": 3, "profile_picture_url": "/art/custom_player_3_profile_....gif"}`.
+The URL may also use `/media/` for object storage or the selected commander's art URL.
+Returns `400` for invalid input, `403` for a visible player the caller cannot edit,
+`404` for an inaccessible player, and `413` for an oversized request.
+
+#### `DELETE /api/players/{player_id}/profile-picture` · owner or admin
+
+Removes the picture and returns `{"id": 3, "profile_picture_url": null}`.
+Replaced/removed uploads are deleted when no player or deck still references them.
+Selecting commander art keeps that image even if the deck later changes its art.
 
 #### `PATCH /api/players/{player_id}` · admin
 
@@ -745,6 +771,9 @@ is not plausible and validating a list that size is work a client should not be 
 Malformed samples are a `400`.
 
 #### `GET /api/games/{game_id}` · auth
+
+The winner and each participant include nullable `profile_picture_url` for
+player identity images in game summaries and drawers.
 
 Each entry in `participants` carries the seat's own story, matching what the web game page shows:
 

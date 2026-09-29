@@ -6,7 +6,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest', v='landscape1') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/CommanderSohn-Logo.png') }}">
     <meta name="theme-color" content="{{ '#f5efe3' if use_light_theme else '#10121a' }}">
     <title>{% block title %}EDH Son{% endblock %}</title>
@@ -14,7 +14,8 @@
     {% block social_meta %}{% endblock %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/base.css', v='badges2') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/base.css', v='drawer2') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/player_picture.css', v='2') }}" rel="stylesheet">
     {% if use_light_theme %}
     <link href="{{ url_for('static', filename='css/light_theme.css', v='p1') }}" rel="stylesheet">
     {% endif %}
@@ -258,9 +259,7 @@
     </div>
     <div id="entity-drawer-content" class="entity-drawer__content" aria-live="polite">
       <div id="entity-drawer-loading" class="entity-drawer__loading" aria-hidden="true">
-        <div class="drawer-skeleton"></div>
-        <div class="drawer-skeleton" style="width:70%;"></div>
-        <div class="drawer-skeleton" style="width:55%;"></div>
+        Loading details…
       </div>
       <div id="entity-drawer-error" class="entity-drawer__error" aria-hidden="true"></div>
       <div id="entity-drawer-body" class="entity-drawer__body" aria-hidden="true"></div>
@@ -298,7 +297,7 @@
 {% endif %}
 
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js', v='badges2') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js', v='pfp2') }}" defer></script>
 
 <script>
   if ('serviceWorker' in navigator) {

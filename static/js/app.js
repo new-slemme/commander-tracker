@@ -4,6 +4,20 @@
 
   var UI = {};
 
+  // Identity images use ordinary <img> elements so uploaded GIFs keep animating.
+  function playerAvatarHtml(name, url, className) {
+    var avatar = document.createElement(url ? 'img' : 'span');
+    avatar.className = className;
+    if (url) {
+      avatar.src = url;
+      avatar.alt = ''; // The player's name is displayed alongside the picture.
+    } else {
+      avatar.textContent = (name || '?')[0].toUpperCase();
+      avatar.setAttribute('aria-hidden', 'true');
+    }
+    return avatar.outerHTML;
+  }
+
   // ── CSRF helper ───────────────────────────────────────────────────
   function csrfToken() {
     var meta = document.querySelector('meta[name="csrf-token"]');
@@ -550,7 +564,7 @@
       var html = '';
 
       html += '<div class="drawer-hero" style="--player-accent:' + esc(data.accent) + '">';
-      html += '<div class="drawer-avatar">' + esc((data.name || '?')[0].toUpperCase()) + '</div>';
+      html += playerAvatarHtml(data.name, data.profile_picture_url, 'drawer-avatar');
       html += '<div><div class="drawer-name">' + esc(data.name) + '</div>';
       html += '<div class="drawer-stats">';
       html += '<span><b>' + esc(data.games_won) + '</b> wins</span>';
@@ -659,6 +673,7 @@
       var html = '';
       html += '<div class="drawer-section-label">Winner</div>';
       html += '<div class="drawer-hero">';
+      html += playerAvatarHtml(data.winner.name, data.winner.profile_picture_url, 'drawer-avatar');
       html += '<a href="/player/' + esc(data.winner.id) + '" class="drawer-name">' + esc(data.winner.name) + '</a>';
       html += '<span class="win-badge good ms-2">W</span>';
       if (data.ending_turn != null) {
@@ -673,7 +688,7 @@
           var isWinner = gp.won;
           html += '<div class="drawer-row" data-entity-type="player" data-entity-id="' + esc(gp.player_id) + '"';
           html += ' style="--player-accent:' + esc(gp.player_accent) + '">';
-          html += '<div class="drawer-avatar drawer-avatar--sm">' + esc((gp.player_name || '?')[0]) + '</div>';
+          html += playerAvatarHtml(gp.player_name, gp.profile_picture_url, 'drawer-avatar drawer-avatar--sm');
           html += '<div class="drawer-row-body">';
           html += '<div class="drawer-row-name"><a href="' + esc(gp.player_url) + '">' + esc(gp.player_name) + '</a></div>';
           if (gp.art_url) {
@@ -846,7 +861,7 @@
         return '<a class="palette-row" role="option" href="' + esc(p.url) + '"'
              + ' data-entity-type="player" data-entity-id="' + esc(p.id) + '"'
              + ' style="--player-accent:' + esc(p.accent) + '">'
-             + '<span class="palette-row__avatar" aria-hidden="true">' + esc(p.name[0] || '?') + '</span>'
+             + playerAvatarHtml(p.name, p.profile_picture_url, 'palette-row__avatar')
              + '<span class="palette-row__name">' + esc(p.name) + '</span>'
              + '</a>';
       });

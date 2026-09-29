@@ -45,6 +45,41 @@
 
   .deck-tile-inner { padding: 16px; }
 
+  .deck-tag-icons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 12px;
+    padding: 2px 0;
+  }
+
+  .deck-tag-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--font-accent);
+    background: var(--darker);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .deck-tag-icon img {
+    display: block;
+    width: 34px;
+    height: 34px;
+    object-fit: contain;
+    /* Strengthen the fine transparent line art at badge size. */
+    filter: brightness(0) invert(1) drop-shadow(0 0 0 #fff) drop-shadow(0 0 0 #fff);
+  }
+
+  html[data-bs-theme="light"] .deck-tag-icon img {
+    filter: brightness(0) drop-shadow(0 0 0 #000) drop-shadow(0 0 0 #000);
+  }
+
   .deck-title {
     display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
   }

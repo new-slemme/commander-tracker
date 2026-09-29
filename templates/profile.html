@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+{% from '_player_picture.html' import picture_editor with context %}
     <link href="{{ url_for('static', filename='css/profile.css') }}" rel="stylesheet">
 
 <div class="container profile-wrap">
@@ -33,6 +34,10 @@
       </div>
     </div>
   </div>
+
+  {% if user.player %}
+    {{ picture_editor(user.player, picture_choices, 'profile') }}
+  {% endif %}
 
   <!-- Account details -->
   <div class="profile-card">
