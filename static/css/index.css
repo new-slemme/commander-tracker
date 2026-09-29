@@ -1,3 +1,8 @@
+  /* Home-page avatar sizes, including the overlapping roster avatars. */
+  .player-avatar.player-avatar--small { width: 50px; height: 50px; }
+  .player-avatar.player-avatar--medium { width: 80px; height: 80px; }
+  .player-avatar.player-avatar--tiny { width: 40px; height: 40px; }
+
   /* ===== Batch 07 homepage integration ===== */
   .home-roster {
     margin-top: 18px;
