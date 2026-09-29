@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% from '_player_picture.html' import avatar with context %}
-    <link href="{{ url_for('static', filename='css/decks.css', v='owner-avatars-1') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/decks.css', v='tags-below-owner-1') }}" rel="stylesheet">
 
 {# =========================
    NEW: compute summary stats
@@ -171,17 +171,6 @@
 
           <div class="deck-tile-inner">
             {% set tag_summary = d.tag_summary %}
-            {% if tag_summary.strategies %}
-              <div class="deck-tag-icons" role="group" aria-label="Deck strategies">
-                {% for tag in tag_summary.strategies %}
-                  {% set icon_key = 'plus1plus1_counters' if tag.key == 'counters' else tag.key %}
-                  <span class="deck-tag-icon" title="{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %} — {{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">
-                    <img src="{{ url_for('static', filename='icons/tag_icons/' ~ icon_key ~ '.png') }}"
-                         alt="{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %}" width="34" height="34" loading="lazy">
-                  </span>
-                {% endfor %}
-              </div>
-            {% endif %}
 
             <div class="deck-title">
               <div>
@@ -195,6 +184,17 @@
                     <span class="player-summary__name">Owner: <span class="strong">{{ d.owner.name }}</span></span>
                   </span>
                 </div>
+                {% if tag_summary.strategies %}
+                  <div class="deck-tag-icons" role="group" aria-label="Deck strategies">
+                    {% for tag in tag_summary.strategies %}
+                      {% set icon_key = 'plus1plus1_counters' if tag.key == 'counters' else tag.key %}
+                      <span class="deck-tag-icon" title="{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %} — {{ 'Manual strategy tag' if tag.source == 'manual' else 'Suggested from the saved decklist' }}">
+                        <img src="{{ url_for('static', filename='icons/tag_icons/' ~ icon_key ~ '.png') }}"
+                             alt="{{ tag.label }}{% if tag.tribe %} · {{ tag.tribe }}{% endif %}" width="34" height="34" loading="lazy">
+                      </span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
               </div>
 
               <div class="deck-badges">
