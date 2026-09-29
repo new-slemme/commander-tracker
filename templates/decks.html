@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
-    <link href="{{ url_for('static', filename='css/decks.css', v='tag-icons-2') }}" rel="stylesheet">
+{% from '_player_picture.html' import avatar with context %}
+    <link href="{{ url_for('static', filename='css/decks.css', v='owner-avatars-1') }}" rel="stylesheet">
 
 {# =========================
    NEW: compute summary stats
@@ -189,8 +190,10 @@
                   <span class="strong commander-link" data-commander="{{ (d.commander_name or d.commander)|e }}" style="cursor:pointer; text-decoration: underline;">
                     {{ d.commander_name or d.commander }}
                   </span>
-                  <span class="muted"> · </span>
-                  <span>Owner: <span class="strong">{{ d.owner.name }}</span></span>
+                  <span class="deck-owner player-summary">
+                    {{ avatar(d.owner, 'player-avatar--medium', decorative=true) }}
+                    <span class="player-summary__name">Owner: <span class="strong">{{ d.owner.name }}</span></span>
+                  </span>
                 </div>
               </div>
 

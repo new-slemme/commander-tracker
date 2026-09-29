@@ -8671,7 +8671,17 @@ def remove_deck_decklist(deck_id):
 def play_game():
     me = get_current_user()
     active_pod = get_active_pod()
-    players = scoped_player_query(me, active_pod).order_by(Player.name.asc()).all()
+    players = scoped_player_query(me, active_pod).order_by(Player.name.asc(), Player.id.asc()).all()
+    recent_participation = (
+        db.session.query(GameParticipant.player_id, func.max(Game.date))
+        .join(Game, Game.id == GameParticipant.game_id)
+        .filter(GameParticipant.player_id.in_([p.id for p in players]))
+    )
+    if active_pod:
+        recent_participation = recent_participation.filter(Game.pod_id == active_pod.id)
+    last_played = dict(recent_participation.group_by(GameParticipant.player_id).all())
+    # Stable sorting keeps alphabetical order for ties and players without games.
+    quick_players = sorted(players, key=lambda p: last_played.get(p.id) or datetime.min, reverse=True)
     decks_by_player = {}
     for p in players:
         active_decks = (
@@ -8697,8 +8707,8 @@ def play_game():
         if raw.isdigit():
             prefill_player_ids.append(int(raw))
 
-    return render_template("play_game.html", players=players, decks_by_player=decks_by_player,
-                           prefill_player_ids=prefill_player_ids)
+    return render_template("play_game.html", players=players, quick_players=quick_players,
+                           decks_by_player=decks_by_player, prefill_player_ids=prefill_player_ids)
 
 
 @app.route("/start_game", methods=["POST"])
