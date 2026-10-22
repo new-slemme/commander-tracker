@@ -86,6 +86,7 @@ Tests use temporary SQLite databases for isolation — no external setup needed.
 | Variable | Required | Description |
 |---|---|---|
 | `FLASK_SECRET_KEY` | Recommended | Session encryption key |
+| `COMMANDER_ART_DIR` | Optional | Artwork cache directory; defaults to `/data/art`; use a temporary directory in local tests |
 | `COMMANDER_DB_URI` | Optional | Explicit SQLAlchemy database URI; overrides channel-based database selection |
 | `CCAUTO_BASE_URL` | Optional | Custom MTG card gallery endpoint (e.g. `http://custom-mtg-gallery:3000`) |
 | `BOOTSTRAP_ADMIN_USERNAME` | Optional | Username to auto-promote to admin on first login |
@@ -117,7 +118,7 @@ All models are defined in `app.py` and use Flask-SQLAlchemy. Stable uses
 - `DEFAULT_POD_NAME` / `DEFAULT_POD_SLUG` — The hardcoded default pod ("Der Keller – Die Salzmine")
 - `DECK_TAGS_VERSION = 2` — Bump this when changing tag computation logic to invalidate cached tags
 - `KNOWN_DECK_TAG_KEYS` — Canonical set of deck tag keys: `monarch`, `initiative`, `citys_blessing`, `poison`, `proliferate`, `energy`, `experience`, `mana_fucked`, `misplayed`
-- `COMMANDER_BRACKET_FAST_MANA` / `COMMANDER_BRACKET_TUTORS` / `COMMANDER_BRACKET_CEDH_COMBOS` — Card name sets for bracket scoring
+- `commander_brackets.GAME_CHANGERS` — Versioned official fallback list for bracket estimates
 - `CANONICAL_WIN_TYPES` — `combat`, `combo`, `alt_win`, `concede`, `time`, `lock`, `other`
 - `CANONICAL_TIMED_MODES` — `off`, `chess_clock`, `turn_timer`
 - `ALLOWED_PARTICIPANT_FLAG_KEYS` — Valid keys in participant `flags_json`
@@ -186,12 +187,32 @@ When changing tag computation logic, **increment `DECK_TAGS_VERSION`** in `app.p
 
 ## Commander Bracket System
 
-`/api/commander-bracket` accepts a card list and returns a bracket (1–5) based on:
-- **+2 points** per fast mana card (Mana Crypt, Jeweled Lotus, etc.)
-- **+1 point** per tutor (Demonic Tutor, Vampiric Tutor, etc.)
-- **+3 points** per cEDH combo piece (Thassa's Oracle, Demonic Consultation, etc.)
+`commander_brackets.py` estimates card-based bracket floors, not a points score.
+`/api/commander-bracket` accepts `cards` or `decklist_text`, optional `commanders`,
+and optional `declared_bracket`. The text path includes commander/mainboard only.
+Deck detail also supplies the selected commander, even if absent from the list.
 
-Score → bracket: 0=1, 1–2=2, 3–4=3, 5–7=4, 8+=5
+- Live card and complete-combo classifications come from Commander Spellbook's
+  `/estimate-bracket` API. Its `bracketTag` is deliberately not used.
+- 1–3 Game Changers imply 3; 4+ imply 4. Mass land denial and extra-turn combos
+  imply 4. Relevant two-card combos imply 3 or 4 depending on Spellbook's speed
+  classification (a mana/prerequisite heuristic, not a simulated winning turn).
+- Multiple extra-turn cards alone trigger a warning, not a proven chain.
+- Nonempty lists start at 2. Empty lists return null. Banned-card detection returns
+  null with `status: invalid`. Unresolved cards and service outages are explicit.
+- Brackets 1 and 5 require owner intent. Nullable `Deck.declared_bracket` is saved
+  separately, never replaces the estimate, and warns when below the detected floor.
+- A bounded 128-entry, one-hour cache includes mainboard quantities and command zone;
+  outages back off for 30 seconds. Timeout: 2s connect / 6s read.
+- `data_sources/commander_game_changers.json` is the dated official fallback list.
+  Update it and its source/date metadata when Wizards changes the list. Live card
+  classifications supersede it, including removals. Fallback estimates only check
+  Game Changers and are explicitly marked partial.
+- API responses expose `bracket`/`estimated_bracket`, `declared_bracket`, `status`,
+  `reasons`, `warnings`, matched cards, combos, unresolved cards and source metadata.
+  The old heuristic `score` field has been removed; clients must handle null brackets.
+- SQLite migration 029 adds declarations without changing existing data. Existing
+  PostgreSQL installations use `docs/migrations/029_deck_declared_bracket.sql`.
 
 ## Deck Import (deck_import.py)
 

@@ -134,9 +134,12 @@
     <div class="fs-5 banner-subtitle">{{ deck.commander_name or deck.commander }}</div>
 
     <div class="mt-2">
-      <span class="badge rounded-pill text-bg-dark" title="Estimated from decklist card names">
-        Commander Bracket {{ commander_bracket.bracket }}
-      </span>
+      {% if deck.declared_bracket %}<span class="badge rounded-pill text-bg-dark">Declared bracket {{ deck.declared_bracket }}</span>{% endif %}
+      <a class="badge rounded-pill text-bg-dark" href="#bracketExplanation">
+        {% if commander_bracket.status == 'invalid' %}Banned cards detected
+        {% elif commander_bracket.bracket %}{{ 'Partial estimate' if commander_bracket.status == 'partial' else 'Estimated bracket' }} {{ commander_bracket.bracket }}
+        {% else %}Bracket unknown{% endif %}
+      </a>
     </div>
 
     {% if deck.color_identity %}
@@ -155,6 +158,16 @@
 </div>
 
 <div class="container pb-4">
+  <details id="bracketExplanation" class="card p-3 mb-4">
+    <summary>Bracket estimate · why this result?</summary>
+    {% for reason in commander_bracket.reasons %}<p class="mt-2 mb-1">{{ reason }}</p>{% endfor %}
+    {% for warning in commander_bracket.warnings %}<p class="small mt-2 mb-1">{{ warning }}</p>{% endfor %}
+    {% for combo in commander_bracket.combos %}
+    <p class="small mb-1"><a href="{{ combo.url }}" target="_blank" rel="noopener noreferrer">{{ combo.cards | join(' + ') }}</a> — {{ combo.explanation }}</p>
+    {% endfor %}
+    <small class="text-secondary mt-2">Rules: {{ commander_bracket.rules_version }} · {{ 'Card and combo data: Commander Spellbook' if commander_bracket.source == 'commander_spellbook' else 'Game Changer fallback list: ' ~ commander_bracket.game_changer_list_date }}</small>
+  </details>
+
 
   {# Keep your stats section, but fix the nested row+row and add a class for mobile layout #}
   <div class="row g-4 mb-4 stats-row">
@@ -463,6 +476,17 @@
               </div>
             </div>
             {% endif %}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="detailDeclaredBracket">Declared bracket</label>
+            <select class="form-select" id="detailDeclaredBracket" name="declared_bracket">
+              <option value="">Use estimate</option>
+              {% for value, label in [(1, 'Exhibition'), (2, 'Core'), (3, 'Upgraded'), (4, 'Optimized'), (5, 'cEDH')] %}
+              <option value="{{ value }}" {% if deck.declared_bracket == value %}selected{% endif %}>{{ value }} · {{ label }}</option>
+              {% endfor %}
+            </select>
+            <small>Your intended bracket is saved separately from the estimate.</small>
           </div>
 
           <!-- Commander section -->

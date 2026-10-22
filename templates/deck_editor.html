@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<link href="{{ url_for('static', filename='css/deck_editor.css', v='mobile-details-1') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/deck_editor.css', v='brackets-2') }}" rel="stylesheet">
 
 {# Split commander into primary + optional partner #}
 {% set _full_cmd = deck.commander_name or deck.commander or '' %}
@@ -30,6 +30,7 @@
     deckName:             {{ deck.name | tojson }},
     commander:            {{ _primary_cmd | tojson }},
     partner:              {{ _partner_cmd | tojson }},
+    declaredBracket:      {{ deck.declared_bracket | tojson }},
     retired:              {{ deck.retired | tojson }},
     planned:              {{ deck.planned | tojson }},
     artUrl:               {{ (deck.commander_art_url or '') | tojson }},
@@ -241,6 +242,22 @@
           {% endif %}
         </div>
       </div>
+      <div id="editorBracketHome">
+        <section id="editorBracketFields" class="editor-settings-section">
+          <label class="editor-field-label" for="editorDeclaredBracket">Declared bracket</label>
+          <select id="editorDeclaredBracket" class="form-select form-select-sm" aria-describedby="editorBracketHelp">
+            <option value="">Use estimate</option>
+            {% for value, label in [(1, 'Exhibition'), (2, 'Core'), (3, 'Upgraded'), (4, 'Optimized'), (5, 'cEDH')] %}
+            <option value="{{ value }}" {% if deck.declared_bracket == value %}selected{% endif %}>{{ value }} · {{ label }}</option>
+            {% endfor %}
+          </select>
+          <p id="editorBracketHelp" class="editor-settings-help">Your intended bracket is saved separately from the estimate.</p>
+          <details class="editor-bracket-details" open>
+            <summary id="editorBracketSummary">Checking bracket…</summary>
+            <div id="editorBracketReasons" class="editor-settings-help" aria-live="polite"></div>
+          </details>
+        </section>
+      </div>
       <div class="editor-settings-inner" id="editorSettingsFields">
         {% for prefix, field, title, current_art in [
           ('settingsCommanderArt', 'commander', 'Custom commander art', deck.commander_local_art_custom or deck.custom_commander_art_url or ''),
@@ -339,6 +356,7 @@
     name:                INIT.deckName,
     commander:           INIT.commander,
     partner:             INIT.partner,
+    declaredBracket:     INIT.declaredBracket,
     retired:             INIT.retired,
     planned:             INIT.planned,
     sections:            JSON.parse(JSON.stringify(INIT.sections)),
@@ -429,6 +447,7 @@
     unsavedDot.classList.add('visible');
     document.getElementById('editorSaveStatus').textContent = 'Unsaved changes';
     updateCommanderSummary();
+    scheduleBracketPreview();
   }
 
   function markClean() {
@@ -465,7 +484,10 @@
 
   function scheduleBracketPreview() {
     if (!bracketBadge) return;
+    ++bracketRequestId; // Invalidate in-flight replies immediately, including the debounce window.
     clearTimeout(bracketPreviewTimer);
+    bracketBadge.classList.add('bracket-stale');
+    document.getElementById('editorBracketSummary').textContent = 'Checking bracket…';
     bracketPreviewTimer = setTimeout(refreshBracketPreview, BRACKET_PREVIEW_DEBOUNCE_MS);
   }
 
@@ -475,22 +497,44 @@
       const res = await fetch('/api/commander-bracket', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decklist_text: toPlaintext() }),
+        body: JSON.stringify({ decklist_text: toPlaintext(), commanders: [state.commander, state.partner].filter(Boolean), declared_bracket: state.declaredBracket }),
       });
       if (requestId !== bracketRequestId) return; // superseded by a newer edit
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json().catch(() => ({}));
-      if (!Number.isInteger(data.bracket)) throw new Error('malformed bracket response');
-      const s = data.signals || {};
-      bracketBadge.textContent = `Bracket ${data.bracket}`;
-      bracketBadge.className = `editor-bracket-badge bracket-${data.bracket}`;
-      bracketBadge.title =
-        `Score ${data.score} — fast mana ${s.fast_mana_count || 0}, ` +
-        `tutors ${s.tutor_count || 0}, combo pieces ${s.combo_piece_count || 0}`;
+      if (requestId !== bracketRequestId) return;
+      if (data.bracket !== null && !Number.isInteger(data.bracket)) throw new Error('malformed bracket response');
+      const estimate = data.bracket === null
+        ? (data.status === 'invalid' ? 'Banned cards detected' : 'Bracket unknown')
+        : `${data.status === 'partial' ? 'Partial estimate' : 'Estimated bracket'} ${data.bracket}`;
+      bracketBadge.textContent = state.declaredBracket ? `Declared ${state.declaredBracket} · ${estimate}` : estimate;
+      bracketBadge.className = `editor-bracket-badge bracket-${data.bracket || 1}`;
+      bracketBadge.title = [...data.reasons, ...data.warnings].join('\n');
       bracketBadge.hidden = false;
+      document.getElementById('editorBracketSummary').textContent = estimate;
+      const reasons = document.getElementById('editorBracketReasons');
+      reasons.replaceChildren();
+      for (const message of [...data.reasons, ...data.warnings]) {
+        const p = document.createElement('p');
+        p.textContent = message;
+        reasons.appendChild(p);
+      }
+      for (const combo of data.combos || []) {
+        const link = document.createElement('a');
+        link.href = `https://commanderspellbook.com/combo/${encodeURIComponent(combo.id)}/`;
+        link.textContent = combo.cards.join(' + ');
+        link.target = '_blank'; link.rel = 'noopener noreferrer';
+        const p = document.createElement('p'); p.appendChild(link); reasons.appendChild(p);
+      }
+      const source = document.createElement('p');
+      source.textContent = data.source === 'commander_spellbook'
+        ? `Card and combo data: Commander Spellbook. Rules: ${data.rules_version}.`
+        : `Game Changer fallback list: ${data.game_changer_list_date}.`;
+      reasons.appendChild(source);
     } catch (err) {
       if (requestId !== bracketRequestId) return;
       console.debug('bracket preview failed', err);
+      document.getElementById('editorBracketSummary').textContent = 'Estimate unavailable — previous result may be stale';
       if (!bracketBadge.hidden) {
         bracketBadge.classList.add('bracket-stale');
         bracketBadge.title = 'Bracket preview unavailable — showing last known value';
@@ -499,6 +543,11 @@
   }
 
   /* ── Serialise to plaintext ── */
+  document.getElementById('editorDeclaredBracket').addEventListener('change', event => {
+    state.declaredBracket = event.target.value ? Number(event.target.value) : null;
+    markDirty();
+  });
+
   function toPlaintext() {
     const lines = [];
     for (const sec of SECTIONS) {
@@ -1421,6 +1470,7 @@
     const payload = {
       name: state.name.trim(),
       commander: fullCommander,
+      declared_bracket: state.declaredBracket,
       retired: state.retired,
       planned: state.planned,
       decklist_text: toPlaintext(),
@@ -1517,6 +1567,7 @@
     move('editorNameField', mobile ? 'editorIdentityFields' : 'editorNameHome');
     move('editorOwnerField', mobile ? 'editorIdentityFields' : 'editorOwnerHome');
     move('editorCommanderFields', mobile ? 'editorCommanderMobileHome' : 'editorCommanderHome');
+    move('editorBracketFields', mobile ? 'editorCommanderMobileHome' : 'editorBracketHome');
     move('editorSettingsFields', mobile ? 'editorSettingsMobileHome' : 'panelSettings');
     move('editorActions', mobile ? 'editorMobileFooter' : 'editorTopbarHome');
     importDisclosure.open = !mobile;

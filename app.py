@@ -52,6 +52,8 @@ from functools import wraps
 from types import SimpleNamespace
 from uuid import uuid4
 
+from commander_brackets import estimate_bracket
+
 from deck_import import DeckParserError, parse_deck_input, parse_plaintext_decklist, ccauto_named_exact
 
 # Scryfall requires a custom User-Agent (they reject the default python-requests one)
@@ -319,7 +321,7 @@ def send_transactional_email(recipient: str, subject: str, body: str) -> bool:
         smtp.send_message(message)
     return True
 
-ART_DIR = Path("/data/art")
+ART_DIR = Path(os.getenv("COMMANDER_ART_DIR", "/data/art"))
 ART_DIR.mkdir(parents=True, exist_ok=True)
 COMMANDER_ART_DIR = ART_DIR / "commander_art"
 COMMANDER_ART_DIR.mkdir(parents=True, exist_ok=True)
@@ -530,38 +532,6 @@ PEER_CHANNEL_URL = os.getenv("PEER_CHANNEL_URL", "").rstrip("/")
 CARD_ART_CACHE_LOCK = threading.Lock()
 CARD_ART_NAME_INDEX: dict[str, str] = {}
 CARD_ART_FAILURE_INDEX: dict[str, dict[str, float | int | str]] = {}
-
-COMMANDER_BRACKET_FAST_MANA = {
-    "mana crypt",
-    "jeweled lotus",
-    "mox diamond",
-    "chrome mox",
-    "mox opal",
-    "lion's eye diamond",
-    "grim monolith",
-}
-
-COMMANDER_BRACKET_TUTORS = {
-    "demonic tutor",
-    "vampiric tutor",
-    "imperial seal",
-    "mystical tutor",
-    "enlightened tutor",
-    "worldly tutor",
-    "gamble",
-    "diabolic intent",
-    "wishclaw talisman",
-}
-
-COMMANDER_BRACKET_CEDH_COMBOS = {
-    "thassa's oracle",
-    "demonic consultation",
-    "tainted pact",
-    "underworld breach",
-    "ad nauseam",
-    "necrotic ooze",
-    "protean hulk",
-}
 
 CANONICAL_WIN_TYPES = {
     "combat",
@@ -1096,6 +1066,7 @@ class Deck(db.Model):
     custom_card_art_local = db.Column(db.String(300))
     color_identity = db.Column(db.String(10))  # e.g. "WUBRG"
     decklist_text = db.Column(db.Text)
+    declared_bracket = db.Column(db.Integer, nullable=True)
     card_print_prefs_json = db.Column(db.Text, nullable=True)
     tags_json = db.Column(db.Text, nullable=False, default="{}")
     tags_version = db.Column(db.Integer, nullable=True)
@@ -2224,6 +2195,12 @@ with app.app_context():
                 text("INSERT INTO schema_migrations(version) VALUES ('027_saas_foundation')")
             )
 
+        if "029_deck_declared_bracket" not in applied:
+            deck_cols = {row[1] for row in db.session.execute(text("PRAGMA table_info(deck)")).fetchall()}
+            if "declared_bracket" not in deck_cols:
+                db.session.execute(text("ALTER TABLE deck ADD COLUMN declared_bracket INTEGER CHECK (declared_bracket BETWEEN 1 AND 5)"))
+            db.session.execute(text("INSERT INTO schema_migrations(version) VALUES ('029_deck_declared_bracket')"))
+
         if "028_player_profile_picture" not in applied:
             player_cols = {
                 row[1] for row in db.session.execute(text("PRAGMA table_info(player)")).fetchall()
@@ -2787,63 +2764,30 @@ def analyze_scryfall_card(card_json: dict) -> dict:
 
 
 
-def _commander_bracket_for_score(score: int) -> int:
-    """Map a Commander-bracket score to a bracket (1..5).
-
-    Mapping (see CLAUDE.md "Commander Bracket System"):
-    0 -> 1, 1-2 -> 2, 3-4 -> 3, 5-7 -> 4, 8+ -> 5.
-    """
-    if score >= 8:
-        return 5
-    if score >= 5:
-        return 4
-    if score >= 3:
-        return 3
-    if score >= 1:
-        return 2
-    return 1
+def compute_commander_bracket(decklist_cards: list[str], *, commanders=(), declared_bracket=None) -> dict:
+    return estimate_bracket(decklist_cards, commanders=commanders, declared_bracket=declared_bracket)
 
 
-def compute_commander_bracket(decklist_cards: list[str]) -> dict:
-    """Heuristic Commander bracket estimate from card names only.
-
-    Returns a dict with `bracket` (1..5), `score`, and feature counts.
-    """
-    unique_cards = {(name or "").strip().lower() for name in (decklist_cards or []) if (name or "").strip()}
-
-    fast_mana_hits = sorted(name for name in unique_cards if name in COMMANDER_BRACKET_FAST_MANA)
-    tutor_hits = sorted(name for name in unique_cards if name in COMMANDER_BRACKET_TUTORS)
-    combo_hits = sorted(name for name in unique_cards if name in COMMANDER_BRACKET_CEDH_COMBOS)
-
-    score = (len(fast_mana_hits) * 2) + len(tutor_hits) + (len(combo_hits) * 2)
-
-    bracket = _commander_bracket_for_score(score)
-    if len(combo_hits) >= 2 and len(fast_mana_hits) >= 1:
-        bracket = 5
-
-    return {
-        "bracket": bracket,
-        "score": score,
-        "signals": {
-            "fast_mana_count": len(fast_mana_hits),
-            "tutor_count": len(tutor_hits),
-            "combo_piece_count": len(combo_hits),
-        },
-        "matched_cards": {
-            "fast_mana": fast_mana_hits,
-            "tutors": tutor_hits,
-            "combo_pieces": combo_hits,
-        },
-    }
+def compute_commander_bracket_from_text(decklist_text: str | None, *, commanders=None, declared_bracket=None) -> dict:
+    parsed = parse_plaintext_decklist((decklist_text or "").strip()).as_dict() if (decklist_text or "").strip() else {}
+    sections = parsed.get("sections", {})
+    def names(section):
+        result = []
+        for entry in sections.get(section, []):
+            result.extend([entry["name"]] * min(int(entry.get("quantity", 1)), 601 - len(result)))
+            if len(result) > 600:
+                break
+        return result
+    main = names("mainboard")
+    parsed_commanders = names("commander")
+    if commanders is None:
+        commanders = parsed_commanders
+    else:
+        selected = {name.casefold() for name in commanders}
+        main.extend(name for name in parsed_commanders if name.casefold() not in selected)
+    return compute_commander_bracket(main, commanders=commanders, declared_bracket=declared_bracket)
 
 
-def compute_commander_bracket_from_text(decklist_text: str | None) -> dict:
-    raw_text = (decklist_text or "").strip()
-    if not raw_text:
-        return {"bracket": 1, "score": 0, "signals": {"fast_mana_count": 0, "tutor_count": 0, "combo_piece_count": 0}, "matched_cards": {"fast_mana": [], "tutors": [], "combo_pieces": []}}
-
-    parsed = parse_plaintext_decklist(raw_text).as_dict()
-    return compute_commander_bracket(extract_decklist_card_names(parsed))
 _SCRYFALL_BATCH_SIZE = 75
 
 
@@ -3737,6 +3681,16 @@ class DeckPayloadError(ValueError):
     """Validation error while constructing/updating a deck from structured payload data."""
 
 
+def _parse_declared_bracket(value):
+    if value is None or value == "":
+        return None
+    if isinstance(value, str) and value in {"1", "2", "3", "4", "5"}:
+        value = int(value)
+    if type(value) is not int or value not in range(1, 6):
+        raise DeckPayloadError("declared_bracket must be an integer from 1 to 5, or null.")
+    return value
+
+
 def _prepare_deck_payload(
     payload: dict,
     *,
@@ -3744,6 +3698,7 @@ def _prepare_deck_payload(
     require_name: bool = True,
     require_commander_input: bool = False,
 ) -> tuple[dict, dict]:
+    declared_bracket = _parse_declared_bracket(payload.get("declared_bracket", current_deck.declared_bracket if current_deck else None))
     name = (payload.get("name") or "").strip()
     commander_input = (payload.get("commander") or "").strip()
     raw_import = (payload.get("raw_import") or "").strip()
@@ -3803,6 +3758,7 @@ def _prepare_deck_payload(
         custom_card_art_local = current_deck.custom_card_art_local
 
     prepared = {
+        "declared_bracket": declared_bracket,
         "name": name,
         "commander_input": commander_input,
         "commander_to_set": commander_to_set,
@@ -3821,6 +3777,7 @@ def _prepare_deck_payload(
 
 
 def _apply_deck_payload(deck: "Deck", prepared: dict, diagnostics: dict) -> None:
+    deck.declared_bracket = prepared["declared_bracket"]
     deck.name = prepared["name"]
     deck.commander = prepared["commander_to_set"]
     deck.custom_commander_art_url = prepared["custom_commander_art_url"]
@@ -7875,7 +7832,9 @@ def deck_detail(deck_id):
 
     decklist_data = _load_decklist_data(deck)
 
-    commander_bracket = compute_commander_bracket_from_text(deck.decklist_text)
+    commander_bracket = compute_commander_bracket_from_text(
+        deck.decklist_text, commanders=(deck.commander_name or deck.commander or "").split(" + ") if deck.decklist_text else [],
+        declared_bracket=deck.declared_bracket)
 
     deck_tags_cache: dict[int, dict[str, bool]] = {}
     deck_tags = get_deck_parsed_tags(deck, cache=deck_tags_cache)
@@ -7993,6 +7952,7 @@ def new_deck_editor():
 
     empty_deck = SimpleNamespace(
         id=None,
+        declared_bracket=None,
         name="",
         commander_name="",
         commander="",
@@ -8389,16 +8349,26 @@ def update_deck_strategy_tags(deck_id):
 
 @app.route("/api/commander-bracket", methods=["POST"])
 def api_commander_bracket():
-    payload = request.get_json(silent=True) or {}
-
-    cards = payload.get("cards")
-    if isinstance(cards, list):
-        return jsonify(compute_commander_bracket([str(card) for card in cards]))
-
-    decklist_text = payload.get("decklist_text")
-    if isinstance(decklist_text, str):
-        return jsonify(compute_commander_bracket_from_text(decklist_text))
-
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Provide a JSON object."}), 400
+    try:
+        declared = _parse_declared_bracket(payload.get("declared_bracket"))
+        commanders = payload.get("commanders")
+        if commanders is not None and (not isinstance(commanders, list) or len(commanders) > 12 or any(not isinstance(n, str) or len(n) > 256 for n in commanders)):
+            raise DeckPayloadError("commanders must be an array of up to 12 card names.")
+        cards = payload.get("cards")
+        if cards is not None:
+            if not isinstance(cards, list) or len(cards) > 600 or any(not isinstance(n, str) or len(n) > 256 for n in cards):
+                raise DeckPayloadError("cards must be an array of up to 600 card names.")
+            return jsonify(compute_commander_bracket(cards, commanders=commanders or [], declared_bracket=declared))
+        decklist_text = payload.get("decklist_text")
+        if isinstance(decklist_text, str):
+            if len(decklist_text) > 100000:
+                raise DeckPayloadError("Decklist is too large.")
+            return jsonify(compute_commander_bracket_from_text(decklist_text, commanders=commanders, declared_bracket=declared))
+    except (DeckPayloadError, DeckParserError) as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"error": "Provide either 'cards' (array) or 'decklist_text' (string)."}), 400
 
 
@@ -8523,6 +8493,7 @@ def update_deck(deck_id):
         flash("You don't have permission to edit this deck.")
         return redirect(request.form.get("next") or url_for("decks"))
 
+    old_declared_bracket = deck.declared_bracket
     old_name = deck.name
     old_commander = deck.commander
     old_player_id = deck.player_id
@@ -8557,6 +8528,7 @@ def update_deck(deck_id):
             deck,
             {
                 "name": name,
+                "declared_bracket": request.form.get("declared_bracket", deck.declared_bracket),
                 "commander": commander_input,
                 "raw_import": raw_import,
                 "imported_from": "text" if imported_from == "pasted text" else imported_from,
@@ -8584,6 +8556,7 @@ def update_deck(deck_id):
     except Exception as exc:
         db.session.rollback()
 
+        deck.declared_bracket = old_declared_bracket
         deck.name = old_name
         deck.commander = old_commander
         deck.player_id = old_player_id
@@ -10013,6 +9986,7 @@ def _serialize_deck_summary(
     return {
         "id": deck.id,
         "name": deck.name,
+        "declared_bracket": deck.declared_bracket,
         "commander": deck.commander_name or deck.commander,
         "retired": deck.retired,
         "planned": deck.planned,
@@ -10086,6 +10060,9 @@ def _serialize_deck_detail(deck: Deck) -> dict:
     payload["recent_games"] = recent_games
     # Detail only: the deck list renders many tiles and does not draw this chart.
     payload["mmr_history"] = deck_mmr_history_points(deck)
+    payload["commander_bracket"] = compute_commander_bracket_from_text(
+        deck.decklist_text, commanders=(deck.commander_name or deck.commander or "").split(" + ") if deck.decklist_text else [],
+        declared_bracket=deck.declared_bracket)
     payload["decklist_text"] = deck.decklist_text or ""
     payload["card_print_prefs"] = json.loads(deck.card_print_prefs_json) if deck.card_print_prefs_json else {}
     payload["custom_commander_art_url"] = deck.custom_commander_art_url or ""
@@ -12645,6 +12622,7 @@ def api_decks():
             deck, diagnostics = _create_deck_from_payload(
                 {
                     "name": payload.get("name") or "",
+                    "declared_bracket": payload.get("declared_bracket"),
                     "commander": payload.get("commander") or "",
                     "raw_import": raw_import or "",
                     "imported_from": "text",
@@ -12777,6 +12755,7 @@ def api_deck_detail(deck_id):
                 deck,
                 {
                     "name": name,
+                    "declared_bracket": payload.get("declared_bracket", deck.declared_bracket),
                     "commander": payload.get("commander") if "commander" in payload else deck.commander,
                     "raw_import": raw_import if raw_import is not None else "",
                     "imported_from": "text",

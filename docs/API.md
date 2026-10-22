@@ -163,8 +163,8 @@ Complete and machine-checked. `auth` values:
 | `PATCH` | `/api/players/{player_id}` | admin |
 | `DELETE` | `/api/players/{player_id}` | admin |
 | `GET` | `/api/players/{player_id}/export` | auth |
-| `POST` | `/api/players/{player_id}/profile-picture` | owner or admin |
-| `DELETE` | `/api/players/{player_id}/profile-picture` | owner or admin |
+| `POST` | `/api/players/{player_id}/profile-picture` | auth |
+| `DELETE` | `/api/players/{player_id}/profile-picture` | auth |
 | `GET` | `/api/decks` | auth |
 | `POST` | `/api/decks` | auth |
 | `GET` | `/api/decks/{deck_id}` | auth |
@@ -1252,9 +1252,30 @@ them on the finished game, pass this token as `game_token` when you `POST /api/g
 | `GET /api/cards/prints?name=` | **auth** | `[{id, set, set_name, collector_number, art_crop, normal}]` |
 | `GET /api/ccauto/sets` | **auth** | Custom gallery sets |
 | `GET /api/ccauto/sets/{set_name}` | **auth** | Cards in a set |
-| `POST /api/commander-bracket` | public | `{cards: []}` or `{decklist_text}` → `{bracket, score}` |
+| `POST /api/commander-bracket` | public | `{cards: []}` or `{decklist_text}` → explainable estimate; see below |
 | `POST /api/deck-import-parse` | auth | `{raw_import}` → commander(s), `sections`, `decklist_text` |
 | `POST /api/deck-import-preview` | auth | `{raw_import}` → commander(s) only |
+
+`POST /api/commander-bracket` also accepts `commanders` (up to 12 names) and
+`declared_bracket` (1–5 or null). `cards` is limited to 600 names; text to 100 KB.
+Only commander/mainboard sections are evaluated; sideboards and maybeboards are excluded.
+Names and quantities are sent to Commander Spellbook for card/combo classification;
+no owner/account information is sent.
+
+The response has `bracket` (alias of `estimated_bracket`, 2–4 or null),
+`declared_bracket`, `status` (`estimated`, `partial`, `unknown`, `invalid`),
+`reasons`, `warnings`, `matched_cards`, `combos` (with source links),
+`unresolved_cards`, `signals`, `source`, `rules_version`, `game_changer_list_date`
+(fallback snapshot date), and `checked_at`. The old points `score` is removed.
+Empty lists are unknown, banned cards invalidate the estimate, and failed live
+checks produce a clearly marked partial Game-Changer-only estimate. Estimates
+cannot determine intent, actual win speed, or full Commander legality.
+
+Deck POST/PUT/PATCH accept nullable `declared_bracket`. Omitting it on an update
+preserves it; null clears it. Summary responses include the declaration; deck
+detail additionally includes the separate `commander_bracket` report. Declarations
+never replace or suppress an estimate, including when declared below its floor.
+
 
 ---
 

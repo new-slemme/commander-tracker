@@ -251,6 +251,10 @@
 .editor-bracket-badge.bracket-4 { color: #d8b14a; border-color: rgba(216,177,74,0.5); }
 .editor-bracket-badge.bracket-5 { color: #e05a6a; border-color: rgba(224,90,106,0.5); }
 .editor-bracket-badge.bracket-stale { opacity: 0.55; }
+.editor-bracket-details { margin-top: 12px; overflow-wrap: anywhere; }
+.editor-bracket-details summary { cursor: pointer; font-weight: 600; }
+#editorBracketFields { min-width: 0; padding: 12px; }
+#editorBracketReasons p { margin: 8px 0; }
 
 .editor-unsaved-dot {
   color: #d8b14a;

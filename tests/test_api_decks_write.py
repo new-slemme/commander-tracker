@@ -69,6 +69,68 @@ class ApiDecksWriteTests(unittest.TestCase):
             "color_identity": "U",
         }
 
+    @patch("commander_brackets._classifications", side_effect=ValueError)
+    def test_declared_bracket_create_preserve_clear_and_estimate(self, _lookup):
+        with app.app.app_context():
+            user, player, _, other_player = self._seed_users_players()
+            client = self._auth_client_for(user.id)
+            with patch("app.resolve_commander_metadata", side_effect=self._fake_commander_metadata):
+                response = client.post("/api/decks", json={"name": "Bracket Deck", "commander": "Talrand, Sky Summoner", "declared_bracket": 5})
+                self.assertEqual(response.status_code, 201)
+                deck_id = response.get_json()["id"]
+                self.assertEqual(response.get_json()["declared_bracket"], 5)
+                deck = app.db.session.get(app.Deck, deck_id)
+                deck.decklist_text = "1 Rhystic Study"
+                app.db.session.commit()
+                response = client.patch(f"/api/decks/{deck_id}", json={"name": "Renamed"})
+                self.assertEqual(response.get_json()["declared_bracket"], 5)
+                detail = client.get(f"/api/decks/{deck_id}").get_json()
+                self.assertEqual(detail["commander_bracket"]["estimated_bracket"], 3)
+                self.assertEqual(detail["commander_bracket"]["declared_bracket"], 5)
+                response = client.patch(f"/api/decks/{deck_id}", json={"declared_bracket": None})
+                self.assertEqual(response.status_code, 200)
+                self.assertIsNone(response.get_json()["declared_bracket"])
+                for invalid in [True, 0, 6, 2.5, "cEDH", {}]:
+                    response = client.patch(f"/api/decks/{deck_id}", json={"declared_bracket": invalid})
+                    self.assertEqual(response.status_code, 400)
+                outsider = app.Deck(name="Other", commander="Island", player_id=other_player.id)
+                app.db.session.add(outsider)
+                app.db.session.commit()
+                self.assertEqual(client.patch(f"/api/decks/{outsider.id}", json={"declared_bracket": 4}).status_code, 404)
+                self.assertIsNone(outsider.declared_bracket)
+
+    @patch("commander_brackets._classifications", side_effect=ValueError)
+    def test_declared_bracket_html_form_and_editor(self, _lookup):
+        with app.app.app_context():
+            user, player, _, _ = self._seed_users_players()
+            deck = app.Deck(name="Bracket HTML", commander="Talrand, Sky Summoner", player_id=player.id)
+            app.db.session.add(deck)
+            app.db.session.commit()
+            client = self._auth_client_for(user.id)
+            self.assertEqual(client.get(f"/deck/{deck.id}/edit").status_code, 200)
+            with patch("app.resolve_commander_metadata", side_effect=self._fake_commander_metadata):
+                response = client.post(f"/deck/{deck.id}/update", data={"name": deck.name, "commander": deck.commander, "declared_bracket": "4"})
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(app.db.session.get(app.Deck, deck.id).declared_bracket, 4)
+
+    def test_declared_bracket_migration_is_idempotent_and_preserves_decks(self):
+        with app.app.app_context():
+            _, player, _, _ = self._seed_users_players()
+            deck = app.Deck(name="Before migration", commander="Island", player_id=player.id)
+            app.db.session.add(deck)
+            app.db.session.commit()
+            deck_id = deck.id
+            app.db.session.execute(app.text("DELETE FROM schema_migrations WHERE version = '029_deck_declared_bracket'"))
+            app.db.session.execute(app.text("ALTER TABLE deck DROP COLUMN declared_bracket"))
+            app.db.session.commit()
+            app.run_schema_migrations()
+            app.run_schema_migrations()
+            app.db.session.expire_all()
+            restored = app.db.session.get(app.Deck, deck_id)
+            self.assertEqual(restored.name, "Before migration")
+            self.assertIsNone(restored.declared_bracket)
+            self.assertEqual(app.db.session.execute(app.text("SELECT COUNT(*) FROM schema_migrations WHERE version = '029_deck_declared_bracket'")).scalar(), 1)
+
     def test_non_admin_can_create_deck_for_own_player(self):
         with app.app.app_context():
             owner_user, owner_player, _, _ = self._seed_users_players()

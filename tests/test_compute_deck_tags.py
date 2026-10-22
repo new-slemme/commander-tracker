@@ -28,7 +28,12 @@ class ComputeDeckTagsTests(unittest.TestCase):
 
 
 class ComputeCommanderBracketTests(unittest.TestCase):
-    def test_high_signal_list_maps_to_bracket_5(self):
+    def setUp(self):
+        patcher = patch("commander_brackets._classifications", side_effect=ValueError)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_signals_do_not_automatically_declare_cedh(self):
         result = app.compute_commander_bracket([
             "Mana Crypt",
             "Jeweled Lotus",
@@ -37,12 +42,12 @@ class ComputeCommanderBracketTests(unittest.TestCase):
             "Demonic Consultation",
         ])
 
-        self.assertEqual(result["bracket"], 5)
-        self.assertGreaterEqual(result["score"], 7)
+        self.assertEqual(result["bracket"], 3)
+        self.assertEqual(result["status"], "partial")
 
-    def test_empty_list_maps_to_bracket_1(self):
+    def test_empty_list_has_unknown_bracket(self):
         result = app.compute_commander_bracket([])
-        self.assertEqual(result["bracket"], 1)
+        self.assertIsNone(result["bracket"])
 
     def test_api_supports_cards_and_text(self):
         client = app.app.test_client()
@@ -86,7 +91,8 @@ class DeckDetailCommanderBracketTests(unittest.TestCase):
             app.db.drop_all()
             app.db.create_all()
 
-    def test_deck_detail_displays_commander_bracket(self):
+    @patch("commander_brackets._classifications", side_effect=ValueError)
+    def test_deck_detail_displays_commander_bracket(self, _lookup):
         with app.app.app_context():
             user = app.User(
                 username="bracket-tester",
@@ -126,7 +132,8 @@ class DeckDetailCommanderBracketTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
-        self.assertIn("Commander Bracket 5", html)
+        self.assertIn("Partial estimate 3", html)
+        self.assertIn("why this result?", html)
 
 
 if __name__ == "__main__":

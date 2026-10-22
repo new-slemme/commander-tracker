@@ -1,0 +1,17 @@
+{
+  "rules_version": "2026-02-09",
+  "updated_at": "2026-02-09",
+  "sources": [
+    "https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-october-21-2025",
+    "https://magic.wizards.com/en/news/announcements/commander-brackets-beta-update-february-9-2026"
+  ],
+  "cards": [
+    "Drannith Magistrate", "Humility", "Serra's Sanctum", "Smothering Tithe", "Enlightened Tutor", "Teferi's Protection", "Farewell",
+    "Consecrated Sphinx", "Cyclonic Rift", "Force of Will", "Fierce Guardianship", "Gifts Ungiven", "Intuition", "Mystical Tutor", "Narset, Parter of Veils", "Rhystic Study", "Thassa's Oracle",
+    "Ad Nauseam", "Bolas's Citadel", "Braids, Cabal Minion", "Demonic Tutor", "Imperial Seal", "Necropotence", "Opposition Agent", "Orcish Bowmasters", "Tergrid, God of Fright", "Vampiric Tutor",
+    "Gamble", "Jeska's Will", "Underworld Breach",
+    "Crop Rotation", "Gaea's Cradle", "Natural Order", "Seedborn Muse", "Survival of the Fittest", "Worldly Tutor", "Biorhythm",
+    "Aura Shards", "Coalition Victory", "Grand Arbiter Augustin IV", "Notion Thief",
+    "Ancient Tomb", "Chrome Mox", "Field of the Dead", "Glacial Chasm", "Grim Monolith", "Lion's Eye Diamond", "Mana Vault", "Mishra's Workshop", "Mox Diamond", "Panoptic Mirror", "The One Ring", "The Tabernacle at Pendrell Vale"
+  ]
+}
