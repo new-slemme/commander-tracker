@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 62,
-  "versionName": "2.1.1",
+  "versionCode": 63,
+  "versionName": "2.2.0.0",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-2.1.1+62.apk",
-  "artifactPath": "apk/edh-son-2.1.1+62.apk",
-  "sha256": "15f35b8dc99bcd0843221c54edcd1791879c61dec05d73f49968e5c00970e342",
-  "publishedAt": "2026-09-21T18:55:47.602287551Z",
-  "notes": "Version 2.1.1 — GIF Support\n\nAnimated GIF artwork now plays in deck previews, deck lists and details, and\ncommander backgrounds in the life counter. Supports both uploaded GIFs and\nGIF image URLs. Includes a GIF decoder fallback for Android 8.\n\nExisting authenticated image loading and offline image caching are preserved."
+  "artifactFileName": "edh-son-2.2.0.0+63.apk",
+  "artifactPath": "apk/edh-son-2.2.0.0+63.apk",
+  "sha256": "0baa18e9e88d283592d6ac9cf19437606ecd9acae57d4faa20adc84acf1e5684",
+  "publishedAt": "2026-10-22T12:54:56.354583655Z",
+  "notes": "Version 2.2.0.0 — Commander Brackets\n\nBracket estimates now follow Game Changer limits and check actual combos through\nCommander Spellbook. View the reasons, matched combos, and source information.\n\nChoose a declared bracket separately from the estimate, including Exhibition and\ncEDH. The deck editor previews changes as you edit, and “Use estimate” clears your\ndeclaration. Unknown, partial, banned-card, and saved offline results are labeled\nclearly. The old power score has been removed.\n\nIncludes compatibility with the updated server API and cached older deck data."
 }
