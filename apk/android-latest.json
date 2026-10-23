@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 63,
-  "versionName": "2.2.0.0",
+  "versionCode": 64,
+  "versionName": "2.3.0.0",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-2.2.0.0+63.apk",
-  "artifactPath": "apk/edh-son-2.2.0.0+63.apk",
-  "sha256": "0baa18e9e88d283592d6ac9cf19437606ecd9acae57d4faa20adc84acf1e5684",
-  "publishedAt": "2026-10-22T12:54:56.354583655Z",
-  "notes": "Version 2.2.0.0 — Commander Brackets\n\nBracket estimates now follow Game Changer limits and check actual combos through\nCommander Spellbook. View the reasons, matched combos, and source information.\n\nChoose a declared bracket separately from the estimate, including Exhibition and\ncEDH. The deck editor previews changes as you edit, and “Use estimate” clears your\ndeclaration. Unknown, partial, banned-card, and saved offline results are labeled\nclearly. The old power score has been removed.\n\nIncludes compatibility with the updated server API and cached older deck data."
+  "artifactFileName": "edh-son-2.3.0.0+64.apk",
+  "artifactPath": "apk/edh-son-2.3.0.0+64.apk",
+  "sha256": "7ca730920fe455403206ba28e7a536d52f0e5207c1457c8e5a1b4ff53ac99683",
+  "publishedAt": "2026-10-23T16:23:19.677942855Z",
+  "notes": "Version 2.3.0.0 — Native browsing and timed games\n\nBrowse decks, players, and games with web-matching search, filters, statistics\nperiods, sorting, removable filter chips, and pagination. Browsing choices remain\nseparate from game setup.\n\nManage account preferences, passwords and sessions; upload or select player\npictures; edit admin identities; import decklist files; share or save exports;\nand control strategy overrides with Auto, Yes and No.\n\nRun chess clocks and turn timers in local and online table games, with increments,\nmodal pauses, low-time indication, restored state, and recorded timer metadata.\nCompanion devices display the host-controlled timer.\n\nRequires the updated server for the new online features. Older servers report\nfeature-unavailable messages. Local games and pending offline records are preserved."
 }
