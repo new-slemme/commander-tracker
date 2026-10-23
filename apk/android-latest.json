@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 64,
-  "versionName": "2.3.0.0",
+  "versionCode": 65,
+  "versionName": "2.3.0.1",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-2.3.0.0+64.apk",
-  "artifactPath": "apk/edh-son-2.3.0.0+64.apk",
-  "sha256": "7ca730920fe455403206ba28e7a536d52f0e5207c1457c8e5a1b4ff53ac99683",
-  "publishedAt": "2026-10-23T16:23:19.677942855Z",
-  "notes": "Version 2.3.0.0 — Native browsing and timed games\n\nBrowse decks, players, and games with web-matching search, filters, statistics\nperiods, sorting, removable filter chips, and pagination. Browsing choices remain\nseparate from game setup.\n\nManage account preferences, passwords and sessions; upload or select player\npictures; edit admin identities; import decklist files; share or save exports;\nand control strategy overrides with Auto, Yes and No.\n\nRun chess clocks and turn timers in local and online table games, with increments,\nmodal pauses, low-time indication, restored state, and recorded timer metadata.\nCompanion devices display the host-controlled timer.\n\nRequires the updated server for the new online features. Older servers report\nfeature-unavailable messages. Local games and pending offline records are preserved."
+  "artifactFileName": "edh-son-2.3.0.1+65.apk",
+  "artifactPath": "apk/edh-son-2.3.0.1+65.apk",
+  "sha256": "22c7403deef29b7debeef4d288a12a7a01447dc1e1b60ba9a2ee7662103acbee",
+  "publishedAt": "2026-10-23T18:28:29.549996594Z",
+  "notes": "Version 2.3.0.1 — Game recording hotfix\n\nFixes untimed games failing to record with an Invalid timer mode response.\nEnd & Record now has winner and win-type selectors like the web client,\nscrollable optional details, visible errors, and recording progress.\nWinner selections survive live state updates, and repeated taps while saving\nare ignored. New games preserve the actual starting player across recovery;\nolder games allow choosing it rather than assuming the first seat."
 }
