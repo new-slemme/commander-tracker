@@ -1,0 +1,356 @@
+{
+  "test_command": "python -m unittest tests.test_browsing_ui tests.test_home_dashboard tests.test_home_updates tests.test_ux_context tests.test_compare_tray tests.test_deck_navigation tests.test_game_crosslinks tests.test_search",
+  "unit_tests_passed": 67,
+  "browser_url": "http://localhost:5078",
+  "server_bind": "0.0.0.0:5078",
+  "data": "Isolated copy of existing QA fixtures; four QA players each have two decks with real decklist text. No production data modified.",
+  "layouts": {
+    "layouts": [
+      {
+        "theme": "dark",
+        "width": 1440,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1440,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1440,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1440,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1024,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1024,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1024,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 1024,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 768,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 768,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 768,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 768,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 390,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 390,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 390,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 390,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 320,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 320,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 320,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "dark",
+        "width": 320,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1440,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1440,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1440,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1440,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1024,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1024,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1024,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 1024,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 768,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 768,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 768,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 768,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 390,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 390,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 390,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 390,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 320,
+        "page": "home",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 320,
+        "page": "players",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 320,
+        "page": "decks",
+        "overflow": false,
+        "offenders": []
+      },
+      {
+        "theme": "light",
+        "width": 320,
+        "page": "games",
+        "overflow": false,
+        "offenders": []
+      }
+    ],
+    "errors": []
+  },
+  "interactions": [
+    "desktop menus open from keyboard and dismiss with Escape",
+    "phone and tablet drawer focus trap, Escape, and focus restoration",
+    "game filters auto-apply, remain open on reload, and clear",
+    "dashboard sort and search palette",
+    "player comparison selection and clear",
+    "deck detail drawer",
+    "four-player game started from setup with deck assignments and 40 life each"
+  ],
+  "edge_cases": [
+    "empty decks and games have clear next actions; member navigation hides admin links",
+    "long unbroken player, deck, pod, and leaderboard names fit at 320px",
+    "pod scope switching still works",
+    "reduced-motion preference disables card transitions"
+  ],
+  "active_game_screenshot": "running-game-4-players.png",
+  "screenshots": [
+    "after-decks-dark-1440.png",
+    "after-decks-dark-390.png",
+    "after-decks-light-1440.png",
+    "after-decks-light-390.png",
+    "after-games-dark-1440.png",
+    "after-games-dark-390.png",
+    "after-games-light-1440.png",
+    "after-games-light-390.png",
+    "after-home-dark-1440.png",
+    "after-home-dark-390.png",
+    "after-home-light-1440.png",
+    "after-home-light-390.png",
+    "after-players-dark-1440.png",
+    "after-players-dark-390.png",
+    "after-players-light-1440.png",
+    "after-players-light-390.png",
+    "before-decks-1440.png",
+    "before-decks-390.png",
+    "before-games-1440.png",
+    "before-games-390.png",
+    "before-home-1440.png",
+    "before-home-390.png",
+    "before-players-1440.png",
+    "before-players-390.png",
+    "deck-tags-notice-dark-1440.png",
+    "deck-tags-notice-dark-390.png",
+    "deck-tags-notice-light-1440.png",
+    "deck-tags-notice-light-390.png",
+    "empty-decks-390.png",
+    "empty-games-390.png",
+    "game-history-dark-1440.png",
+    "game-history-dark-390.png",
+    "game-history-light-1440.png",
+    "game-history-light-390.png",
+    "running-game-4-players.png"
+  ],
+  "baseline_note": "Baseline screenshots were captured before restoring cached QA artwork; final screenshots include the restored artwork.",
+  "banner_followup": {
+    "source": "Uncommitted banner markup and CSS in the main checkout",
+    "tests_passed": 9,
+    "browser_checks": [
+      "Dark/light at 390px and 1440px",
+      "No horizontal overflow",
+      "Dismiss button at least 44px high",
+      "Dismissal persists after reload"
+    ]
+  }
+}

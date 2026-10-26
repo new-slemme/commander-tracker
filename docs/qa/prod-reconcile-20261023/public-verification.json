@@ -1,0 +1,35 @@
+{
+  "origin": "https://edh.figurensohn.de",
+  "health": {
+    "database": "reachable",
+    "status": "ok"
+  },
+  "public_login_new_layout": true,
+  "assets": [
+    {
+      "path": "static/css/games.css",
+      "status": 200,
+      "sha256": "03e67a11ac696a307498b1cd30995a8547e120b0d95fcc7814a7a15441217682"
+    },
+    {
+      "path": "static/css/browsing.css",
+      "status": 200,
+      "sha256": "fc02416413ed49860b9890c132e040a2d6abc79f28d3bd35884da0d93a33854b"
+    },
+    {
+      "path": "static/css/browse.css",
+      "status": 200,
+      "sha256": "1bfcf1b1a1a58cd85b7f658600809b1bb5ebfcf635f9420d9cb8cbd3986029b7"
+    },
+    {
+      "path": "static/js/app.js",
+      "status": 200,
+      "sha256": "3bd3c54e2e1849f7072275ec4d1b51c2c719899acf2696d6e2f183b1d2aaec1a"
+    },
+    {
+      "path": "static/js/commander_motion.js",
+      "status": 200,
+      "sha256": "1ceeb2a4ac37d6915c581c2534f579d2035f47a269961b48089361700923549f"
+    }
+  ]
+}

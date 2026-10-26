@@ -189,7 +189,7 @@ function renderCommanderDamage(){
     const sourcePid = String(opponent.player_id);
     const current = Number(commanderDamageBySource[sourcePid]) || 0;
     const isDanger = current >= 21;
-    const artUrl = opponent.commander_art || "";
+    const artUrl = opponent.commander_art_poster || opponent.commander_art || "";
     const artScale = opponent.commander_art_scale || "cover";
 
     const card = document.createElement("div");

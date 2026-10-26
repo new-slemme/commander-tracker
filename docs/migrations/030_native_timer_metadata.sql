@@ -1,0 +1,2 @@
+ALTER TABLE game ADD COLUMN IF NOT EXISTS timed_out_player_id INTEGER;
+ALTER TABLE game ADD COLUMN IF NOT EXISTS timer_state_json TEXT;

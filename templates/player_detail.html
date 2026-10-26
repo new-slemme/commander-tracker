@@ -66,7 +66,7 @@
         {% for d in decks %}
           {% set s = deck_stats.get(d.id, {}) %}
           <div class="col-12 col-md-6 col-lg-4">
-            <a class="deck-card text-decoration-none" href="{{ url_for('deck_detail', deck_id=d.id) }}">
+            <a class="deck-card text-decoration-none" href="{{ url_for('deck_detail', deck_id=d.id, return_to=listing_return) }}">
               <div class="fw-bold text-white text-truncate">{{ d.name }}</div>
               <div class="muted2 small text-truncate">{{ d.commander_name or d.commander }}</div>
               <div class="deck-mini-grid mt-3">
@@ -93,7 +93,7 @@
     {% if recent_games %}
       <div class="recent-list">
         {% for item in recent_games %}
-          <a class="recent-row" href="{{ url_for('game_detail', game_id=item.game_id) }}">
+          <a class="recent-row" href="{{ url_for('game_detail', game_id=item.game_id, return_to=listing_return) }}">
             <div>
               <div class="fw-bold text-white">Game #{{ item.game_id }}</div>
               <div class="muted2 small">

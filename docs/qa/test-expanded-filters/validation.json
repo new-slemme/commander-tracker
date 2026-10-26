@@ -1,0 +1,265 @@
+{
+  "origin": "http://localhost:5068",
+  "layouts": [
+    {
+      "theme": "dark",
+      "width": 1440,
+      "listing": "decks",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "listing": "decks",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "listing": "players",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "listing": "players",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "listing": "games",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "listing": "games",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "listing": "decks",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "listing": "decks",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "listing": "players",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "listing": "players",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "listing": "games",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "listing": "games",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "listing": "decks",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "listing": "decks",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "listing": "players",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "listing": "players",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "listing": "games",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "listing": "games",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "listing": "decks",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "listing": "decks",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "listing": "players",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "listing": "players",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "listing": "games",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "listing": "games",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "listing": "decks",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "listing": "decks",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "listing": "players",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "listing": "players",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "listing": "games",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "listing": "games",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "listing": "decks",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "listing": "decks",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "listing": "players",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "listing": "players",
+      "expanded": true,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "listing": "games",
+      "expanded": false,
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "listing": "games",
+      "expanded": true,
+      "overflow": false
+    }
+  ],
+  "page_errors": [],
+  "multiselect_apply": true,
+  "chip_removal": true,
+  "pagination_and_return": true,
+  "period_presets": true,
+  "error_recovery": true,
+  "scope_preservation": true,
+  "live_game_video": true
+}

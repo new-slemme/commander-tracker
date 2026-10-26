@@ -203,7 +203,7 @@
       {# Featured deck: last winning or best MMR #}
       {% set featured = last_winning_deck or best_deck %}
       {% if featured %}
-        {% set feat_art = featured.commander_art_url %}
+        {% set feat_art = featured.commander_art_poster_url %}
         <div class="deck-featured mb-4"
              data-entity-type="deck"
              data-entity-id="{{ featured.id }}">
@@ -224,7 +224,7 @@
       <div class="deck-grid" id="decks-in-form-grid">
         {% for s in deck_stats %}
           {% set d = s.deck %}
-          {% set art = d.commander_art_url %}
+          {% set art = d.commander_art_poster_url %}
           {% set wr = s.winrate %}
           {% set badge_class = 'bad' %}
           {% if wr >= 60 %}{% set badge_class = 'good' %}
@@ -319,7 +319,7 @@
             {# Collect commander art URLs for this game (up to 6) #}
             {% set ns = namespace(arts=[]) %}
             {% for gp in game_parts[g.id] %}
-              {% set art = gp.deck.commander_art_url %}
+              {% set art = gp.deck.commander_art_poster_url %}
               {% if art and (ns.arts|length) < 6 %}
                 {% set ns.arts = ns.arts + [art] %}
               {% endif %}

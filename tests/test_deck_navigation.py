@@ -54,8 +54,8 @@ class DeckNavigationTests(unittest.TestCase):
             with self.subTest(show_retired=retired):
                 query = f'player_id={self.owner_id}' + ('&show_retired=1' if retired else '')
                 overview = self.get_html('/decks?' + query)
-                detail_url = unescape(re.search(r'class="deck-tile[^\"]*"\s+href="([^"]+)"', overview).group(1))
-                self.assertEqual(parse_qs(urlsplit(detail_url).query), parse_qs(query))
+                detail_url = unescape(re.search(r'class="deck-name-link"\s+href="([^"]+)"', overview).group(1))
+                self.assertEqual(parse_qs(urlsplit(detail_url).query)["return_to"], ["/decks?" + query])
                 back_url = self.back_url(detail_url)
                 self.assertEqual(parse_qs(urlsplit(back_url).query), parse_qs(query))
                 returned = self.get_html(back_url)
@@ -73,6 +73,6 @@ class DeckNavigationTests(unittest.TestCase):
     def test_clearing_filter_does_not_restore_old_context(self):
         self.get_html(f'/decks?player_id={self.owner_id}')
         html = self.get_html('/decks')
-        detail_url = unescape(re.search(r'class="deck-tile[^\"]*"\s+href="([^"]+)"', html).group(1))
-        self.assertEqual(urlsplit(detail_url).query, '')
+        detail_url = unescape(re.search(r'class="deck-name-link"\s+href="([^"]+)"', html).group(1))
+        self.assertEqual(parse_qs(urlsplit(detail_url).query)['return_to'], ['/decks?'])
         self.assertEqual(self.back_url(detail_url), '/decks')

@@ -1,0 +1,115 @@
+{
+  "layouts": [
+    {
+      "theme": "dark",
+      "width": 1440,
+      "state": "collapsed",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "state": "insights",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "state": "filters",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "collapsed",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "insights",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "filters",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "state": "collapsed",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "state": "insights",
+      "overflow": false
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "state": "filters",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "state": "collapsed",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "state": "insights",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "state": "filters",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "collapsed",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "insights",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "filters",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "state": "collapsed",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "state": "insights",
+      "overflow": false
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "state": "filters",
+      "overflow": false
+    }
+  ],
+  "page_errors": [],
+  "checks": "Player counts, query preservation, game/deck return navigation, pagination, scope, search, chips, clearing, validation recovery, missing metadata, keyboard disclosures, clipboard success and fallback passed",
+  "empty_state": "Empty pod renders No games yet, no statistics, no overflow at 320px"
+}

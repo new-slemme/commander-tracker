@@ -1,0 +1,86 @@
+{
+  "status": "superseded_by_later_build_and_reconciled",
+  "url": "https://edh.figurensohn.de",
+  "started_at": "2026-10-23T14:54:44.363740734Z",
+  "source_workspace": "/home/slemme/mine/commander-tracker-test",
+  "source_git_head": "119391b1f0770ba09c640485faa860162df772f4",
+  "includes_uncommitted_workspace_changes": true,
+  "image": "sha256:a7e4222724a15e482a9a56911eaeafa3c4b5fd63cc358ecc040144176b993719",
+  "release_tag": "commander-tracker:release-20261023",
+  "rollback_tag": "commander-tracker:rollback-20261023",
+  "rollback_command": "docker tag commander-tracker:rollback-20261023 commander-tracker-commander-tracker && docker compose -f /home/slemme/mine/commander-tracker/docker-compose.yaml up -d --no-deps --no-build commander-tracker",
+  "database_backup": "/home/slemme/mine/commander-tracker/data/backups/prod-deploy-20261023T1454Z/commander.db",
+  "database_integrity": "ok",
+  "database_counts_before_and_after": {
+    "player": 10,
+    "deck": 106,
+    "game": 71,
+    "game_participant": 243
+  },
+  "unit_tests": {
+    "passed": 418,
+    "subtests_passed": 203
+  },
+  "browser_layouts": 36,
+  "browser_errors": [],
+  "browser_origin": "http://localhost:5070",
+  "browser_fixture": "Isolated copy of four QA players with two real decklists each; setup navigated to active four-player game at 40 life.",
+  "public_health": "ok",
+  "public_asset_hash_matches": true,
+  "production_smoke": {
+    "routes": [
+      {
+        "path": "/decks",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/players",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/games",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/decks?status=all&bracket=2&bracket=3",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/players?period=30&sort=games&direction=desc",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/games?win_type=combat&win_type=combo",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/decks?min_games=bad",
+        "status": 200,
+        "filters_open": true
+      }
+    ],
+    "legacy_videos": 14,
+    "range_status": 206,
+    "ffmpeg_conversion": true,
+    "record_counts_unchanged": true
+  },
+  "artwork_restoration": {
+    "reason": "Production deck referenced a missing original GIF and derivatives in the shared art directory.",
+    "source_copy": "/tmp/commander-motion-qa/legacy-art/commander_art/custom_Big_Tiddy_Dragon_commander_7296ef4d.gif",
+    "sha256": "b3ba99984ed3e4895d80139282e5b0741df8c71ac7fd591450c94f379373c346",
+    "original_bytes": 9020018,
+    "database_references_unchanged": true,
+    "original_restored_and_variants_generated": true
+  },
+  "test_container_unchanged": true,
+  "git_committed_or_pushed": false,
+  "rebuild_note": "Production was deployed from the current Test workspace image. The separate production source checkout was not modified; rebuild from this release source or reuse the tagged release image.",
+  "screenshot": "running-game-4-players.png",
+  "replacement_report": "../prod-reconcile-20261023/deployment.json"
+}

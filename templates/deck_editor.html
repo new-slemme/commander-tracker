@@ -33,7 +33,7 @@
     declaredBracket:      {{ deck.declared_bracket | tojson }},
     retired:              {{ deck.retired | tojson }},
     planned:              {{ deck.planned | tojson }},
-    artUrl:               {{ (deck.commander_art_url or '') | tojson }},
+    artUrl:               {{ (deck.commander_art_poster_url or '') | tojson }},
     printPrefs:           {{ card_print_prefs | tojson }},
     customCommanderArt:   {{ (deck.commander_local_art_custom or deck.custom_commander_art_url or '') | tojson }},
     customCardArt:        {{ (deck.custom_card_art_local or deck.custom_card_art_url or '') | tojson }},
@@ -49,7 +49,7 @@
 {# ── Top bar ── #}
 <div class="deck-editor-page">
 <div class="editor-topbar" id="editorTopbarHome">
-  <a class="editor-topbar-back" href="{{ url_for('decks') if create_mode else url_for('deck_detail', deck_id=deck.id) }}">‹ Back</a>
+  <a class="editor-topbar-back" href="{{ (listing_return or url_for('decks')) if create_mode else url_for('deck_detail', deck_id=deck.id, return_to=listing_return) }}">‹ Back</a>
   <button id="toggleSearchBtn" class="editor-sidebar-toggle" title="Toggle Search panel">
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <rect x="1" y="1" width="5" height="14" rx="1"/>
@@ -198,8 +198,8 @@
       </div>
 
       {# Commander art preview #}
-      <div class="editor-art-preview" id="editorArtPreview" style="{{ '' if deck.commander_art_url else 'display:none;' }}">
-        <img id="editorArtImg" src="{{ deck.commander_art_url or '' }}" alt="Commander art">
+      <div class="editor-art-preview" id="editorArtPreview" style="{{ '' if deck.commander_art_poster_url else 'display:none;' }}">
+        <img id="editorArtImg" src="{{ deck.commander_art_poster_url or '' }}" alt="Commander art">
       </div>
 
       {# Partner commander #}
@@ -266,14 +266,18 @@
         <div class="editor-settings-section editor-art-settings">
           <h2 class="editor-settings-label">{{ title }}</h2>
           {% if create_mode %}
-          <div class="editor-settings-help">Save the deck once before uploading an image.</div>
+          <div class="editor-settings-help">Save the deck once before uploading art.</div>
           {% else %}
-          <label class="editor-field-label" for="{{ prefix }}File">Upload image</label>
-          <input type="file" id="{{ prefix }}File" class="editor-art-file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif" aria-describedby="{{ prefix }}Help">
-          <div id="{{ prefix }}Help" class="editor-settings-help">PNG, JPG, WebP, GIF or AVIF · Max 15 MB. Uploads are applied immediately.</div>
+          <label class="editor-field-label" for="{{ prefix }}File">Upload {{ 'image or video' if field == 'commander' else 'image' }}</label>
+          <input type="file" id="{{ prefix }}File" class="editor-art-file" accept=".png,.jpg,.jpeg,.webp,.gif,.avif{{ ',.mp4' if field == 'commander' else '' }}" aria-describedby="{{ prefix }}Help">
+          <div id="{{ prefix }}Help" class="editor-settings-help">{{ 'Images or MP4 · Max 30 MB. GIFs and videos: up to 60 seconds.' if field == 'commander' else 'PNG, JPG, WebP, GIF or AVIF · Max 15 MB.' }} Uploads are applied immediately.</div>
           <div id="{{ prefix }}Filename" class="editor-settings-filename" role="status"></div>
           {% endif %}
-          <img id="{{ prefix }}Preview" class="editor-custom-art-preview" {% if current_art %}src="{{ current_art }}"{% else %}hidden{% endif %} alt="{{ title }} preview">
+          <img id="{{ prefix }}Preview" class="editor-custom-art-preview" {% if current_art %}src="{{ deck.commander_art_poster_url if field == 'commander' else current_art }}"{% else %}hidden{% endif %} {% if field == 'commander' and deck.commander_art_video_url %}hidden{% endif %} alt="{{ title }} preview">
+          {% if field == 'commander' %}
+          <video id="{{ prefix }}Video" class="editor-motion-preview" controls muted loop playsinline preload="none"
+                 {% if deck.commander_art_video_url %}src="{{ deck.commander_art_video_url }}" poster="{{ deck.commander_art_poster_url }}"{% else %}hidden{% endif %}></video>
+          {% endif %}
           <details class="editor-art-url-option" {% if current_art.startswith('http') %}open{% endif %}>
             <summary>Use an image URL instead</summary>
             <label class="editor-field-label" for="{{ prefix }}Url">{{ title }} URL</label>
@@ -363,6 +367,7 @@
     printPrefs:          Object.assign({}, INIT.printPrefs),  // {card_name_lower: scryfall_id}
     customCommanderArt:  INIT.customCommanderArt,  // URL or /art/... path
     customCommanderArtDirty: false,
+    customCommanderPoster: INIT.artUrl,
     customCardArt:       INIT.customCardArt,
     customCardArtDirty:  false,
     ownerId:             INIT.ownerPlayerId,
@@ -429,7 +434,7 @@
 
   function updateCommanderArt(name) {
     if (state.customCommanderArt) {
-      artImg.src = state.customCommanderArt;
+      artImg.src = state.customCommanderPoster || state.customCommanderArt;
       artPreview.style.display = '';
       return;
     }
@@ -1199,19 +1204,30 @@
     const filename = document.getElementById(prefix + 'Filename');
     const preview = document.getElementById(prefix + 'Preview');
     const remove = document.getElementById(prefix + 'Remove');
+    const videoPreview = document.getElementById(prefix + 'Video');
+    let motionPoster = field === 'commander' ? {{ (deck.commander_art_poster_url or '') | tojson }} : '';
+    let motionVideo = field === 'commander' ? {{ (deck.commander_art_video_url or '') | tojson }} : '';
     const error = document.getElementById(prefix + 'Error');
     function refreshArt() {
-      const src = state[key];
-      preview.hidden = !src;
+      const src = motionPoster || state[key];
+      if (videoPreview) {
+        videoPreview.pause();
+        videoPreview.hidden = !motionVideo;
+        if (motionVideo) { videoPreview.src = motionVideo; videoPreview.poster = src; }
+        else { videoPreview.removeAttribute('src'); videoPreview.load(); }
+      }
+      preview.hidden = !src || Boolean(motionVideo);
       if (src) preview.src = src; else preview.removeAttribute('src');
       remove.hidden = !src;
       if (field === 'commander') {
+        state.customCommanderPoster = src;
         if (src) { artImg.src = src; artPreview.style.display = ''; }
         else updateCommanderArt(state.commander);
       }
     }
     preview.addEventListener('error', () => { preview.hidden = true; });
     urlInput.addEventListener('input', () => {
+      motionPoster = motionVideo = '';
       state[key] = urlInput.value.trim();
       state[key + 'Dirty'] = true;
       if (fileInput) fileInput.value = '';
@@ -1221,6 +1237,7 @@
     });
     urlInput.addEventListener('change', refreshArt);
     remove.addEventListener('click', () => {
+      motionPoster = motionVideo = '';
       state[key] = '';
       state[key + 'Dirty'] = true;
       urlInput.value = '';
@@ -1234,8 +1251,10 @@
       const file = fileInput.files[0];
       if (!file) return;
       error.hidden = true;
-      if (!/\.(png|jpe?g|webp|gif|avif)$/i.test(file.name) || file.size > 15 * 1024 * 1024) {
-        error.textContent = 'Choose a PNG, JPG, WebP, GIF or AVIF image up to 15 MB.';
+      const limitMB = field === 'commander' ? 30 : 15;
+      const allowed = field === 'commander' ? /\.(png|jpe?g|webp|gif|avif|mp4)$/i : /\.(png|jpe?g|webp|gif|avif)$/i;
+      if (!allowed.test(file.name) || file.size > limitMB * 1024 * 1024) {
+        error.textContent = `Choose an image${field === 'commander' ? ' or MP4' : ''} up to ${limitMB} MB.`;
         error.hidden = false;
         fileInput.value = '';
         return;
@@ -1251,6 +1270,8 @@
         const res = await fetch(`/api/decks/${DECK_ID}/upload-art`, { method: 'POST', body: fd });
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.url) throw new Error(data.error || 'Upload failed. Try again.');
+        motionPoster = data.poster_url || data.url;
+        motionVideo = data.video_url || '';
         state[key] = data.url;
         state[key + 'Dirty'] = true;
         urlInput.value = '';
@@ -1500,7 +1521,8 @@
           markClean();
         }
         if (CREATE_MODE && data.id) {
-          window.location = `/deck/${data.id}/edit`;
+          const returnTo = {{ listing_return|tojson }};
+          window.location = `/deck/${data.id}/edit` + (returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : "");
           return;
         }
         showToast('✓ Saved', false);

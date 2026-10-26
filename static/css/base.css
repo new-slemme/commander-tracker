@@ -144,6 +144,16 @@ img, svg { display: block; max-width: 100%; }
 input, button, select, textarea { font: inherit; }
 ul, ol { list-style: none; }
 
+/* ── Full-width layout ───────────────────────────────────────── */
+/* Use the whole viewport width on desktop instead of Bootstrap's
+   fixed .container max-widths. */
+.container { max-width: 100%; }
+
+/* ── Hidden scrollbars ───────────────────────────────────────── */
+/* Keep scrolling possible, but don't render visible scrollbars. */
+html { scrollbar-width: none; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 /* ── Body ──────────────────────────────────────────────────────  */
 body {
   background-color: var(--darkest);
@@ -1250,8 +1260,7 @@ h1, .display-3 { text-transform: uppercase; }
   top: var(--topbar-h);
   height: calc(100vh - var(--topbar-h));
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-color) transparent;
+  scrollbar-width: none;
   padding: 16px 12px 24px 20px;
   border-right: 1px solid var(--border-color-subtle);
 }

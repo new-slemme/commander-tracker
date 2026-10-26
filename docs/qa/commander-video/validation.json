@@ -1,0 +1,63 @@
+{
+  "origin": "http://localhost:5066",
+  "players": 4,
+  "starting_life": 40,
+  "uploads": [
+    {
+      "poster_url": "/art/commander_art/custom_QA_Player_1_Pirates_commander_3ac184c6.gif.poster.jpg",
+      "url": "/art/commander_art/custom_QA_Player_1_Pirates_commander_3ac184c6.gif",
+      "video_url": "/art/commander_art/custom_QA_Player_1_Pirates_commander_3ac184c6.gif.motion.mp4"
+    },
+    {
+      "poster_url": "/art/commander_art/custom_QA_Player_2_Pirates_commander_c2850b6a.motion.jpg",
+      "url": "/art/commander_art/custom_QA_Player_2_Pirates_commander_c2850b6a.motion.jpg",
+      "video_url": "/art/commander_art/custom_QA_Player_2_Pirates_commander_c2850b6a.motion.jpg.motion.mp4"
+    },
+    {
+      "poster_url": "/art/commander_art/custom_QA_Player_3_Pirates_commander_1b9329d1.gif.poster.jpg",
+      "url": "/art/commander_art/custom_QA_Player_3_Pirates_commander_1b9329d1.gif",
+      "video_url": "/art/commander_art/custom_QA_Player_3_Pirates_commander_1b9329d1.gif.motion.mp4"
+    },
+    {
+      "poster_url": "/art/commander_art/custom_QA_Player_4_Pirates_commander_c7259b86.motion.jpg",
+      "url": "/art/commander_art/custom_QA_Player_4_Pirates_commander_c7259b86.motion.jpg",
+      "video_url": "/art/commander_art/custom_QA_Player_4_Pirates_commander_c7259b86.motion.jpg.motion.mp4"
+    }
+  ],
+  "initial_video_states": [
+    {
+      "player": "2",
+      "paused": false,
+      "src": "/art/commander_art/custom_QA_Player_1_Pirates_commander_15f6444c.motion.jpg.motion.mp4",
+      "ready": 4,
+      "error": null
+    },
+    {
+      "player": "3",
+      "paused": true,
+      "src": null,
+      "ready": 0,
+      "error": null
+    },
+    {
+      "player": "4",
+      "paused": true,
+      "src": null,
+      "ready": 0,
+      "error": null
+    },
+    {
+      "player": "5",
+      "paused": true,
+      "src": null,
+      "ready": 0,
+      "error": null
+    }
+  ],
+  "turn_switch": true,
+  "reduced_motion": true,
+  "visibility_pause": true,
+  "editor_mp4_upload_and_save": true,
+  "failed_video_poster_fallback": true,
+  "page_errors": []
+}

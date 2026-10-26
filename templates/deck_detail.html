@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-    <link href="{{ url_for('static', filename='css/deck_detail.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/deck_detail.css', v='back-button-2') }}" rel="stylesheet">
 
 {# Helper macro to map color letters to your SVG filenames #}
 {% macro mana_svg(letter) -%}
@@ -16,10 +16,10 @@
 
 <div class="deck-banner position-relative text-white rounded-4 overflow-hidden mb-4"
      style="
-     {% if deck.commander_art_url %}
+     {% if deck.commander_art_poster_url %}
        background-image:
          linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.85)),
-         url('{{ deck.commander_art_url }}');
+         url('{{ deck.commander_art_poster_url }}');
        background-size: cover;
        background-position: top;
        background-repeat: no-repeat;
@@ -29,6 +29,11 @@
      {% endif %}
      min-height: 320px;
      ">
+
+  {% if deck.commander_art_video_url %}
+  <video class="commander-motion" data-commander-video="{{ deck.commander_art_video_url }}"
+         poster="{{ deck.commander_art_poster_url }}" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"></video>
+  {% endif %}
 
   {# NEW: Top bar with Go Back + actions (keeps your old actions, just relocates for mobile sanity) #}
   <div class="position-absolute top-0 start-0 end-0 d-flex align-items-center justify-content-between banner-topbar"
@@ -57,7 +62,7 @@
 
         <ul class="dropdown-menu dropdown-menu-end banner-menu">
         <li>
-          <a class="dropdown-item" href="{{ url_for('deck_editor', deck_id=deck.id) }}">
+          <a class="dropdown-item" href="{{ url_for('deck_editor', deck_id=deck.id, return_to=listing_return) }}">
             Open Deck Editor
           </a>
         </li>
@@ -345,9 +350,9 @@
     {% for h in history %}
       <div class="list-group-item d-flex justify-content-between align-items-center history-item">
         <div>
-          <strong><a href="{{ url_for('game_detail', game_id=h.game_id) }}" class="text-white text-decoration-none">Game #{{ h.game_id }}</a></strong><br>
+          <strong><a href="{{ url_for('game_detail', game_id=h.game_id, return_to=listing_return) }}" class="text-white text-decoration-none">Game #{{ h.game_id }}</a></strong><br>
           <small class="text-muted">
-            {{ h.date.strftime("%Y-%m-%d") }}
+            {{ h.date.strftime("%Y-%m-%d") if h.date else "Date not recorded" }}
             • vs {{ h.opponents | join(", ") }}
           </small>
         </div>
@@ -403,7 +408,7 @@
           <div class="card p-4 text-center matchup-card">
             <h5 class="mb-2">
               {% if m.deck_id %}
-                <a class="matchup-link" href="{{ url_for('deck_detail', deck_id=m.deck_id) }}">{{ m.deck_name }}</a>
+                <a class="matchup-link" href="{{ url_for('deck_detail', deck_id=m.deck_id, return_to=listing_return) }}">{{ m.deck_name }}</a>
               {% else %}
                 {{ m.deck_name }}
               {% endif %}
@@ -445,7 +450,7 @@
       <div class="modal-body p-4">
         <form method="post" action="{{ url_for('update_deck', deck_id=deck.id) }}" enctype="multipart/form-data">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-          <input type="hidden" name="next" value="{{ url_for('deck_detail', deck_id=deck.id) }}">
+          <input type="hidden" name="next" value="{{ url_for('deck_detail', deck_id=deck.id, return_to=listing_return) }}">
 
           {% if is_admin %}
           <div class="mb-3">
@@ -515,10 +520,10 @@
 
           <!-- Commander previews: side-by-side thumbnails -->
           <div id="editCommanderPreviews" class="d-flex gap-3 mb-3"
-               style="{{ '' if deck.commander_art_url else 'display:none;' }}">
-            <div id="editCommanderPreview" style="{{ '' if deck.commander_art_url else 'display:none;' }}">
+               style="{{ '' if deck.commander_art_poster_url else 'display:none;' }}">
+            <div id="editCommanderPreview" style="{{ '' if deck.commander_art_poster_url else 'display:none;' }}">
               <img id="editCommanderImg" alt="Commander preview"
-                   src="{{ deck.commander_art_url or '' }}"
+                   src="{{ deck.commander_art_poster_url or '' }}"
                    style="width:90px; border-radius:8px; aspect-ratio:5/7; object-fit:cover; display:block;" />
             </div>
             <div id="editPartnerCommanderPreview" style="display:none;">
@@ -610,7 +615,7 @@
 
                 <label class="form-label small">Or upload commander artwork</label>
                 <input class="form-control form-control-sm" type="file" name="custom_commander_art_file"
-                       accept=".png,.jpg,.jpeg,.webp,.gif,.avif,image/*" />
+                       accept=".png,.jpg,.jpeg,.webp,.gif,.avif,.mp4,image/*,video/mp4" />
 
                 <hr class="border-secondary my-2">
 
@@ -914,7 +919,7 @@
     return null;
   }
 
-  async function hydrateDeckCardImages() {
+  function hydrateDeckCardImages() {
     const entries = Array.from(document.querySelectorAll('.deck-card-entry[data-card-name]'));
     if (!entries.length) return;
 
@@ -945,7 +950,7 @@
       return cache.get(name);
     }
 
-    await Promise.all(entries.map(async (entry) => {
+    async function hydrateEntry(entry) {
       const name = (entry.getAttribute('data-card-name') || '').trim();
       const preferredImage = (entry.getAttribute('data-preferred-image') || '').trim();
       const img = entry.querySelector('.deck-card-image');
@@ -973,7 +978,27 @@
       } else {
         entry.classList.add('deck-card-missing-image');
       }
-    }));
+    }
+
+    // Defer both metadata lookups and images until a card is near the viewport.
+    // Native image lazy-loading alone still requests metadata for the whole list.
+    if ('IntersectionObserver' in window) {
+      const observer = new IntersectionObserver((changes) => {
+        for (const change of changes) {
+          if (!change.isIntersecting) continue;
+          observer.unobserve(change.target);
+          hydrateEntry(change.target);
+        }
+      }, {rootMargin: '300px 0px'});
+      entries.forEach(entry => {
+        // The commander may already have a preferred src in the server markup.
+        // Attach its error fallback immediately, before native lazy-loading runs.
+        if (entry.querySelector('.deck-card-image[src]')) hydrateEntry(entry);
+        else observer.observe(entry);
+      });
+    } else {
+      entries.forEach(hydrateEntry);
+    }
   }
 
   hydrateDeckCardImages();

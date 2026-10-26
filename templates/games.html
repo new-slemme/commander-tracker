@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 {% from '_player_picture.html' import avatar with context %}
-    <link href="{{ url_for('static', filename='css/games.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/games.css', v='match-cards-1') }}" rel="stylesheet">
 
 {# Mana symbol SVG helper #}
 {% macro mana_svg(letter) -%}
@@ -15,169 +15,33 @@
   {{ url_for('static', filename='mtg-svg/' ~ m.get(letter, 'mtg-black-symbol-color.svg')) }}
 {%- endmacro %}
 
-<div class="container pb-4">
-
-  <!-- Header / Hero Card -->
-  <div class="app-hero mb-4">
-    <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
-      <!-- Left -->
-      <div>
-        <h1 class="card-head-title">
-          All Games
-        </h1>
-        <div class="muted" style="font-size:0.95rem;">
-          Browse and filter recorded games
-        </div>
-      </div>
-
-      <!-- Right: Filters toggle + quick clear -->
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <button class="btn btn-sm btn-outline-light"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#gamesFiltersCollapse"
-                aria-expanded="false"
-                aria-controls="gamesFiltersCollapse"
-                id="filtersToggleBtn">
-          Filters
-        </button>
-
-        <a class="btn btn-sm btn-secondary"
-           href="{{ url_for('games') }}">
-          Clear filters
-        </a>
-      </div>
+<div class="browse-listing games-page pb-4">
+  <header class="games-header">
+    <div>
+      <h1 class="card-head-title">Games</h1>
+      <p class="games-subtitle">Your pod’s games, at a glance.</p>
     </div>
+    <a href="{{ url_for('play_game') }}" class="btn btn-primary">Play Game</a>
+    <nav class="games-scope" aria-label="Game scope">
+      <a class="btn {{ 'btn-primary' if scope == 'pod' else 'btn-outline-light' }}" href="{{ browse.url(scope='pod') }}" {% if scope == 'pod' %}aria-current="true"{% endif %}>This Pod</a>
+      <a class="btn {{ 'btn-primary' if scope == 'all' else 'btn-outline-light' }}" href="{{ browse.url(scope='all') }}" {% if scope == 'all' %}aria-current="true"{% endif %}>All Pods</a>
+    </nav>
+  </header>
 
-    <!-- Collapsible Filters -->
-    <div class="collapse mt-3" id="gamesFiltersCollapse">
-      <div class="filter-card">
-        <div class="filter-card-head">
-          <div class="muted">Auto-applies on change</div>
-          <div class="filter-actions">
-            <a class="btn btn-sm btn-secondary"
-               href="{{ url_for('games') }}">Clear filters</a>
-          </div>
-        </div>
+  {% include "_browse_controls.html" %}
 
-        <form method="get" action="{{ url_for('games') }}" id="gamesFilterForm">
-          <div class="filter-grid">
-
-            <div class="fg-3">
-              <div class="filter-label">Player</div>
-              <select class="form-select" name="player_id" data-autosubmit>
-                <option value="">Any</option>
-                {% for p in players %}
-                  <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
-                    {{ p.name }}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">Deck</div>
-              <select class="form-select" name="deck_id" data-autosubmit>
-                <option value="">Any</option>
-                {% for d in decks %}
-                  <option value="{{ d.id }}" {% if selected_deck_id == d.id %}selected{% endif %}>
-                    {{ d.name }}{% if d.retired %} (Retired){% endif %}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">Winner</div>
-              <select class="form-select" name="winner_id" data-autosubmit>
-                <option value="">Any</option>
-                {% for p in players %}
-                  <option value="{{ p.id }}" {% if selected_winner_id == p.id %}selected{% endif %}>
-                    {{ p.name }}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">Per page</div>
-              <select class="form-select" name="per_page" data-autosubmit>
-                {% for n in [10,25,50,100] %}
-                  <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">From</div>
-              <input type="date" class="form-control" name="date_from" value="{{ date_from }}" data-autosubmit>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">To</div>
-              <input type="date" class="form-control" name="date_to" value="{{ date_to }}" data-autosubmit>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">Min players</div>
-              <select class="form-select" name="min_players" data-autosubmit>
-                <option value="">Any</option>
-                {% for n in [2,3,4,5,6] %}
-                  <option value="{{ n }}" {% if min_players == n %}selected{% endif %}>{{ n }}+</option>
-                {% endfor %}
-              </select>
-            </div>
-
-            <div class="fg-3">
-              <div class="filter-label">Max players</div>
-              <select class="form-select" name="max_players" data-autosubmit>
-                <option value="">Any</option>
-                {% for n in [2,3,4,5,6] %}
-                  <option value="{{ n }}" {% if max_players == n %}selected{% endif %}>{{ n }}</option>
-                {% endfor %}
-              </select>
-            </div>
-
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-  <div class="scope-indicator d-flex align-items-center justify-content-between gap-3 mb-4">
-    <div class="scope-indicator__label">Scope: <strong>{{ "This Pod" if scope == "pod" else "All Pods" }}</strong></div>
-    <div class="d-flex gap-2 scope-toggle">
-      <a class="btn btn-sm {% if scope == "pod" %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('games', scope='pod') }}">This Pod</a>
-      <a class="btn btn-sm {% if scope == "all" %}btn-primary{% else %}btn-outline-light{% endif %}" href="{{ url_for('games', scope='all') }}">All Pods</a>
-    </div>
-  </div>
-
-  <!-- Stats panel -->
-  <!-- debug: games_stats.total={{ games_stats.total }} -->
   {% set gs = games_stats %}
-  {% if gs.total >= 3 %}
-  <div class="games-stats-panel mb-4">
-
-    <!-- Summary row -->
-    <div class="gsp-summary">
-      <div class="gsp-stat">
-        <span class="gsp-val">{{ gs.total }}</span>
-        <span class="gsp-lbl">Games</span>
-      </div>
-      {% if gs.avg_turns is not none %}
-      <div class="gsp-stat">
-        <span class="gsp-val">{{ gs.avg_turns }}</span>
-        <span class="gsp-lbl">Avg turns</span>
-      </div>
-      {% endif %}
-      {% if gs.avg_duration is not none %}
-      <div class="gsp-stat">
-        <span class="gsp-val">{{ gs.avg_duration // 60 }}m</span>
-        <span class="gsp-lbl">Avg duration</span>
-      </div>
-      {% endif %}
-    </div>
-
+  {% if gs.total %}
+  <section class="games-overview" aria-label="Filtered game statistics">
+    <dl class="games-metrics">
+      <div><dt>Games</dt><dd>{{ gs.total }}</dd></div>
+      {% if gs.avg_turns is not none %}<div><dt>Avg turns</dt><dd>{{ gs.avg_turns }}</dd></div>{% endif %}
+      {% if gs.avg_duration is not none %}<div><dt>Avg duration</dt><dd>{{ gs.avg_duration // 60 }}<span>m</span></dd></div>{% endif %}
+    </dl>
+    {% if gs.total >= 3 %}
+    <details class="games-insights">
+      <summary>Insights <span>Win types, colors &amp; activity</span></summary>
+      <div class="games-insights-grid">
     {% if gs.win_types %}
     <!-- Win type breakdown -->
     <div class="gsp-section">
@@ -188,7 +52,6 @@
           <div class="gsp-wt-seg gsp-wt--{{ wtype }}"
                style="width:{{ pct }}%"
                title="{{ wtype | replace('_',' ') | title }}: {{ cnt }} ({{ pct }}%)">
-            {% if pct >= 14 %}<span class="gsp-wt-label">{{ wtype | replace('_',' ') | title }}&nbsp;{{ pct }}%</span>{% endif %}
           </div>
         {% endfor %}
       </div>
@@ -231,315 +94,90 @@
     <div class="gsp-section">
       <div class="gsp-section-label">Activity</div>
       <div class="gsp-timeline" id="gsp-timeline"
-           data-timeline="{{ gs.activity_timeline | tojson }}"></div>
+           data-timeline='{{ gs.activity_timeline | tojson }}'></div>
     </div>
     {% endif %}
 
-  </div>
+      </div>
+    </details>
+    {% endif %}
+  </section>
   {% endif %}
 
-  <!-- Games -->
-  {% if games|length == 0 %}
-    <div class="card p-3">
-      <div class="muted">No games match these filters.</div>
+  <section class="games-results" aria-labelledby="games-results-heading">
+    <div class="games-results-head">
+      <h2 id="games-results-heading">Game history</h2>
+      <span>{{ games|length }} of {{ pagination.total }} {{ 'game' if pagination.total == 1 else 'games' }}</span>
     </div>
-  {% else %}
-    <div class="recent-card mb-4">
-      <div class="recent-card-head">
-        <div class="muted">
-          Showing {{ games|length }} games on this page
-        </div>
-        <div class="muted" style="font-size:0.9rem;">
-          Page <span class="text-white fw-bold">{{ pagination.page }}</span>
-          of <span class="text-white fw-bold">{{ pagination.pages if pagination.pages else 1 }}</span>
-          — <span class="text-white fw-bold">{{ pagination.total }}</span> total
-        </div>
-      </div>
-
-      <div class="p-3">
-        <div class="game-list">
-
-          {% for g in games %}
-
-            <div class="list-group-item p-0 game-tile-link">
-              <details class="game-tile recent-game-inner" id="game-{{ g.id }}">
-                <div class="game-bg">
-                  <div class="game-slice"></div>
-                </div>
-
-                <div class="game-overlay"></div>
-
-                <summary class="game-content game-content--summary">
-                  <div class="game-summary-head">
-                    <div class="game-summary-left">
-                      <div class="game-date">
-                        {{ g.date.strftime('%Y-%m-%d %H:%M') }}
-                      </div>
-                      <div class="game-submeta">
-                        <span class="game-submeta__item">{{ player_counts.get(g.id, (game_parts[g.id]|length)) }} players</span>
-                        <span class="game-submeta__dot">•</span>
-                        <span class="game-submeta__item">Game #{{ g.id }}</span>
-                        {% if g.ending_turn is not none %}
-                          <span class="game-submeta__dot">•</span>
-                          <span class="game-submeta__item">Turn {{ g.ending_turn }}</span>
-                        {% endif %}
-                      </div>
-                    </div>
-
-                    <div class="game-summary-right">
-                      {% set salt_stats = game_salt_stats.get(g.id, {'salted_players': 0, 'participants': game_parts[g.id]|length, 'salt_clicks': 0}) %}
-                      <div class="game-top-actions">
-                        {% if scope == "all" and g.pod %}
-                          <span class="game-tag game-tag--pod" title="Pod">
-                            Pod · {{ g.pod.name }}
-                          </span>
-                        {% endif %}
-
-                        <div class="winner-pill">
-                          <span class="dot"></span>
-                          Winner: {{ g.winner.name }}
-                        </div>
-                      </div>
-
-                      <span class="expander-hint" aria-hidden="true" title="Expand/collapse">
-                        <span class="expander-chevron">⌄</span>
-                      </span>
-                    </div>
-                  </div>
-
-                <div class="game-summary-extras">
-                  <div class="decks-compact" data-decks-compact>
-                    {% for gp in game_parts[g.id][:3] %}
-                      <a class="deck-mini deck-mini--link {% if gp.player_id == g.winner_id %}win{% endif %}"
-                         href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
-                         aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name }})"
-                         title="Open deck: {{ gp.deck.name }}">
-                        <span class="deck-mini__player player-summary">{{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}<span>{{ gp.player.name }}</span></span>
-                        <span class="deck-mini__deck">{{ gp.deck.name }}</span>
-                      </a>
-                    {% endfor %}
-
-                    {% if game_parts[g.id]|length > 3 %}
-                      <button class="deck-more-toggle" type="button" data-decks-toggle aria-expanded="false">
-                        <span class="deck-more-label">+{{ game_parts[g.id]|length - 3 }} more</span>
-                        <span class="deck-chevron" aria-hidden="true">⌄</span>
-                      </button>
-
-                      <div class="deck-mini-extra" data-decks-extra hidden>
-                        {% for gp in game_parts[g.id][3:] %}
-                          <a class="deck-mini deck-mini--link {% if gp.player_id == g.winner_id %}win{% endif %}"
-                             href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
-                             aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name }})"
-                             title="Open deck: {{ gp.deck.name }}">
-                            <span class="deck-mini__player player-summary">{{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}<span>{{ gp.player.name }}</span></span>
-                            <span class="deck-mini__deck">{{ gp.deck.name }}</span>
-                          </a>
-                        {% endfor %}
-                      </div>
-                    {% endif %}
-                  </div>
-                </div>
-                </summary>
-
-                <div class="game-content game-content--details">
-                  <div class="game-meta game-meta--redundant">
-                    Winner: {{ g.winner.name }}
-                  </div>
-
-                <div class="open-head">
-                  <div class="open-head__left">
-                    <div class="open-head__date">Game #{{ g.id }}</div>
-                    <div class="open-head__meta">
-                      {{ g.date.strftime('%Y-%m-%d %H:%M') }}
-                    </div>
-                  </div>
-                
-                  <div class="open-head__right">
-                    <a href="{{ url_for('game_detail', game_id=g.id) }}" class="btn btn-sm btn-outline-light">
-                      Open game
-                    </a>
-
-                    <button class="copy-link-btn" type="button"
-                            data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}"
-                            aria-label="Copy game link" title="Copy game link">
-                      <span class="copy-link-icon" aria-hidden="true">🔗</span>
-                    </button>
-                
-                    <button type="button" class="collapse-btn" data-collapse aria-label="Collapse">
-                      ✕
-                    </button>
-                  </div>
-                </div>
-
-                  <div class="game-tags">
-                    <span class="game-tag">
-                      Decks in game: {{ game_parts[g.id]|length }}
-                    </span>
-                    {% if g.win_type %}
-                      <span class="game-tag">Win: {{ g.win_type.replace('_', ' ')|title }}</span>
-                    {% endif %}
-                    {% if g.ending_turn is not none %}
-                      <span class="game-tag">Ending turn: {{ g.ending_turn }}</span>
-                    {% endif %}
-                    {% if salt_stats.salted_players > 0 %}
-                      <span class="game-tag game-tag--salt">Salted players {{ salt_stats.salted_players }}/{{ salt_stats.participants }} · Salt clicks {{ salt_stats.salt_clicks }}</span>
-                    {% elif g.salt_rating %}
-                      <span class="game-tag game-tag--salt">Legacy salt {{ g.salt_rating }} 🧂</span>
-                    {% endif %}
-                  </div>
-
-                  <div class="players-row">
-                    {% for gp in game_parts[g.id] %}
-                      {% set commander_art = gp.deck.commander_art_url %}
-                      <a class="ppill ppill--link {% if gp.player_id == g.winner_id %}win{% endif %}"
-                         href="{{ url_for('deck_detail', deck_id=gp.deck.id) }}"
-                         aria-label="Open deck: {{ gp.deck.name }} for {{ gp.player.name }}"
-                         title="Open deck: {{ gp.deck.name }}"
-                         {% if commander_art %} style="--ppill-art: url('{{ commander_art }}');"{% endif %}>
-                        <span class="ppill-top">
-                          {{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}
-                          {% if gp.player_id == g.winner_id %}
-                            <span class="wmark">W</span>
-                          {% endif %}
-                          <span class="name">{{ gp.player.name }}</span>
-                        </span>
-
-                        <span class="deck">{{ gp.deck.name }}</span>
-                        {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
-                        {% if gp_salt_count > 0 %}
-                          <span class="badge rounded-pill text-bg-danger mt-1">Salt x{{ gp_salt_count }}</span>
-                        {% endif %}
-                        <span class="deck-meta">
-                          {{ gp.deck.commander_name or gp.deck.commander }}
-                          <span class="muted">·</span>
-                          {{ gp.deck.owner.name }}
-                          {% if gp.deck.retired %}
-                            <span class="retired-pill">Retired</span>
-                          {% endif %}
-                        </span>
-                      </a>
-                    {% endfor %}
-                  </div>
-
-                </div>
-              </details>
-            </div>
-
+    {% if games|length == 0 %}
+      {% include "_browse_empty.html" %}
+    {% else %}
+    <div class="match-list">
+      {% for g in games %}
+      {% set participants = game_parts.get(g.id, []) %}
+      <article class="match-card" id="game-{{ g.id }}" aria-labelledby="game-title-{{ g.id }}">
+        <header class="match-header">
+          <div class="match-heading">
+            <h3 id="game-title-{{ g.id }}">{% if g.date %}<time datetime="{{ g.date.isoformat() }}">{{ g.date.strftime('%d %b %Y') }}</time>{% else %}Date not recorded{% endif %}</h3>
+            <span class="match-reference">Game #{{ g.id }}{% if g.date %} · {{ g.date.strftime('%H:%M') }}{% endif %}</span>
+          </div>
+          <div class="match-result"><span>{{ 'Winner' if g.winner else 'Winner not recorded' }}</span>{% if g.winner %}<strong>{{ g.winner.name }}</strong>{% endif %}</div>
+        </header>
+        <ul class="match-metadata" aria-label="Game information">
+          <li>{{ player_counts.get(g.id, participants|length) }} players</li>
+          {% if g.win_type %}<li>{{ g.win_type.replace('_', ' ')|title }}</li>{% endif %}
+          {% if g.duration_seconds is not none %}<li>{% if g.duration_seconds < 60 %}{{ g.duration_seconds }}s{% else %}{{ g.duration_seconds // 60 }}m{% endif %}</li>{% endif %}
+          {% if g.ending_turn is not none %}<li>Turn {{ g.ending_turn }}</li>{% endif %}
+          {% if scope == 'all' and g.pod %}<li>Pod · {{ g.pod.name }}</li>{% endif %}
+        </ul>
+        <ul class="match-participants" aria-label="Players and decks">
+          {% for gp in participants %}
+          <li class="match-participant{% if gp.player_id == g.winner_id %} match-participant--winner{% endif %}">
+            {% if gp.deck %}
+            <a class="match-participant-body match-deck" href="{{ url_for('deck_detail', deck_id=gp.deck.id, return_to=request.full_path) }}" aria-label="Open deck: {{ gp.deck.name }} ({{ gp.player.name if gp.player else 'Unknown player' }})">
+            {% else %}<div class="match-participant-body">{% endif %}
+              {% if gp.player %}{{ avatar(gp.player, 'player-avatar--tiny', decorative=true) }}{% endif %}
+              <div class="match-participant-copy">
+                <div class="match-player">{{ gp.player.name if gp.player else 'Unknown player' }}{% if gp.player_id == g.winner_id %}<span class="match-winner-label">Winner</span>{% endif %}</div>
+                <span class="match-deck-name">{{ gp.deck.name if gp.deck else 'Deck not recorded' }}</span>
+              </div>
+            {% if gp.deck %}</a>{% else %}</div>{% endif %}
+          </li>
+          {% else %}
+          <li class="match-missing">Participants not recorded</li>
           {% endfor %}
-
-        </div>
-      </div>
+        </ul>
+        <footer class="match-actions">
+          <button class="btn match-copy" type="button" data-copy-url="{{ url_for('game_detail', game_id=g.id, _external=True) }}" aria-label="Copy link to game {{ g.id }}">Copy link</button>
+          <span class="match-copy-status" role="status"></span>
+          <a href="{{ url_for('game_detail', game_id=g.id, return_to=request.full_path) }}" class="btn btn-outline-light match-open" aria-label="Open game {{ g.id }}">Open game <span aria-hidden="true">→</span></a>
+        </footer>
+      </article>
+      {% endfor %}
     </div>
-
-    <!-- Pagination -->
-    <div class="pager">
-      <div class="muted">
-        Page <span class="text-white fw-bold">{{ pagination.page }}</span>
-        of <span class="text-white fw-bold">{{ pagination.pages if pagination.pages else 1 }}</span>
-        — <span class="text-white fw-bold">{{ pagination.total }}</span> total
-      </div>
-
-      <div class="d-flex gap-2 flex-wrap">
-        {% set args = request.args.to_dict() %}
-
-        {% if pagination.has_prev %}
-          {% set args = args.copy() %}
-          {% set _ = args.update({"page": pagination.prev_num}) %}
-          <a class="btn btn-sm btn-secondary" href="{{ url_for('games', **args) }}">← Prev</a>
-        {% endif %}
-
-        {% if pagination.has_next %}
-          {% set args2 = request.args.to_dict() %}
-          {% set _ = args2.update({"page": pagination.next_num}) %}
-          <a class="btn btn-sm btn-secondary" href="{{ url_for('games', **args2) }}">Next →</a>
-        {% endif %}
-      </div>
-    </div>
-
-  {% endif %}
-
+    {% endif %}
+    {% include "_browse_pagination.html" %}
+  </section>
 </div>
 
 <script>
-  // Auto-submit filters
-  (function() {
-    const form = document.getElementById("gamesFilterForm");
-    if (!form) return;
-
-    const els = form.querySelectorAll("[data-autosubmit]");
-    els.forEach(el => {
-      el.addEventListener("change", () => {
-        // Reset to page 1 whenever a filter changes
-        const page = form.querySelector('input[name="page"]');
-        if (page) page.value = "1";
-        form.submit();
-      });
-      // Some mobile browsers don't always "change" on date pickers the same way
-      el.addEventListener("input", () => {
-        if (el.type === "date") {
-          const page = form.querySelector('input[name="page"]');
-          if (page) page.value = "1";
-          form.submit();
-        }
-      });
-    });
-  })();
-
-  // Compact decks expansion and quick-copy links
-  (function() {
-    document.querySelectorAll('[data-decks-toggle]').forEach((btn) => {
-      btn.addEventListener('click', (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const wrapper = btn.closest('[data-decks-compact]');
-        const extra = wrapper?.querySelector('[data-decks-extra]');
-        if (!extra) return;
-        const expanded = btn.getAttribute('aria-expanded') === 'true';
-        btn.setAttribute('aria-expanded', String(!expanded));
-        extra.hidden = expanded;
-      });
-    });
-
-    document.querySelectorAll('[data-copy-url]').forEach((btn) => {
-      btn.addEventListener('click', async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        const url = btn.getAttribute('data-copy-url');
-        if (!url) return;
+  (() => {
+    document.querySelectorAll('.games-page [data-copy-url]').forEach((button) => {
+      let reset;
+      button.addEventListener('click', async () => {
+        const status = button.parentElement.querySelector('[role="status"]');
+        clearTimeout(reset);
+        status.textContent = '';
         try {
-          await navigator.clipboard.writeText(url);
-          const previous = btn.textContent;
-          btn.textContent = '✓';
-          setTimeout(() => {
-            btn.textContent = previous;
-          }, 1000);
+          await navigator.clipboard.writeText(button.dataset.copyUrl);
+          status.textContent = 'Link copied';
         } catch (_) {
-          window.prompt('Copy game link:', url);
+          window.prompt('Copy game link:', button.dataset.copyUrl);
         }
+        reset = setTimeout(() => { status.textContent = ''; }, 3000);
       });
     });
   })();
-
-  // Add an "is-open" class for styling without :has()
-  (function() {
-    document.querySelectorAll('.game-tile').forEach((d) => {
-      const set = () => d.classList.toggle('is-open', d.open);
-      set();
-      d.addEventListener('toggle', set);
-    });
-  })();
-
-     // Collapse button inside details (because summary may be hidden on mobile)
-    (function() {
-      document.querySelectorAll('[data-collapse]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const details = btn.closest('details');
-          if (details) details.open = false;
-        });
-      });
-    })();
 
   // Activity timeline bar chart
   (function() {
@@ -560,5 +198,4 @@
   })();
 
 </script>
-
 {% endblock %}

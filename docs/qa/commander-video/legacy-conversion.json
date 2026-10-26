@@ -1,0 +1,135 @@
+{
+  "converted": 14,
+  "original_bytes": 149398956,
+  "video_bytes": 25914862,
+  "originals_preserved": true,
+  "installed_in_shared_art_volume": true,
+  "assets": [
+    {
+      "source": "/art/commander_art/custom_35Kilo-_Stuncounter_commander_e00cf45d.gif",
+      "status": "converted",
+      "original_bytes": 9556920,
+      "video_bytes": 1453662,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_35Kilo-_Stuncounter_commander_e00cf45d.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_35Kilo-_Stuncounter_commander_e00cf45d.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Athreos_commander_0ca0bcef.gif",
+      "status": "converted",
+      "original_bytes": 14118052,
+      "video_bytes": 1134427,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Athreos_commander_0ca0bcef.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Athreos_commander_0ca0bcef.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Big_Tiddy_Dragon_commander_7296ef4d.gif",
+      "status": "converted",
+      "original_bytes": 9020018,
+      "video_bytes": 1903746,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Big_Tiddy_Dragon_commander_7296ef4d.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Big_Tiddy_Dragon_commander_7296ef4d.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Dragon_Combo_commander_11c60a32.gif",
+      "status": "converted",
+      "original_bytes": 14454927,
+      "video_bytes": 4867085,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Dragon_Combo_commander_11c60a32.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Dragon_Combo_commander_11c60a32.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Elder_Dragon_Highlander_commander_afe3669c.gif",
+      "status": "converted",
+      "original_bytes": 14454927,
+      "video_bytes": 4867085,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Elder_Dragon_Highlander_commander_afe3669c.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Elder_Dragon_Highlander_commander_afe3669c.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Froth_and_Foam_commander_b8daefba.gif",
+      "status": "converted",
+      "original_bytes": 12092562,
+      "video_bytes": 1639174,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Froth_and_Foam_commander_b8daefba.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Froth_and_Foam_commander_b8daefba.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Mardu_Reanimate_commander_5bafaa3e.gif",
+      "status": "converted",
+      "original_bytes": 9940012,
+      "video_bytes": 1227695,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Mardu_Reanimate_commander_5bafaa3e.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Mardu_Reanimate_commander_5bafaa3e.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Monarch_commander_c4a657f3.gif",
+      "status": "converted",
+      "original_bytes": 12000591,
+      "video_bytes": 1598325,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Monarch_commander_c4a657f3.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Monarch_commander_c4a657f3.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Pain_Train_commander_17578ae3.gif",
+      "status": "converted",
+      "original_bytes": 8823519,
+      "video_bytes": 357355,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Pain_Train_commander_17578ae3.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Pain_Train_commander_17578ae3.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Shirei_Atze_commander_7622dfd9.gif",
+      "status": "converted",
+      "original_bytes": 8073603,
+      "video_bytes": 1544292,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Shirei_Atze_commander_7622dfd9.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Shirei_Atze_commander_7622dfd9.gif.poster.jpg"
+    },
+    {
+      "source": "/art/commander_art/custom_Yarok_yayaveve_commander_aa49c68a.gif",
+      "status": "converted",
+      "original_bytes": 14123741,
+      "video_bytes": 510049,
+      "version": 1,
+      "video_url": "/art/commander_art/custom_Yarok_yayaveve_commander_aa49c68a.gif.motion.mp4",
+      "poster_url": "/art/commander_art/custom_Yarok_yayaveve_commander_aa49c68a.gif.poster.jpg"
+    },
+    {
+      "source": "/art/custom_breena-commander-art_a9a3adaa96a749b1a6cc0589ee049b0e.gif",
+      "status": "converted",
+      "original_bytes": 7431303,
+      "video_bytes": 1832805,
+      "version": 1,
+      "video_url": "/art/custom_breena-commander-art_a9a3adaa96a749b1a6cc0589ee049b0e.gif.motion.mp4",
+      "poster_url": "/art/custom_breena-commander-art_a9a3adaa96a749b1a6cc0589ee049b0e.gif.poster.jpg"
+    },
+    {
+      "source": "/art/custom_kess-commander-art_bb4f9c0f4d574df6a25fb2fb14cf9db3.gif",
+      "status": "converted",
+      "original_bytes": 7235178,
+      "video_bytes": 1434870,
+      "version": 1,
+      "video_url": "/art/custom_kess-commander-art_bb4f9c0f4d574df6a25fb2fb14cf9db3.gif.motion.mp4",
+      "poster_url": "/art/custom_kess-commander-art_bb4f9c0f4d574df6a25fb2fb14cf9db3.gif.poster.jpg"
+    },
+    {
+      "source": "/art/custom_shirei-commander-art_4c9e64dac91a4093873836eaae1287d2.gif",
+      "status": "converted",
+      "original_bytes": 8073603,
+      "video_bytes": 1544292,
+      "version": 1,
+      "video_url": "/art/custom_shirei-commander-art_4c9e64dac91a4093873836eaae1287d2.gif.motion.mp4",
+      "poster_url": "/art/custom_shirei-commander-art_4c9e64dac91a4093873836eaae1287d2.gif.poster.jpg"
+    }
+  ]
+}

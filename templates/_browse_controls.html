@@ -1,0 +1,60 @@
+{% macro field(f) %}
+<div class="browse-field{% if f.type == 'multi' %} browse-field--wide{% endif %}">
+  {% if f.type == 'multi' %}
+  <fieldset aria-describedby="{{ f.name }}-error">
+    <legend>{{ f.label }}</legend>
+    <div class="browse-options">
+    {% for value, label in f.options %}
+      <label class="browse-option"><input type="checkbox" name="{{ f.name }}" value="{{ value }}" {% if value in browse.values.get(f.name, []) %}checked{% endif %}> <span>{{ label }}</span></label>
+    {% endfor %}
+    </div>
+  </fieldset>
+  {% else %}
+  <label for="browse-{{ f.name }}">{{ f.label }}</label>
+  {% if f.type == 'select' %}
+  <select class="form-select" id="browse-{{ f.name }}" name="{{ f.name }}" aria-describedby="{{ f.name }}-error" {% if f.name in browse.errors %}aria-invalid="true"{% endif %}>
+    {% for value, label in f.options %}<option value="{{ value }}" {% if browse.values.get(f.name) == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  {% else %}
+  <input class="form-control" id="browse-{{ f.name }}" name="{{ f.name }}" type="{{ f.type }}" value="{{ browse.values.get(f.name, '') }}" {% if f.type == 'number' %}min="0" step="{{ f.step }}"{% endif %} aria-describedby="{{ f.name }}-error" {% if f.name in browse.errors %}aria-invalid="true"{% endif %}>
+  {% endif %}
+  {% endif %}
+  <span id="{{ f.name }}-error" class="browse-error">{{ browse.errors.get(f.name, '') }}</span>
+</div>
+{% endmacro %}
+<section class="browse-controls" aria-label="Browse {{ browse.kind }}">
+  <form method="get" action="{{ request.path }}" class="browse-form">
+    {% if browse.kind == 'games' %}<input type="hidden" name="scope" value="{{ scope }}">{% endif %}
+    {% if browse.kind == 'games' %}
+    <div class="games-searchbar">
+      <div class="browse-search"><label for="browse-q">Search games</label><input class="form-control" id="browse-q" name="q" type="search" value="{{ browse.q }}" placeholder="Players, decks, commanders or notes"></div>
+      <button class="btn btn-primary" type="submit">Search</button>
+      <a href="{{ browse.clear_url }}" class="browse-clear">Clear filters</a>
+    </div>
+    {% endif %}
+    <details class="browse-advanced" id="browseFilters" {% if browse.errors %}open{% endif %}>
+      <summary>Filters &amp; sorting <span class="browse-count">{{ browse.chips|length }} active</span></summary>
+      {% if browse.errors %}<p class="browse-error" role="alert">Check the highlighted filters. Results will appear when the filters are valid.</p>{% endif %}
+    <div class="browse-toolbar">
+      {% if browse.kind != 'games' %}<div class="browse-search"><label for="browse-q">Search {{ browse.kind }}</label><input class="form-control" id="browse-q" name="q" type="search" value="{{ browse.q }}" placeholder="{{ 'Name or commander' if browse.kind == 'decks' else 'Notes, players, decks or commanders' if browse.kind == 'games' else 'Player name' }}"></div>{% endif %}
+      <div><label for="browse-sort">Sort by</label><select class="form-select" id="browse-sort" name="sort">{% for value, label in browse.sorts %}<option value="{{ value }}" {% if browse.sort == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <div><label for="browse-direction">Order</label><select class="form-select" id="browse-direction" name="direction"><option value="asc" {% if browse.direction == 'asc' %}selected{% endif %}>{{ 'Oldest first' if browse.kind == 'games' and browse.sort == 'date' else 'Ascending' }}</option><option value="desc" {% if browse.direction == 'desc' %}selected{% endif %}>{{ 'Newest first' if browse.kind == 'games' and browse.sort == 'date' else 'Descending' }}</option></select></div>
+      <div><label for="browse-per-page">Per page</label><select class="form-select" id="browse-per-page" name="per_page">{% for n in [10,25,50,100] %}<option {% if browse.per_page == n %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></div>
+      <button class="btn btn-primary" type="submit">Apply filters</button>
+    </div>
+    {% if browse.kind != 'games' %}
+    <div class="browse-period">
+      {% for f in browse.fields if f.name == 'period' %}{{ field(f) }}{% endfor %}
+      <p class="browse-help">Date-limited statistics exclude undated recovered history. Dates use UTC; MMR remains current{% if browse.kind == 'players' %} and includes active, non-planned decks only. Deck counts include all owned decks{% endif %}.</p>
+    </div>
+    {% endif %}
+      <div class="browse-fields">{% for f in browse.fields if f.name != 'period' %}{{ field(f) }}{% endfor %}</div>
+      {% if browse.kind != 'games' %}<p class="browse-help">Statistics use the selected period and UTC calendar dates. Date-limited periods exclude undated recovered history. MMR is current{% if browse.kind == 'players' %}, averaged across active, non-planned decks; deck counts include all owned decks{% endif %}.</p>{% endif %}
+      {% for key, error in browse.errors.items() %}{% if key in ['sort', 'direction', 'per_page', 'page'] %}<p class="browse-error">{{ key }}: {{ error }}</p>{% endif %}{% endfor %}
+      <button class="btn btn-primary" type="submit">Apply filters</button>
+    </details>
+  </form>
+  {% if browse.kind != 'games' %}<div class="browse-status"><strong>{{ pagination.total }} {{ browse.kind }}</strong><a href="{{ browse.clear_url }}" class="browse-clear">Clear filters</a></div>{% endif %}
+  {% if browse.chips %}<div class="browse-chips" aria-label="Active filters">{% for chip in browse.chips %}<a class="browse-chip" href="{{ chip.url }}" aria-label="Remove {{ chip.label }}">{{ chip.label }} <span aria-hidden="true">×</span></a>{% endfor %}</div>{% endif %}
+  {% if listing_summary is defined %}<p class="browse-help browse-summary">Filtered {{ 'deck' if browse.kind == 'decks' else 'player' }} totals · {{ listing_summary.games }} games · {{ listing_summary.wins }} wins · {{ listing_summary.winrate }}% win rate · {{ {'lifetime':'Lifetime', '30':'Last 30 days', '90':'Last 90 days', 'custom':'Custom dates'}[browse.period] }}</p>{% endif %}
+</section>

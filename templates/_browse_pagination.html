@@ -1,0 +1,10 @@
+{% if pagination.total %}
+<nav class="browse-pagination" aria-label="Results pages">
+  <span>Page {{ pagination.page }} of {{ pagination.pages }} · {{ pagination.total }} results</span>
+  <div>
+    {% if pagination.has_prev %}<a class="btn btn-outline-light" href="{{ browse.url(page=pagination.prev_num) }}">← Previous</a>{% endif %}
+    {% if pagination.has_next %}<a class="btn btn-outline-light" href="{{ browse.url(page=pagination.next_num) }}">Next →</a>{% endif %}
+    {% if not pagination.items and pagination.page > 1 %}<a class="btn btn-outline-light" href="{{ browse.url(page=1) }}">First page</a>{% endif %}
+  </div>
+</nav>
+{% endif %}

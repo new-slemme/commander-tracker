@@ -45,7 +45,8 @@
   }
 
 
-  .banner-topbar {
+  /* Keep navigation above the commander-media content layer. */
+  .deck-banner > .banner-topbar {
     z-index: 2;
   }
 
@@ -260,8 +261,8 @@
       width: 100vw;
       margin-left: calc(50% - 50vw);
       margin-right: calc(50% - 50vw);
-      padding-left: calc((100vw - min(100vw - 32px, 1320px)) / 2);
-      padding-right: calc((100vw - min(100vw - 32px, 1320px)) / 2);
+      padding-left: 16px;
+      padding-right: 16px;
     }
   }
 

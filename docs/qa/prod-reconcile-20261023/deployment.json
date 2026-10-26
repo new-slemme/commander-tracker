@@ -1,0 +1,144 @@
+{
+  "status": "deployed_and_verified",
+  "url": "https://edh.figurensohn.de",
+  "started_at": "2026-10-23T18:13:13.23931256Z",
+  "image": "sha256:5e0ec4ee0b1dc432d381c5ce39f998a37af29e26235f977589929cb8f79e1027",
+  "tag": "commander-tracker:reconciled-20261023",
+  "root_cause": "Earlier deployment used the Test workspace image without updating production source. A subsequent Android/timer build replaced it with older web UI.",
+  "resolution": "Merged web changes into production source while retaining current Android and native timer changes; rebuilt with production Compose.",
+  "production_source": "/home/slemme/mine/commander-tracker",
+  "source_files_updated": [
+    ".dockerignore",
+    "Dockerfile",
+    "app.py",
+    "commander_media.py",
+    "docs/API.md",
+    "scripts/convert_commander_gifs.py",
+    "static/css/base.css",
+    "static/css/browse.css",
+    "static/css/browsing.css",
+    "static/css/commander_motion.css",
+    "static/css/deck_detail.css",
+    "static/css/decks.css",
+    "static/css/games.css",
+    "static/js/app.js",
+    "static/js/commander_motion.js",
+    "templates/_browse_controls.html",
+    "templates/base.html",
+    "templates/deck_detail.html",
+    "templates/deck_editor.html",
+    "templates/decks.html",
+    "templates/game_detail.html",
+    "templates/games.html",
+    "templates/index.html",
+    "templates/life_counter.html",
+    "templates/player_panel.html",
+    "templates/players.html",
+    "tests/test_browsing_ui.py",
+    "tests/test_commander_media.py"
+  ],
+  "tests_passed": 425,
+  "subtests_passed": 275,
+  "browser_layouts": 36,
+  "browser_errors": [],
+  "public_verification": {
+    "origin": "https://edh.figurensohn.de",
+    "health": {
+      "database": "reachable",
+      "status": "ok"
+    },
+    "public_login_new_layout": true,
+    "assets": [
+      {
+        "path": "static/css/games.css",
+        "status": 200,
+        "sha256": "03e67a11ac696a307498b1cd30995a8547e120b0d95fcc7814a7a15441217682"
+      },
+      {
+        "path": "static/css/browsing.css",
+        "status": 200,
+        "sha256": "fc02416413ed49860b9890c132e040a2d6abc79f28d3bd35884da0d93a33854b"
+      },
+      {
+        "path": "static/css/browse.css",
+        "status": 200,
+        "sha256": "1bfcf1b1a1a58cd85b7f658600809b1bb5ebfcf635f9420d9cb8cbd3986029b7"
+      },
+      {
+        "path": "static/js/app.js",
+        "status": 200,
+        "sha256": "3bd3c54e2e1849f7072275ec4d1b51c2c719899acf2696d6e2f183b1d2aaec1a"
+      },
+      {
+        "path": "static/js/commander_motion.js",
+        "status": 200,
+        "sha256": "1ceeb2a4ac37d6915c581c2534f579d2035f47a269961b48089361700923549f"
+      }
+    ]
+  },
+  "in_container_smoke": {
+    "routes": [
+      {
+        "path": "/decks",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/players",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/games",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/decks?status=all&bracket=2&bracket=3",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/players?period=30&sort=games&direction=desc",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/games?win_type=combat&win_type=combo",
+        "status": 200,
+        "filters_open": false
+      },
+      {
+        "path": "/decks?min_games=bad",
+        "status": 200,
+        "filters_open": true
+      }
+    ],
+    "legacy_videos": 14,
+    "range_status": 206,
+    "ffmpeg_conversion": true,
+    "record_counts_unchanged": true
+  },
+  "native_timers_preserved": true,
+  "native_browsing_preserved": true,
+  "android_version": "2.3.0.0",
+  "counts_before_and_after": {
+    "player": 10,
+    "deck": 107,
+    "game": 71,
+    "game_participant": 243
+  },
+  "database_integrity": "ok",
+  "backup_directory": "/home/slemme/mine/commander-tracker/data/backups/prod-reconcile-20261023T1811Z",
+  "rollback_image": "commander-tracker:rollback-before-reconcile-20261023",
+  "source_hashes_matching_container": {
+    "app.py": "8207b3f7fb967233b0c6492e5e033af2b3a9bb5cfc549d91353e5a0b3848c988",
+    "game_timers.py": "1245275c7480f739792ff72cddee8eb76351b188811ecaac20fb0569303161b6",
+    "templates/games.html": "4566289d96151d545b18bac76636e65484d3100f3a7bef60a40f7dab112fc8ca",
+    "templates/base.html": "1a317bd30583857651ccfbb5d64180a9192e5602b99b5a01cf9b55c9281d64fb"
+  },
+  "test_container_unchanged": true,
+  "qa_screenshot": "running-game-4-players.png",
+  "verification_limit": "Public browser checks used unauthenticated login and exact asset hashes. Authenticated production checks ran inside the container. Authenticated Chromium UI/game checks used an isolated QA database.",
+  "git_committed_or_pushed": false
+}

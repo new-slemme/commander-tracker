@@ -14,14 +14,26 @@
     {% block social_meta %}{% endblock %}
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="{{ url_for('static', filename='bootstrap.min.css') }}" rel="stylesheet">
-    <link href="{{ url_for('static', filename='css/base.css', v='drawer2') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/base.css', v='fullwidth1') }}" rel="stylesheet">
     <link href="{{ url_for('static', filename='css/player_picture.css', v='2') }}" rel="stylesheet">
     {% if use_light_theme %}
     <link href="{{ url_for('static', filename='css/light_theme.css', v='p1') }}" rel="stylesheet">
     {% endif %}
+    {% if request.endpoint not in ['life_counter', 'player_panel', 'play_game'] %}
+    <link href="{{ url_for('static', filename='css/browse.css', v='test-filters-1') }}" rel="stylesheet">
+    {% endif %}
+    <link href="{{ url_for('static', filename='css/browsing.css', v='fullwidth1') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/commander_motion.css', v='1') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='js/commander_motion.js', v='1') }}" defer></script>
 </head>
 
-<body class="{% if use_sigtaara %}sigtaara-ui{% endif %}" data-nav-scope="{{ nav_scope }}">
+<body class="{% if request.endpoint not in ['life_counter', 'player_panel', 'play_game'] %}site-polish {% endif %}browsing-shell {% if session.get('user_id') and request.endpoint in ['index', 'players', 'decks', 'games'] %}browse-page{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}" data-nav-scope="{{ nav_scope }}">
+{% macro nav_item(label, href, active, css='nav-link') -%}
+<a class="{{ css }}{% if active %} is-current{% endif %}" href="{{ href }}"{% if active %} aria-current="page"{% endif %}>{{ label }}</a>
+{%- endmacro %}
+{% set on_players = request.path == '/players' or request.path.startswith('/player/') %}
+{% set on_decks = request.path == '/decks' or request.path.startswith('/deck/') %}
+{% set on_games = request.path == '/games' or request.path.startswith('/games/') %}
 {% if request.endpoint != 'life_counter' %}
 <nav class="navbar navbar-expand-lg">
   <div class="container d-flex align-items-center justify-content-between">
@@ -54,18 +66,23 @@
     </button>
     {% endif %}
 
-    <!-- Desktop nav (unchanged content) -->
+    <!-- Primary navigation and secondary menus -->
     <div class="d-none d-lg-flex w-100 align-items-center ms-3">
       <div class="navbar-nav">
         {% if session.get("user_id") %}
-          <a class="nav-link" href="/">Home</a>
-          <a class="nav-link" href="/players">Players</a>
-          <a class="nav-link" href="/decks">Decks</a>
-          <a class="nav-link" href="/games">Games</a>
-          <a class="nav-link" href="/pods">Pods</a>
-          <a class="nav-link" href="/saltmine">Saltmine</a>
-          <a class="nav-link" href="/play_game">Play Game</a>
-          <a class="nav-link" href="/apk">Android App</a>
+          {{ nav_item('Home', '/', request.endpoint == 'index') }}
+          {{ nav_item('Players', '/players', on_players) }}
+          {{ nav_item('Decks', '/decks', on_decks) }}
+          {{ nav_item('Games', '/games', on_games) }}
+          <div class="dropdown">
+            <button class="nav-link dropdown-toggle{% if request.endpoint in ['pods', 'saltmine', 'apk_download'] %} is-current{% endif %}" type="button" data-bs-toggle="dropdown" aria-expanded="false">More</button>
+            <div class="dropdown-menu">
+              {{ nav_item('Pods', '/pods', request.path == '/pods', 'dropdown-item') }}
+              {{ nav_item('Saltmine', '/saltmine', request.path == '/saltmine', 'dropdown-item') }}
+              {{ nav_item('Android App', '/apk', request.path == '/apk', 'dropdown-item') }}
+            </div>
+          </div>
+          {{ nav_item('Play Game', '/play_game', request.endpoint == 'play_game', 'nav-link nav-play') }}
         {% else %}
           <a class="nav-link" href="{{ url_for('pricing') }}">Pricing</a>
           <a class="nav-link" href="{{ url_for('privacy') }}">Privacy</a>
@@ -86,13 +103,13 @@
             <div class="nav-pod-menu" id="nav-pod-menu" role="menu">
               <div class="nav-pod-menu__section-label">Scope</div>
               <a class="nav-pod-option {% if nav_scope == 'pod' %}is-active{% endif %}"
-                 href="{{ url_for('index', scope='pod') }}"
+                 href="{{ browse.url(scope='pod') if browse is defined and browse.kind == 'games' else url_for('index', scope='pod') }}"
                  role="menuitem">
                 This Pod
                 {% if nav_scope == 'pod' %}<span class="nav-pod-option__meta">Active</span>{% endif %}
               </a>
               <a class="nav-pod-option {% if nav_scope == 'all' %}is-active{% endif %}"
-                 href="{{ url_for('index', scope='all') }}"
+                 href="{{ browse.url(scope='all') if browse is defined and browse.kind == 'games' else url_for('index', scope='all') }}"
                  role="menuitem">
                 All Pods
                 {% if nav_scope == 'all' %}<span class="nav-pod-option__meta">Active</span>{% endif %}
@@ -119,17 +136,21 @@
           </div>
           {% endif %}
 
-          <span class="navbar-text me-3">
-            Welcome, {{ session.get("display_name") or session.get("username") }}
-          </span>
-          <a class="nav-link" href="{{ url_for('profile') }}">Profile</a>
-          {% if can_access_registration_requests %}
-            <a class="nav-link" href="{{ url_for('registration_requests') }}">Requests</a>
-          {% endif %}
-          {% if session.get("is_admin") %}
-            <a class="nav-link" href="{{ url_for('admin_users') }}">Admin</a>
-          {% endif %}
-          <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+          <div class="dropdown nav-account">
+            <button class="nav-link dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Account</button>
+            <div class="dropdown-menu dropdown-menu-end">
+              <div class="dropdown-header">{{ session.get("display_name") or session.get("username") }}</div>
+              {{ nav_item('Profile', url_for('profile'), request.endpoint == 'profile', 'dropdown-item') }}
+              {% if can_access_registration_requests %}
+              {{ nav_item('Requests', url_for('registration_requests'), request.endpoint == 'registration_requests', 'dropdown-item') }}
+              {% endif %}
+              {% if session.get("is_admin") %}
+              {{ nav_item('Admin', url_for('admin_users'), request.endpoint == 'admin_users', 'dropdown-item') }}
+              {% endif %}
+              <div class="dropdown-divider"></div>
+              <a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a>
+            </div>
+          </div>
         {% endif %}
       </div>
     </div>
@@ -147,7 +168,7 @@
 
 <div id="menuOverlay" class="menu-overlay" aria-hidden="true"></div>
 
-<aside id="menuDrawer" class="menu-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu">
+<aside id="menuDrawer" class="menu-drawer" role="dialog" aria-modal="true" aria-label="Navigation menu" inert>
   <div class="drawer-header">
     <div class="drawer-title">Menu</div>
     <button id="menuClose" class="drawer-close" type="button" aria-label="Close menu">✕</button>
@@ -167,23 +188,23 @@
       {% endif %}
 
       <div class="drawer-list">
-        <a class="drawer-item" href="/">Home</a>
-        <a class="drawer-item" href="/play_game">Play Game</a>
-        <a class="drawer-item" href="/players">Players</a>
-        <a class="drawer-item" href="/decks">Decks</a>
-        <a class="drawer-item" href="/games">Games</a>
-        <a class="drawer-item" href="/pods">Pods</a>
-        <a class="drawer-item" href="/saltmine">Saltmine</a>
-        <a class="drawer-item" href="/apk">Android App</a>
-
-        <div class="drawer-divider"></div>
-
-        <a class="drawer-item" href="{{ url_for('profile') }}">Profile</a>
+        <div class="drawer-section-label">Your table</div>
+        {{ nav_item('Home', '/', request.endpoint == 'index', 'drawer-item') }}
+        {{ nav_item('Players', '/players', on_players, 'drawer-item') }}
+        {{ nav_item('Decks', '/decks', on_decks, 'drawer-item') }}
+        {{ nav_item('Games', '/games', on_games, 'drawer-item') }}
+        {{ nav_item('Play Game', '/play_game', request.endpoint == 'play_game', 'drawer-item nav-play') }}
+        <div class="drawer-section-label">More</div>
+        {{ nav_item('Pods', '/pods', request.path == '/pods', 'drawer-item') }}
+        {{ nav_item('Saltmine', '/saltmine', request.path == '/saltmine', 'drawer-item') }}
+        {{ nav_item('Android App', '/apk', request.path == '/apk', 'drawer-item') }}
+        <div class="drawer-section-label">Account</div>
+        {{ nav_item('Profile', url_for('profile'), request.endpoint == 'profile', 'drawer-item') }}
         {% if can_access_registration_requests %}
-          <a class="drawer-item" href="{{ url_for('registration_requests') }}">Requests</a>
+          {{ nav_item('Requests', url_for('registration_requests'), request.endpoint == 'registration_requests', 'drawer-item') }}
         {% endif %}
         {% if session.get("is_admin") %}
-          <a class="drawer-item" href="{{ url_for('admin_users') }}">Admin</a>
+          {{ nav_item('Admin', url_for('admin_users'), request.endpoint == 'admin_users', 'drawer-item') }}
         {% endif %}
         <a class="drawer-item" href="{{ url_for('logout') }}">Logout</a>
       </div>
@@ -199,7 +220,7 @@
 </aside>
 {% endif %}
 
-<div class="container mt-4">
+<main id="main-content" class="container mt-4 browsing-content">
   {% if request.endpoint != 'life_counter' %}
   {% with messages = get_flashed_messages() %}
     {% if messages %}
@@ -218,7 +239,7 @@
   {% endif %}
 
   {% block content %}{% endblock %}
-</div>
+</main>
 
 <!-- Player compare tray -->
 {% if session.get("user_id") %}
@@ -297,7 +318,7 @@
 {% endif %}
 
 <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js', v='pfp2') }}" defer></script>
+<script src="{{ url_for('static', filename='js/app.js', v='test-filters-1') }}" defer></script>
 
 <script>
   if ('serviceWorker' in navigator) {

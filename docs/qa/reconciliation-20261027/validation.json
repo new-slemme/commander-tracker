@@ -1,0 +1,10 @@
+{
+  "players": 4,
+  "decks": 8,
+  "starting_life": 40,
+  "web_game": true,
+  "native_timer": true,
+  "browse_api": true,
+  "player_recency": true,
+  "page_errors": []
+}

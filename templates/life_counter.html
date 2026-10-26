@@ -17,6 +17,8 @@
   {% if use_light_theme %}
   <link href="{{ url_for('static', filename='css/light_theme.css', v='p1') }}" rel="stylesheet">
   {% endif %}
+  <link href="{{ url_for('static', filename='css/commander_motion.css', v='1') }}" rel="stylesheet">
+  <script src="{{ url_for('static', filename='js/commander_motion.js', v='1') }}" defer></script>
 </head>
 
 <body class="{% if participants|length == 2 %}mode-2p{% endif %} {% if participants|length == 3 %}mode-3p{% endif %} {% if participants|length == 5 %}mode-5p{% endif %} {% if participants|length == 6 %}mode-6p{% endif %} {% if use_sigtaara %}sigtaara-ui{% endif %}{% if debug_ui_enabled %} debug-ui{% endif %}">
@@ -75,6 +77,10 @@
           {% endif %}
         "
       >
+        {% if p.commander_art_video %}
+        <video class="commander-motion" data-commander-video="{{ p.commander_art_video }}"
+               poster="{{ p.commander_art }}" muted loop playsinline preload="none" aria-hidden="true" tabindex="-1"></video>
+        {% endif %}
         <button
           class="salt-dispenser-btn"
           type="button"

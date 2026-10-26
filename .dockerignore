@@ -16,6 +16,8 @@ __pycache__
 htmlcov
 bugs
 docs/qa/*.png
+# Verification reports and screenshots are not runtime assets.
+docs/qa/
 apk/*
 !apk/android-latest.json
 !apk/app-release.apk
@@ -28,3 +30,5 @@ static/mtg-svg.zip
 static/*.map
 static/css/*.map
 static/js/*.map
+# Browser verification artifacts are kept in the repository, not the runtime image.
+docs/qa/advanced-browsing/

@@ -1,0 +1,70 @@
+{
+  "before": {
+    "clickable": false,
+    "covering": "position-absolute bottom-0 start-0 banner-inner",
+    "toolbarZ": "1",
+    "contentZ": "1"
+  },
+  "after": [
+    {
+      "theme": "dark",
+      "width": 1440,
+      "clickable": true,
+      "covering": "btn btn-sm btn-outline-light",
+      "toolbarZ": "2",
+      "contentZ": "1",
+      "returned_to_filtered_games": true,
+      "actions_menu_clickable": true
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "clickable": true,
+      "covering": "btn btn-sm btn-outline-light",
+      "toolbarZ": "2",
+      "contentZ": "1",
+      "returned_to_filtered_games": true,
+      "actions_menu_clickable": true
+    },
+    {
+      "theme": "dark",
+      "width": 320,
+      "clickable": true,
+      "covering": "btn btn-sm btn-outline-light",
+      "toolbarZ": "2",
+      "contentZ": "1",
+      "returned_to_filtered_games": true,
+      "actions_menu_clickable": true
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "clickable": true,
+      "covering": "btn btn-sm btn-outline-light",
+      "toolbarZ": "2",
+      "contentZ": "1",
+      "returned_to_filtered_games": true,
+      "actions_menu_clickable": true
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "clickable": true,
+      "covering": "btn btn-sm btn-outline-light",
+      "toolbarZ": "2",
+      "contentZ": "1",
+      "returned_to_filtered_games": true,
+      "actions_menu_clickable": true
+    },
+    {
+      "theme": "light",
+      "width": 320,
+      "clickable": true,
+      "covering": "btn btn-sm btn-outline-light",
+      "toolbarZ": "2",
+      "contentZ": "1",
+      "returned_to_filtered_games": true,
+      "actions_menu_clickable": true
+    }
+  ]
+}

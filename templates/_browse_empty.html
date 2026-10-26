@@ -1,0 +1,11 @@
+<div class="browse-empty card p-4">
+  {% if browse.base_total == 0 %}
+  <h2>No {{ browse.kind }} yet</h2>
+  <p class="muted">{{ 'Add your first deck to start tracking its results.' if browse.kind == 'decks' else 'Add players to build your pod.' if browse.kind == 'players' else 'Record a game to start exploring your results.' }}</p>
+  {% if browse.kind == 'decks' %}<a class="btn btn-primary" href="{{ url_for('new_deck_editor', player_id=selected_player_id, return_to=request.full_path) }}">Add Deck</a>{% elif browse.kind == 'games' %}<a class="btn btn-primary" href="{{ url_for('play_game') }}">Play Game</a>{% else %}<a href="#new-guest-name" class="btn btn-primary">Add Guest</a>{% endif %}
+  {% else %}
+  <h2>{{ 'Check your filters' if browse.errors else 'No matching ' ~ browse.kind }}</h2>
+  <p class="muted">{{ 'Correct the highlighted fields and apply again.' if browse.errors else 'Try a wider period or remove a filter.' }}</p>
+  <a href="{{ browse.clear_url }}" class="btn btn-outline-light">Clear filters</a>
+  {% endif %}
+</div>

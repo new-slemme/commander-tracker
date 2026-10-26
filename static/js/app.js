@@ -78,14 +78,19 @@
     if (!btn || !drawer || !overlay || !closeBtn) return;
 
     function openMenu() {
+      drawer.inert = false;
       drawer.classList.add('open');
       overlay.classList.add('open');
       overlay.setAttribute('aria-hidden', 'false');
       btn.setAttribute('aria-expanded', 'true');
       document.body.style.overflow = 'hidden';
+      closeBtn.focus();
     }
 
     function closeMenu() {
+      if (!drawer.classList.contains('open')) return;
+      btn.focus();
+      drawer.inert = true;
       drawer.classList.remove('open');
       overlay.classList.remove('open');
       overlay.setAttribute('aria-hidden', 'true');
@@ -103,7 +108,18 @@
       if (e.target.closest('a')) closeMenu();
     });
     document.addEventListener('keydown', function (e) {
+      if (!drawer.classList.contains('open')) return;
       if (e.key === 'Escape') closeMenu();
+      if (e.key === 'Tab') {
+        var items = Array.from(drawer.querySelectorAll('a[href], button:not(:disabled), input, select, [tabindex="0"]'))
+          .filter(function (el) { return el.getClientRects().length > 0; });
+        var first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    });
+    window.matchMedia('(min-width: 1200px)').addEventListener('change', function (e) {
+      if (e.matches) closeMenu();
     });
   }
 
@@ -395,16 +411,26 @@
     var MAX = 2;
 
     function load() {
-      try { return JSON.parse(sessionStorage.getItem(KEY) || '[]'); } catch (_) { return []; }
+      try { var saved = JSON.parse(sessionStorage.getItem(KEY) || '[]'); return Array.isArray(saved) ? saved.filter(p => Number.isInteger(p.id) && typeof p.name === 'string').slice(0, MAX) : []; } catch (_) { return []; }
     }
 
     function save(players) {
-      sessionStorage.setItem(KEY, JSON.stringify(players.slice(0, MAX)));
+      try { sessionStorage.setItem(KEY, JSON.stringify(players.slice(0, MAX))); } catch (_) {}
     }
 
     function render() {
       var players = load();
       slots.innerHTML = '';
+      document.body.classList.toggle('has-compare-selection', players.length > 0);
+      document.querySelectorAll('[data-compare-player]').forEach(function (btn) {
+        var selected = players.some(p => p.id === Number(btn.dataset.comparePlayer));
+        btn.setAttribute('aria-pressed', String(selected));
+        btn.classList.toggle('pcard__compare-btn--active', selected);
+        var card = btn.closest('.pcard');
+        if (card) card.classList.toggle('pcard--selected', selected);
+        var label = btn.querySelector('.pcard__compare-label');
+        if (label) label.textContent = selected ? 'Selected ✓' : 'Compare';
+      });
 
       if (players.length === 0) {
         var empty = document.createElement('span');
@@ -456,7 +482,11 @@
       var id = parseInt(btn.getAttribute('data-compare-player'), 10);
       var name = btn.getAttribute('data-compare-name') || ('Player ' + id);
       var players = load();
-      if (players.some(function (p) { return p.id === id; })) return;
+      if (players.some(function (p) { return p.id === id; })) {
+        save(players.filter(p => p.id !== id));
+        render();
+        return;
+      }
       if (players.length >= MAX) {
         players = players.slice(1);
       }
@@ -471,6 +501,8 @@
         render();
       });
     }
+
+    window.addEventListener('pageshow', render);
 
     // Prevent disabled link navigation
     goLink.addEventListener('click', function (e) {
@@ -580,7 +612,7 @@
           var wr = d.winrate >= 60 ? 'good' : (d.winrate >= 45 ? 'mid' : 'bad');
           html += '<a class="drawer-row" href="/deck/' + esc(d.id) + '" data-entity-type="deck" data-entity-id="' + esc(d.id) + '">';
           if (d.art_url) {
-            html += '<div class="drawer-row-art" style="background-image:url(\'' + esc(d.art_url) + '\')"></div>';
+            html += '<div class="drawer-row-art" style="background-image:url(\'' + esc(d.art_poster_url || d.art_url) + '\')"></div>';
           }
           html += '<div class="drawer-row-body"><div class="drawer-row-name">' + esc(d.name) + '</div>';
           html += '<div class="drawer-row-meta">' + esc(d.commander) + '</div></div>';
@@ -621,7 +653,7 @@
 
       html += '<div class="drawer-hero" style="--player-accent:' + esc(data.owner_accent) + '">';
       if (data.art_url) {
-        html += '<div class="drawer-deck-art" style="background-image:url(\'' + esc(data.art_url) + '\')"></div>';
+        html += '<div class="drawer-deck-art" style="background-image:url(\'' + esc(data.art_poster_url || data.art_url) + '\')"></div>';
       }
       html += '<div><div class="drawer-name">' + esc(data.name) + '</div>';
       html += '<div class="drawer-row-meta">' + esc(data.commander) + '</div>';
@@ -953,6 +985,23 @@
     });
   }
 
+  // Date boundaries belong to Custom dates. Changing the period never submits.
+  function initBrowsePeriod() {
+    var period = document.getElementById('browse-period');
+    if (!period) return;
+    var form = period.closest('form');
+    function syncDates() {
+      form.querySelectorAll('input[type="date"]').forEach(function (input) {
+        input.disabled = period.value !== 'custom';
+      });
+    }
+    period.addEventListener('change', function () {
+      syncDates();
+      if (period.value === 'custom') form.querySelector('.browse-advanced').open = true;
+    });
+    syncDates();
+  }
+
   // ── Init ─────────────────────────────────────────────────────────
   UI.init = function () {
     initMobileMenu();
@@ -963,6 +1012,7 @@
     initEntityHighlighting();
     initGameExpand();
     initCompareTray();
+    initBrowsePeriod();
     initEntityDrawer();
     initCommandPalette();
   };

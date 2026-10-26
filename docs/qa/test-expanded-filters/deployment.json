@@ -1,0 +1,47 @@
+{
+  "routes": [
+    {
+      "path": "/decks",
+      "status": 200,
+      "filters_open": false
+    },
+    {
+      "path": "/players",
+      "status": 200,
+      "filters_open": false
+    },
+    {
+      "path": "/games",
+      "status": 200,
+      "filters_open": false
+    },
+    {
+      "path": "/decks?status=all&bracket=2&bracket=3",
+      "status": 200,
+      "filters_open": false
+    },
+    {
+      "path": "/players?period=30&sort=games&direction=desc",
+      "status": 200,
+      "filters_open": false
+    },
+    {
+      "path": "/games?win_type=combat&win_type=combo",
+      "status": 200,
+      "filters_open": false
+    },
+    {
+      "path": "/decks?min_games=bad",
+      "status": 200,
+      "filters_open": true
+    }
+  ],
+  "legacy_videos": 14,
+  "range_status": 206,
+  "ffmpeg_conversion": true,
+  "record_counts_unchanged": true,
+  "source_hashes_match": 18,
+  "test_image": "sha256:73508f6ffa576d91550d65b2434a751202de1b97b375c90f64bfa00bc742801d",
+  "test_started_at": "2026-10-22T21:14:13.805260097Z",
+  "production_unchanged": true
+}

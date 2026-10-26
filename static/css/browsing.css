@@ -1,0 +1,207 @@
+/* Browsing shell only: the standalone life counter never loads this file. */
+.browsing-shell {
+  --browse-text: #eef0f7;
+  --browse-muted: #b0b8cc;
+  --browse-accent: #ff865b;
+  --browse-surface: #1a1e2b;
+  --browse-soft: #202637;
+}
+html[data-bs-theme="light"] .browsing-shell {
+  --browse-text: #252d3d;
+  --browse-muted: #5a6473;
+  --browse-accent: #a93b18;
+  --browse-surface: #fffaf1;
+  --browse-soft: #f0e9db;
+}
+.browsing-shell .navbar {
+  padding: 12px 0;
+  background: var(--darker);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: none;
+}
+.browsing-shell .navbar > .container { gap: 16px; max-width: 100%; }
+.browsing-shell .navbar-brand { margin: 0; flex-shrink: 0; }
+.browsing-shell .navbar .navbar-nav { align-items: center; gap: 4px; }
+.browsing-shell .navbar .nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--browse-muted);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.browsing-shell :is(.nav-link, .drawer-item, .dropdown-item):hover,
+.browsing-shell :is(.nav-link, .drawer-item, .dropdown-item).is-current {
+  background: var(--browse-soft);
+  color: var(--browse-text);
+}
+.browsing-shell .nav-link.is-current { box-shadow: inset 0 -2px var(--browse-accent); }
+.browsing-shell .navbar .nav-play,
+.browsing-shell .drawer-item.nav-play {
+  background: var(--browse-accent);
+  color: var(--darkest);
+  font-weight: 700;
+}
+html[data-bs-theme="light"] .browsing-shell :is(.navbar .nav-play, .drawer-item.nav-play) { color: #fff; }
+.browsing-shell .palette-trigger { flex-shrink: 0; min-height: 44px; padding: 8px 12px; gap: 8px; }
+.browsing-shell .palette-trigger__kbd { white-space: nowrap; }
+.browsing-shell .nav-pod-pill { min-height: 44px; max-width: 200px; }
+.browsing-shell .nav-pod-pill__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browsing-shell .dropdown-menu {
+  padding: 8px;
+  min-width: 192px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--browse-surface);
+  box-shadow: 0 12px 32px #0003;
+}
+.browsing-shell .dropdown-item { min-height: 44px; padding: 12px; border-radius: 8px; color: var(--browse-text); }
+.browsing-shell .dropdown-header { max-width: 260px; white-space: normal; overflow-wrap: anywhere; color: var(--browse-muted); }
+.browsing-shell .menu-drawer .drawer-section-label { margin: 24px 12px 8px; color: var(--browse-muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.browsing-shell .drawer-item { min-height: 44px; }
+.browsing-shell :is(.menu-btn, .drawer-close, .palette-trigger-mobile) { min-width: 44px; min-height: 44px; }
+.browsing-shell :is(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid var(--browse-accent); outline-offset: 3px; }
+/* The desktop cluster fits comfortably from 1200px; use the drawer below it. */
+@media (min-width: 992px) and (max-width: 1199px) {
+  .browsing-shell .navbar .d-lg-none { display: flex !important; }
+  .browsing-shell .navbar .d-lg-flex { display: none !important; }
+  .browsing-shell :is(.menu-btn, .menu-drawer) { display: block !important; }
+  .browsing-shell .menu-overlay.open { display: block !important; }
+}
+
+/* Shared page rhythm and surfaces, limited to the four browsing pages. */
+.browse-page { color: var(--browse-text); }
+.browse-page .browsing-content { max-width: 100%; padding: 0 24px 96px; margin-top: 32px !important; }
+.browse-page .browse-listing { min-width: 0; }
+.browse-page .app-hero {
+  padding: 32px;
+  margin-bottom: 32px !important;
+  border: 1px solid var(--border-color);
+  border-top: 3px solid var(--browse-accent);
+  border-radius: 16px;
+  background: var(--browse-surface);
+  box-shadow: none;
+}
+.browse-page .app-hero::before { display: none; }
+.browse-page .app-hero__head { align-items: center; gap: 24px; }
+.browse-page .app-hero__head > div,
+.browse-page .browse-heading-copy { min-width: 0; }
+.browse-page .card-head-title {
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.2;
+  letter-spacing: .01em;
+  color: var(--browse-text);
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+.browse-page h2 { font-size: 1.6rem; color: var(--browse-text); }
+.browse-page :is(.muted, .players-sub, .app-hero__sub, .pcard__username, .pcard__stat-lbl) { color: var(--browse-muted); }
+.browse-page :is(.btn, .roster-btn, .metric-btn, .pcard__compare-btn) { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.browse-page :is(.btn-primary, .app-hero .roster-btn.on) { background: var(--browse-accent); border-color: var(--browse-accent); color: var(--darkest); box-shadow: none; font-weight: 700; }
+html[data-bs-theme="light"] .browse-page :is(.btn-primary, .app-hero .roster-btn.on) { color: #fff; }
+.browse-page :is(.btn-secondary, .btn-outline-light) { background: var(--browse-soft); border-color: var(--border-color); color: var(--browse-text); }
+.browse-page :is(.form-control, .form-select) { min-height: 44px; background-color: var(--darkest); color: var(--browse-text); border-color: var(--border-color-strong); border-radius: 8px; }
+.browse-page .form-control::placeholder { color: var(--browse-muted); opacity: 1; }
+.browse-page .app-badges { gap: 8px; margin-top: 16px; }
+.browse-page :is(.app-badge, .spec) { background: var(--browse-soft); color: var(--browse-text); border-color: var(--border-color); box-shadow: none; }
+.browse-page :is(.players-grid, .deck-grid) { gap: 24px; }
+.browse-page :is(.pcard, .deck-tile, .game-tile, .stats-card, .games-stats-panel, .scope-indicator, .filter-card) { border-color: var(--border-color); box-shadow: none; border-radius: 16px; }
+.browse-page :is(.pcard, .deck-tile, .game-tile) { background-color: var(--browse-surface); }
+.browse-page :is(.pcard__body, .deck-tile-inner, .game-content) { padding: 24px; }
+.browse-page :is(.pcard__name, .deck-name, .podium-name) { font-size: 1.2rem; line-height: 1.35; overflow-wrap: anywhere; }
+.browse-page :is(.pcard__name, .pcard__stat-val, .deck-name, .deck-meta .strong) { color: var(--browse-text); }
+.browse-page .pcard__stats { gap: 16px; padding: 16px 0 8px; }
+.browse-page .pcard__stat { align-items: flex-start; }
+.browse-page .pcard__stat-val { font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.browse-page .pcard__compare-btn { color: var(--browse-text); margin-top: 8px; }
+.browse-page .pcard__delete-btn { min-width: 44px; min-height: 44px; }
+.browse-page .add-guest-wrap { align-items: flex-end; gap: 8px; }
+.browse-page .guest-name-field { flex: 1; min-width: 0; }
+.browse-page .guest-name-field label { display: block; color: var(--browse-muted); font-size: 13px; margin-bottom: 8px; }
+.browse-page .compare-hint { padding: 0 0 16px; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: none; color: var(--browse-muted); }
+.browse-page .compare-hint__icon { display: none; }
+.browse-page .deck-tag-icons { flex-wrap: wrap; overflow: visible; }
+.browse-page .deck-title { flex-wrap: wrap; gap: 16px; }
+.browse-page .deck-badges { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.browse-page .deck-actions-row { flex-wrap: wrap; margin-top: auto; padding-top: 24px; }
+.browse-page .deck-tile-inner { height: 100%; display: flex; flex-direction: column; }
+.browse-page .game-list { gap: 24px; }
+.browse-page :is(.scope-indicator, .filter-card, .games-stats-panel) { background: var(--browse-surface); }
+.browse-page .filter-card { padding: 24px; }
+.browse-page .filter-grid { gap: 16px; }
+.browse-page .filter-label { color: var(--browse-muted); letter-spacing: .02em; text-transform: none; }
+.browse-page .scope-indicator { padding: 16px 24px; flex-wrap: wrap; }
+/* Keep readable text on artwork in both themes. */
+.browse-page .pcard--art :is(.pcard__name, .pcard__stat-val, .pcard__compare-btn),
+.browse-page .deck-tile.has-bg :is(.deck-name, .deck-meta .strong) { color: #fff; }
+.browse-page .pcard--art :is(.pcard__stat-lbl, .pcard__username),
+.browse-page .deck-tile.has-bg .deck-meta { color: #d0d5e0; }
+.browse-page .deck-tile:not(.has-bg)::before { background: none; }
+.browse-page .pcard:not(.pcard--art) .pcard__name:hover { color: var(--browse-accent); }
+
+/* Dashboard: three equal ranks make the table easier to scan. */
+.browse-page .home-roster { margin-top: 24px; padding-top: 24px; gap: 16px; }
+.browse-page .home-roster .player-avatar { width: 48px; height: 48px; }
+.browse-page .roster-count { color: var(--browse-muted); font-family: Arial, sans-serif; }
+.browse-page .home-roster-specs { flex-wrap: wrap; }
+.browse-page .section-sticky-bar { position: static; justify-content: flex-start; margin: 16px 0 24px; }
+.browse-page .section-sticky-bar .metric-selector { background: var(--browse-surface); box-shadow: none; border: 1px solid var(--border-color); }
+.browse-page .leaderboard-podium { grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: none; gap: 24px; }
+.browse-page .podium-card { justify-self: stretch; grid-area: auto; width: auto; max-width: none; min-height: 200px; border-radius: 16px; background: var(--browse-surface); box-shadow: none; }
+.browse-page .podium-body { padding: 24px; }
+.browse-page .podium-card .podium-overlay { background: none; }
+.browse-page .podium-card[data-bg-art] .podium-overlay { background: linear-gradient(180deg, #10121a99, #10121af2); }
+.browse-page .podium-card :is(.podium-name, .podium-stat) { color: var(--browse-text); }
+.browse-page .podium-card[data-bg-art] :is(.podium-name, .podium-stat) { color: #fff; }
+.browse-page .podium-card[data-bg-art] .podium-deck { color: #d0d5e0; }
+.browse-page .podium-card .player-avatar { width: 48px; height: 48px; }
+.browse-page .podium-stats { display: flex; flex-wrap: wrap; gap: 12px; }
+.browse-page .browsing-content > section { margin-bottom: 48px !important; }
+
+@media (max-width: 767px) {
+  .browse-page .browsing-content { padding: 0 16px 96px; margin-top: 24px !important; }
+  .browse-page .app-hero { padding: 24px; }
+  .browse-page .app-hero__head { flex-direction: column; align-items: stretch; }
+  .browse-page .app-hero .roster-btn { align-self: stretch; }
+  .browse-page .leaderboard-podium { grid-template-columns: 1fr; gap: 16px; }
+  .browse-page .podium-card { min-height: 0; }
+  .browse-page :is(.players-grid, .deck-grid) { gap: 16px; }
+  .browse-page .add-guest-wrap { width: 100%; flex-direction: column; align-items: stretch; }
+  .browse-page .add-guest-wrap .form-control { min-width: 0; width: 100%; }
+  .browse-page .home-roster { flex-wrap: wrap; }
+  .browse-page .home-roster-specs { margin-left: 0; }
+  .browse-page .scope-indicator { padding: 16px; }
+  .browse-page :is(.pcard__body, .deck-tile-inner, .game-content, .filter-card) { padding: 16px; }
+  .browse-page .fg-3 { grid-column: span 6; }
+  .browse-page .filter-grid > * { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .browsing-shell *, .browsing-shell *::before, .browsing-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+/* Ensure inherited theme styles do not wash out numbers or fallback avatars. */
+.browse-page .podium-card .podium-stat b { color: inherit; }
+.browse-page .podium-card .player-avatar--initial { color: var(--browse-text); }
+.browse-page .stats-card { background: var(--browse-surface); box-shadow: none; }
+.browse-page .stats-card .text-white { color: var(--browse-text) !important; }
+.browse-page .stats-table thead th { color: var(--browse-muted); }
+.browse-page .stats-card :is(.stat-mini b, .mmr-value) { color: var(--browse-text); }
+.browse-page .pcard:not(.pcard--art) .pill { color: var(--browse-text); }
+.browse-page .app-badge { flex-wrap: wrap; max-width: 100%; }
+.browse-page .deck-tile:not(.has-bg) .deck-meta { color: var(--browse-muted); }
+.browse-page .deck-tile:not(.has-bg) .deck-meta a { color: var(--browse-text); }
+.browsing-shell :is(.drawer-title, .drawer-close, .drawer-pod-name) { color: var(--browse-text); }
+
+.browsing-shell .drawer-body .text-white { color: var(--browse-text) !important; }
+
+.browse-page .empty-state { padding: 48px 24px; background: var(--browse-surface); border: 1px dashed var(--border-color-strong); border-radius: 16px; }
+.browse-page .empty-state__title { color: var(--browse-text); }
+.browse-page .empty-state__body { color: var(--browse-muted); }

@@ -9,6 +9,75 @@
     display:flex; gap:10px; flex-wrap:wrap; align-items:center;
   }
 
+  .deck-tags-notice {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px 16px;
+    margin-bottom: 20px;
+    padding: 18px 20px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    background: var(--darker);
+    color: var(--font-base);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .deck-tags-notice__icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--darkest);
+    color: var(--font-accent);
+  }
+
+  .deck-tags-notice__content h2 {
+    margin: 0 0 4px;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .deck-tags-notice__content p {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .deck-tags-notice__actions { margin: 0; }
+
+  .deck-tags-notice__dismiss {
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color-strong);
+    background: transparent;
+    color: var(--font-base);
+  }
+
+  .deck-tags-notice__dismiss:hover,
+  .deck-tags-notice__dismiss:focus-visible {
+    border-color: var(--font-accent);
+    background: var(--darkest);
+    color: var(--font-base);
+  }
+
+  .deck-tags-notice__dismiss:focus-visible {
+    outline: 2px solid var(--font-accent);
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 575.98px) {
+    .deck-tags-notice {
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 12px;
+      padding: 16px;
+    }
+    .deck-tags-notice__actions { grid-column: 2; }
+  }
+
   .deck-grid {
     display:grid;
     grid-template-columns: repeat(12, 1fr);
@@ -200,24 +269,6 @@
 
 
 
-
-  /* Mobile floating Add button (keeps normal button on desktop) */
-  .fab-add-deck {
-    position: fixed;
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom));
-    z-index: 9990;
-    border-radius: 999px;
-    padding: 12px 16px;
-    font-weight: 900;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.55);
-    display: none;
-  }
-
-  @media (max-width: 576px) {
-    .fab-add-deck { display: inline-flex; }
-    .desktop-add { display: none !important; }
-  }
 
   /* =========================================
      Add/Edit Deck modal enhancements

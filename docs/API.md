@@ -145,6 +145,16 @@ Complete and machine-checked. `auth` values:
 | `GET` | `/api/capabilities` | public |
 | `POST` | `/api/login` | public |
 | `POST` | `/api/logout` | public |
+| `PATCH` | `/api/me` | auth | Update identity and preferences |
+| `POST` | `/api/me/password` | auth | Change own password |
+| `POST` | `/api/me/sessions/revoke` | auth | Revoke other sessions |
+| `POST` | `/api/me/anonymize` | auth | Password-confirmed account anonymization |
+| `GET` | `/api/browse/{kind}` | auth | Paginated decks, players, games with web filters |
+| `GET` | `/api/players/{player_id}/profile-picture` | auth | Authorized commander choices |
+| `GET` | `/api/decks/{deck_id}/export` | auth | Plain-text decklist |
+| `POST` | `/api/decks/{deck_id}/retag` | auth | Refresh cached tags |
+| `POST` | `/api/decks/{deck_id}/remove-decklist` | auth | Remove list, preserve overrides |
+| `POST` | `/api/decks/{deck_id}/strategy-tags` | auth | Replace strategy overrides |
 | `GET` | `/api/me` | auth |
 | `POST` | `/api/register` | public |
 | `POST` | `/api/password/forgot` | public |
@@ -575,10 +585,15 @@ Authenticated summary scoped to the active pod. Sends
 
 #### `GET /api/players` · auth
 
-Pod-scoped list.
+Pod-scoped list, ordered by name and ID. `last_played_at` is the latest recorded
+participation in the active pod (ISO date-time, or null when the player has no
+recorded games in that scope). With no active pod, it uses all games for the
+visible players, matching the web Play picker. This field does not change the
+existing career statistics. Clients may sort quick picks by recency descending,
+then name and ID, with null dates last; older servers may omit the field.
 
 ```json
-[{"id": 3, "name": "Alice", "wins": 12, "played": 30, "winrate": 40.0, "deck_count": 5}]
+[{"id": 3, "name": "Alice", "wins": 12, "played": 30, "winrate": 40.0, "deck_count": 5, "profile_picture_url": null, "last_played_at": "2026-10-23T00:00:00"}]
 ```
 
 #### `POST /api/players` · auth
@@ -610,7 +625,7 @@ The detail response also includes `can_edit_picture` and, for an owner or admin,
 Choose a commander with JSON `{"deck_id": 12, "commander_index": 0}` (index defaults to 0),
 or upload multipart form data with a `file` field. Only commanders belonging to the
 target player's decks are accepted. Uploads support PNG, JPEG, WebP, AVIF, and GIF;
-the entire request must fit the existing 15 MB limit. GIF bytes and animation are preserved.
+the individual profile image is limited to 15 MB. GIF bytes and animation are preserved.
 
 Returns `{"id": 3, "profile_picture_url": "/art/custom_player_3_profile_....gif"}`.
 The URL may also use `/media/` for object storage or the selected commander's art URL.
@@ -684,7 +699,41 @@ endpoint with the single relevant boolean.
 
 #### `POST /api/decks/{deck_id}/upload-art` · auth, owner or admin
 
-`multipart/form-data`: `field` (`commander` or `card`) and `file`. Returns `{"url": "…"}`.
+`multipart/form-data`: `field` (`commander` or `card`) and `file`.
+
+Commander art accepts PNG, JPEG, WebP, AVIF, GIF, or MP4, up to **30 MiB per file**.
+Card art remains image-only, up to 15 MiB. The entire multipart request must fit
+within 31 MiB; upload multiple large files separately. Reverse proxies must allow
+at least that request size.
+
+GIF commander art and MP4 uploads are converted to silent H.264 MP4 (`yuv420p`,
+fast-start, at most 1280 pixels on the longest edge and 30 fps), plus a JPEG poster.
+Input animations must be at most 60 seconds and 4096 × 4096 pixels. Conversion is
+bounded by a timeout and concurrency limit; invalid/unsupported or busy conversions
+return `400` with an actionable `error`. FFmpeg and FFprobe are required on the
+server and included in the Docker image.
+
+Returns `{"url": "…", "poster_url": "…", "video_url": "…"}`. `video_url` is null
+for still images. `url` remains an **image URL** for backward compatibility: the
+original GIF for GIF uploads, or the generated JPEG for MP4 uploads. Existing
+image-only native clients can continue using it. Deck summaries additionally
+expose `art_poster_url` and `art_video_url`; new game participants additionally
+carry `commander_art_poster` and `commander_art_video`. Native clients must opt into
+the video fields to play MP4s; their existing image loaders cannot do so.
+
+Web lists use posters; the deck banner and active life-counter seat play video.
+Inactive seats do not load their video until activated. Hidden pages and reduced
+motion preferences pause automatic playback. The deck editor provides a manual
+video preview. Direct external URLs remain image URLs; upload a video file to
+convert and use it as commander art.
+
+For existing GIFs run `python scripts/convert_commander_gifs.py` in the app's
+environment. `--dry-run` inventories referenced GIFs, and `--all-local` also
+includes unreferenced GIFs under the art directory. The command is repeatable,
+reports failures individually, and leaves original files and database references
+unchanged. It supports local art and referenced object-storage GIFs; external
+URLs are reported as skipped. Back up the entire art volume, including
+`video_metadata/`, which maps legacy image URLs to their MP4/poster variants.
 
 ---
 
@@ -1303,3 +1352,59 @@ Adding JSON equivalents is phase 6 of `edh-son-android/INTEGRATION-PLAN.md`. Reg
 equivalents — see [5.1a Onboarding](#51a-onboarding). Invites, guest players, and recap
 sharing were phase 4 — see [5.8a](#58a-invites), [5.8b](#58b-guest-players) and
 [5.8c](#58c-public-game-recaps).
+
+
+## Android parity additions (2.3)
+
+Authenticated capabilities now include `browse`, `profile_edit`, `account_security`,
+`player_pictures`, `deck_actions`, and `native_timers`. Older collections retain their
+existing contracts. Clients must check capabilities before submitting timed records.
+
+`GET /api/browse/{kind}` accepts `decks`, `players`, or `games` and exactly the web
+query parameters. Repeated `color`, `bracket`, `strategy`, `mechanic`, and `win_type`
+parameters are multi-select values. `q`, `sort`, `direction`, `page`, `per_page`
+(10/25/50/100), and all range and selection parameters match the HTML controls.
+The `fields` array exposes authorized choices and labels; `sorts` exposes sortable
+columns. Results contain `items`, `page`, `pages`, `total`, `base_total`, `per_page`,
+`summary` (over the full filtered result), `values`, `fields`, `sorts`, `chips`, and
+`errors`. Invalid filters return 400 with this same envelope and field-keyed errors,
+empty items, and no silently broadened results. Statistics periods are `lifetime`,
+`30`, `90`, `custom`; UTC dates include the entire end date. Undated historical totals
+are lifetime-only. MMR always reflects the current value. Equal sort values use ID
+ascending for stable pagination. Browsing performs no metadata refreshes.
+
+`PATCH /api/me` accepts optional username/display_name strings, use_light_theme and
+use_sigtaara booleans, and mana_fucked_salt_value/misplayed_salt_value integers 0–50.
+It returns the full me payload, including light_theme (legacy Android alias),
+use_light_theme, use_sigtaara and both salt values. `POST /api/me/password` accepts
+current_password and new_password, with optional confirm_new_password. Password and
+identity validation are shared with the web. `POST /api/me/sessions/revoke` keeps
+this session and revokes other devices. `POST /api/me/anonymize` requires
+current_password and invokes the same permanent anonymization as the web.
+
+Deck action endpoints require the owner or an admin. Strategy-tags accepts a JSON
+map of known strategy keys to `auto`, `yes`, or `no`, replacing overrides. Details
+include strategy_choices and strategy_overrides. Retag preserves overrides and
+rejects concurrent decklist changes. Export returns text/plain and an attachment
+filename. GET profile-picture returns `{choices:[{deck_id,commander_index,name,
+deck_name,url}]}` and requires picture-edit permission. Upload, selection and
+removal retain the existing POST/DELETE contract (multipart field `file`).
+
+`POST /api/start_game` accepts native_timer=true to opt into persisted timing.
+The state adds timer_config, started_at_ms, a caller-specific is_host flag, and timer:
+`{config, remaining_ms, turn_remaining_ms, active_player_id, updated_at_ms,
+paused_reasons, timed_out_player_id, timeout_handled}`. Values are epoch milliseconds.
+Chess clock limits: 1–180 minutes, 0–300 seconds increment; turn timer: 5–3600 seconds.
+Only the host sends timer_tick=true, timer_paused (a complete array of modal,
+manual/end_game reasons), timer_timeout_handled=true, or timed turn changes. Host
+requests reconcile elapsed time under the same write lock as life and turn state;
+GET and companion requests never apply increments or timeouts. Repeating the same
+active player does not add another increment. Timed companion pass requests return
+403; pass turns on the table host. Paused and expired clocks cannot advance turns.
+Legacy web games retain their existing timing behavior.
+
+Recorded-game POST and detail support timed_mode, time_control (configuration),
+ended_on_time, timed_out_player_id and timer_snapshot (the above clock shape).
+Snapshot player IDs must refer to submitted participants. Offline clients retain
+these fields unchanged until successful submission. Migration 030 adds nullable
+metadata fields, leaving prior games compatible.

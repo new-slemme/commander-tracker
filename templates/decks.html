@@ -1,28 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
 {% from '_player_picture.html' import avatar with context %}
-    <link href="{{ url_for('static', filename='css/decks.css', v='tags-below-owner-1') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/decks.css', v='tags-notice-2') }}" rel="stylesheet">
 
-{# =========================
-   NEW: compute summary stats
-   (no backend changes required)
-   ========================= #}
-{% set ns = namespace(total_decks=0, total_wins=0, total_games=0, best_games=-1, best_name="", best_commander="") %}
-{% for d in decks %}
-  {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0,"mmr":0}) %}
-  {% set ns.total_decks = ns.total_decks + 1 %}
-  {% set ns.total_wins = ns.total_wins + (s.wins or 0) %}
-  {% set ns.total_games = ns.total_games + (s.uses or 0) %}
-  {% if (s.uses or 0) > ns.best_games %}
-    {% set ns.best_games = (s.uses or 0) %}
-    {% set ns.best_name = d.name %}
-    {% set ns.best_commander = (d.commander_name or d.commander) %}
-  {% endif %}
-{% endfor %}
-{% set overall_wr = 0 %}
-{% if ns.total_games > 0 %}
-  {% set overall_wr = ((ns.total_wins * 100) // ns.total_games) %}
-{% endif %}
+{% set ns = namespace(total_decks=listing_summary.count, total_wins=listing_summary.wins, total_games=listing_summary.games, best_games=listing_summary.best_games, best_name=listing_summary.best_name) %}
+{% set overall_wr = listing_summary.winrate %}
 {% set wr_class = 'mid' %}
 {% if overall_wr >= 60 %}
   {% set wr_class = 'good' %}
@@ -30,14 +12,14 @@
   {% set wr_class = '' %}
 {% endif %}
 
-<div class="container pb-4">
+<div class="browse-listing pb-4">
 
   <!-- Header card (enhanced, nothing removed) -->
   <div class="app-hero mb-4">
 
     <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
       <!-- LEFT SIDE -->
-      <div style="min-width: min(520px, 100%);">
+      <div class="browse-heading-copy">
         <h1 class="card-head-title">
           Decks
         </h1>
@@ -46,7 +28,7 @@
           {% if is_admin %}
             Browse all decks <span style="opacity:0.6;">(admin view)</span>
           {% else %}
-            Your active decks
+            Your decks
           {% endif %}
         </div>
 
@@ -54,13 +36,13 @@
         <div class="app-badges">
           <div class="app-badge">
             <span class="muted">Total</span>
-            <b class="js-count" data-to="{{ ns.total_decks }}">0</b>
+            <b>{{ ns.total_decks }}</b>
             <span class="muted">decks</span>
           </div>
 
           <div class="app-badge {{ wr_class }}">
             <span class="muted">Overall</span>
-            <b class="js-count" data-to="{{ overall_wr }}">0</b><b>%</b>
+            <b>{{ overall_wr }}</b><b>%</b>
             <span class="muted">winrate</span>
           </div>
 
@@ -77,45 +59,9 @@
       <!-- RIGHT SIDE -->
       <div class="d-flex flex-wrap align-items-center gap-2">
 
-        {% if is_admin %}
-        <form method="get" action="{{ url_for('decks') }}" class="d-flex gap-2 align-items-center">
-          <select class="form-select form-select-sm" name="player_id" onchange="this.form.submit()">
-            <option value="">All owners</option>
-            {% for p in players %}
-              <option value="{{ p.id }}" {% if selected_player_id == p.id %}selected{% endif %}>
-                {{ p.name }}
-              </option>
-            {% endfor %}
-          </select>
-          {% if selected_player_id %}
-            <a class="btn btn-sm btn-secondary" href="{{ url_for('decks') }}">
-              Clear
-            </a>
-          {% endif %}
-        </form>
-        {% endif %}
-
-        <form method="get" action="{{ url_for('decks') }}" class="d-flex align-items-center gap-2 m-0">
-          {% if is_admin and selected_player_id %}
-            <input type="hidden" name="player_id" value="{{ selected_player_id }}">
-          {% endif %}
-          <div class="form-check form-switch m-0">
-            <input class="form-check-input"
-                   type="checkbox"
-                   name="show_retired"
-                   value="1"
-                   id="showRetiredSwitch"
-                   onchange="this.form.submit()"
-                   {% if show_retired %}checked{% endif %}>
-            <label class="form-check-label small" for="showRetiredSwitch">
-              Show Retired
-            </label>
-          </div>
-        </form>
-
         <!-- Desktop button stays -->
-        <a class="btn btn-primary btn-lg app-btn desktop-add"
-           href="{{ url_for('new_deck_editor', player_id=selected_player_id) if is_admin and selected_player_id else url_for('new_deck_editor') }}">
+        <a class="btn btn-primary btn-lg app-btn"
+           href="{{ url_for('new_deck_editor', player_id=selected_player_id, return_to=request.full_path) if is_admin and selected_player_id else url_for('new_deck_editor', return_to=request.full_path) }}">
           + Add Deck
         </a>
 
@@ -123,30 +69,36 @@
     </div>
   </div>
 
+  {% include "_browse_controls.html" %}
+
   {% if show_tags_refresh_banner %}
-    <div class="alert alert-warning d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2" role="alert">
-      <div>
-        <strong>Deck tags refresh recommended:</strong>
-        {{ stale_deck_count }} deck{{ '' if stale_deck_count == 1 else 's' }} have missing, incomplete, or outdated tags.
-        Refresh their tags to update life-counter mechanics and strategy suggestions.
+    <aside class="deck-tags-notice" aria-labelledby="deck-tags-notice-title">
+      <span class="deck-tags-notice__icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 7v5h-5M4 17v-5h5" />
+          <path d="M6.1 7a7 7 0 0 1 11.5-1L20 9M4 15l2.4 3A7 7 0 0 0 17.9 17" />
+        </svg>
+      </span>
+      <div class="deck-tags-notice__content">
+        <h2 id="deck-tags-notice-title">Deck tags refresh recommended</h2>
+        <p>{{ stale_deck_count }} deck{{ '' if stale_deck_count == 1 else 's' }} {{ 'has' if stale_deck_count == 1 else 'have' }} missing, incomplete, or outdated tags.
+        Refresh their tags to update life-counter mechanics and strategy suggestions.</p>
       </div>
-      <form method="post" action="{{ url_for('dismiss_deck_tags_banner') }}" class="m-0">
+      <form method="post" action="{{ url_for('dismiss_deck_tags_banner') }}" class="deck-tags-notice__actions">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="next" value="{{ request.full_path }}">
-        <button type="submit" class="btn btn-sm btn-outline-light">Dismiss</button>
+        <button type="submit" class="btn btn-sm deck-tags-notice__dismiss">Dismiss</button>
       </form>
-    </div>
+    </aside>
   {% endif %}
 
   {% if decks|length == 0 %}
-    <div class="card p-3">
-      <div class="muted">No decks found.</div>
-    </div>
+    {% include "_browse_empty.html" %}
   {% else %}
     <div class="deck-grid">
       {% for d in decks %}
         {% set s = deck_stats.get(d.id, {"wins":0,"losses":0,"uses":0,"winrate":0,"mmr":0}) %}
-        {% set art = d.commander_art_url %}
+        {% set art = d.commander_art_poster_url %}
         {% set wr = s.winrate %}
         {% set badge_class = 'bad' %}
         {% if wr >= 60 %}{% set badge_class = 'good' %}
@@ -159,8 +111,7 @@
         {% elif mmr >= 950 %}{% set tier = "C" %}{% set tier_cls = "" %}
         {% else %}{% set tier = "D" %}{% set tier_cls = "alert" %}{% endif %}
 
-        <a class="deck-tile {% if art %}has-bg{% endif %}"
-           href="{{ url_for('deck_detail', deck_id=d.id, player_id=selected_player_id if is_admin else none, show_retired=show_retired or none) }}"
+        <article class="deck-tile {% if art %}has-bg{% endif %}"
            data-deck-id="{{ d.id }}"
            data-deck-name="{{ d.name|e }}"
            data-deck-commander="{{ (d.commander_name or d.commander)|e }}"
@@ -174,7 +125,7 @@
 
             <div class="deck-title">
               <div>
-                <h3 class="deck-name">{{ d.name }}</h3>
+                <h3 class="deck-name"><a class="deck-name-link" href="{{ url_for('deck_detail', deck_id=d.id, return_to=request.full_path) }}">{{ d.name }}</a></h3>
                 <div class="deck-meta">
                   <span class="strong commander-link" data-commander="{{ (d.commander_name or d.commander)|e }}" style="cursor:pointer; text-decoration: underline;">
                     {{ d.commander_name or d.commander }}
@@ -241,10 +192,10 @@
                       data-confirm-msg="Delete deck {{ d.name|e }}? This cannot be undone."
                       style="display:inline;">
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                  <button type="submit" class="btn btn-sm btn-danger">Delete</button>
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                 </form>
               {% else %}
-                <button type="button" class="btn btn-sm btn-danger" disabled
+                <button type="button" class="btn btn-sm btn-outline-danger" disabled
                         title="Can't delete: deck has recorded games">
                   Delete
                 </button>
@@ -252,61 +203,12 @@
             </div>
 
           </div>
-        </a>
+        </article>
       {% endfor %}
     </div>
   {% endif %}
+  {% include "_browse_pagination.html" %}
 </div>
-
-<!-- Mobile floating Add Deck button -->
-<a class="btn btn-primary app-btn fab-add-deck"
-   href="{{ url_for('new_deck_editor', player_id=selected_player_id) if is_admin and selected_player_id else url_for('new_deck_editor') }}"
-   aria-label="Add Deck">
-  + Add Deck
-</a>
-
-<script>
-  // =========================
-  // Animated counters
-  // =========================
-  (function () {
-    const els = document.querySelectorAll('.js-count');
-    if (!els.length) return;
-
-    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    function animate(el) {
-      const to = parseInt(el.getAttribute('data-to') || '0', 10);
-      if (prefersReduced) { el.textContent = String(to); return; }
-
-      const dur = 650;
-      const start = performance.now();
-      const from = 0;
-
-      function tick(now) {
-        const t = Math.min(1, (now - start) / dur);
-        const eased = 1 - Math.pow(1 - t, 3);
-        const val = Math.round(from + (to - from) * eased);
-        el.textContent = String(val);
-        if (t < 1) requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
-    }
-
-    const head = els[0].closest('.card');
-    if ('IntersectionObserver' in window && head) {
-      const io = new IntersectionObserver((entries) => {
-        if (entries.some(e => e.isIntersecting)) {
-          els.forEach(animate);
-          io.disconnect();
-        }
-      }, { threshold: 0.35 });
-      io.observe(head);
-    } else {
-      els.forEach(animate);
-    }
-  })();
-</script>
 
 <script>
   document.querySelectorAll('.commander-link').forEach(el => {

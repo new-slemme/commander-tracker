@@ -234,7 +234,7 @@
   <div class="row g-3">
     {% for gp in parts %}
       {% set d = gp.deck %}
-      {% set art = d.commander_art_url %}
+      {% set art = d.commander_art_poster_url %}
       {% set gp_salt_count = gp.parsed_flags.get('salt_count', 1 if gp.parsed_flags.get('salted') else 0) %}
       {% set ns = namespace(life_delta=0, turn_seconds=0, mana_fucked_turns=0, misplayed_turns=0) %}
       {% for ts in gp.turn_stats %}
@@ -261,7 +261,7 @@
 
             <div class="muted2 mt-2">
               Deck:
-              <a class="text-white" href="{{ url_for('deck_detail', deck_id=d.id) }}">{{ d.name }}</a>
+              <a class="text-white" href="{{ url_for('deck_detail', deck_id=d.id, return_to=listing_return) }}">{{ d.name }}</a>
               <span class="muted2"> · </span>
               <span>{{ d.commander_name or d.commander }}</span>
             </div>
