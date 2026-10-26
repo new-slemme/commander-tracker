@@ -1,12 +1,12 @@
 {
   "applicationId": "de.slemme.edhcompanion",
-  "versionCode": 65,
-  "versionName": "2.3.0.1",
+  "versionCode": 66,
+  "versionName": "2.4.0.0",
   "minSupportedVersionCode": 6,
   "releaseChannel": "stable",
-  "artifactFileName": "edh-son-2.3.0.1+65.apk",
-  "artifactPath": "apk/edh-son-2.3.0.1+65.apk",
-  "sha256": "22c7403deef29b7debeef4d288a12a7a01447dc1e1b60ba9a2ee7662103acbee",
-  "publishedAt": "2026-10-23T18:28:29.549996594Z",
-  "notes": "Version 2.3.0.1 — Game recording hotfix\n\nFixes untimed games failing to record with an Invalid timer mode response.\nEnd & Record now has winner and win-type selectors like the web client,\nscrollable optional details, visible errors, and recording progress.\nWinner selections survive live state updates, and repeated taps while saving\nare ignored. New games preserve the actual starting player across recovery;\nolder games allow choosing it rather than assuming the first seat."
+  "artifactFileName": "edh-son-2.4.0.0+66.apk",
+  "artifactPath": "apk/edh-son-2.4.0.0+66.apk",
+  "sha256": "5df3c096bf0a7dbd9b32bae3b48959007cc282d8882f8f2937c1e780eccaef17",
+  "publishedAt": "2026-10-26T23:20:26.787313994Z",
+  "notes": "Version 2.4.0.0 — Play setup and player avatars\n\nPlay now has a unified setup layout with profile-picture player selection,\nconsistent seat and deck cards, grouped game options, and a fixed Start Game button.\nThe full player picker blocks duplicates and supports clearing a seat.\nSelections survive rotation, with a two-column layout on wider screens.\nQuick picks use recent-player ordering when supported by the server,\nwith alphabetical ordering on older servers."
 }
